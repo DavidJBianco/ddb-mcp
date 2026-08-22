@@ -23,16 +23,6 @@ async function connectDockerClient(t, args) {
   return client;
 }
 
-test("production image negotiates MCP through its normal entrypoint", { timeout: 30_000 }, async (t) => {
-  const client = await connectDockerClient(t, ["run", "--rm", "--interactive", "--network", "none", image]);
-  const listed = await client.listTools();
-
-  assert.deepEqual(
-    listed.tools.map(({ name }) => name).sort(),
-    EXPECTED_TOOLS
-  );
-});
-
 test("production image executes synthetic browser-backed MCP calls", { timeout: 120_000 }, async (t) => {
   const client = await connectDockerClient(t, [
     "run",

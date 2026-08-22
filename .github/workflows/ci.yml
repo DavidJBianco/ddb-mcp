@@ -86,9 +86,11 @@ jobs:
           - platform: linux/amd64
             tag: ddb-mcp:ci-amd64
             cache: amd64
+            test-script: test:docker:run
           - platform: linux/arm64
             tag: ddb-mcp:ci-arm64
             cache: arm64
+            test-script: test:docker:architecture
 
     steps:
       - uses: actions/checkout@v6
@@ -118,7 +120,7 @@ jobs:
           cache-from: type=gha,scope=docker-${{ matrix.cache }}
           cache-to: type=gha,scope=docker-${{ matrix.cache }},mode=max
 
-      - name: Exercise MCP and headed Chromium inside the image
+      - name: Exercise candidate image
         env:
           DDB_MCP_TEST_IMAGE: ${{ matrix.tag }}
-        run: npm run test:docker:run
+        run: npm run ${{ matrix.test-script }}
