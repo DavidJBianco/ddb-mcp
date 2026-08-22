@@ -4,24 +4,11 @@ import test from "node:test";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { EXPECTED_TOOLS } from "../support/tool-manifest.mjs";
 
 const image = process.env.DDB_MCP_TEST_IMAGE ?? "ddb-mcp:test";
 const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 const testRoot = fileURLToPath(new URL("..", import.meta.url));
-const expectedTools = [
-  "ddb_current_page",
-  "ddb_download_character",
-  "ddb_get_campaign",
-  "ddb_get_character",
-  "ddb_interact",
-  "ddb_list_campaigns",
-  "ddb_list_characters",
-  "ddb_list_library",
-  "ddb_login",
-  "ddb_navigate",
-  "ddb_read_book",
-  "ddb_search",
-];
 
 async function connectDockerClient(t, args) {
   const transport = new StdioClientTransport({
@@ -42,7 +29,7 @@ test("production image negotiates MCP through its normal entrypoint", { timeout:
 
   assert.deepEqual(
     listed.tools.map(({ name }) => name).sort(),
-    expectedTools
+    EXPECTED_TOOLS
   );
 });
 
@@ -66,19 +53,60 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     "/app/test/fixtures/synthetic-mcp-server.mjs",
   ]);
 
-  const searchResult = await client.callTool({
-    name: "ddb_search",
-    arguments: { query: "shield", category: "spells" },
-  });
-  assert.equal(searchResult.isError, undefined);
-  assert.equal(JSON.parse(searchResult.content[0].text).results[0].name, "Synthetic Shield");
+  const calledTools = [];
+  async function callSuccessfully(name, args = {}) {
+    const result = await client.callTool({ name, arguments: args });
+    assert.equal(result.isError, undefined, `${name} should succeed`);
+    assert.equal(result.content[0].type, "text");
+    calledTools.push(name);
+    return result.content[0].text;
+  }
 
-  const characterResult = await client.callTool({
-    name: "ddb_get_character",
-    arguments: { character_id: "4242" },
+  await callSuccessfully("ddb_login");
+  assert.equal(JSON.parse(await callSuccessfully("ddb_list_characters")).length, 1);
+
+  const characterText = await callSuccessfully("ddb_get_character", { character_id: "4242" });
+  assert.equal(JSON.parse(characterText).data.name, "Synthetic Hero");
+  await callSuccessfully("ddb_download_character", {
+    character_id: "4242",
+    output_path: "/tmp/synthetic-character.json",
   });
-  assert.equal(characterResult.isError, undefined);
-  assert.equal(JSON.parse(characterResult.content[0].text).data.name, "Synthetic Hero");
+
+  assert.equal(
+    JSON.parse(await callSuccessfully("ddb_get_campaign", { campaign_id: "7" })).name,
+    "Synthetic Campaign"
+  );
+  assert.equal(JSON.parse(await callSuccessfully("ddb_list_campaigns")).length, 1);
+
+  await callSuccessfully("ddb_navigate", {
+    url: "https://www.dndbeyond.com/synthetic-page",
+  });
+  await callSuccessfully("ddb_interact", {
+    action: "click",
+    selector: "#synthetic-button",
+  });
+  assert.match(await callSuccessfully("ddb_current_page"), /Synthetic Page/);
+
+  const searchText = await callSuccessfully("ddb_search", {
+    query: "shield",
+    category: "spells",
+  });
+  assert.equal(JSON.parse(searchText).results[0].name, "Synthetic Shield");
+
+  assert.equal(JSON.parse(await callSuccessfully("ddb_list_library")).count, 1);
+  assert.match(
+    await callSuccessfully("ddb_read_book", { book_slug: "synthetic-handbook" }),
+    /Safe Examples/
+  );
+
+  const fallbackResult = await client.callTool({
+    name: "ddb_get_character",
+    arguments: { character_id: "999", fallback_scrape: true },
+  });
+  assert.equal(fallbackResult.isError, undefined);
+  assert.equal(JSON.parse(fallbackResult.content[0].text).Name, "Synthetic Fallback Hero");
+
+  assert.deepEqual(calledTools.sort(), EXPECTED_TOOLS);
 
   const failureResult = await client.callTool({
     name: "ddb_get_campaign",

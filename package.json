@@ -12,7 +12,9 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run test:offline",
-    "test:offline": "node --test test/*.test.mjs",
+    "test:unit": "node --test test/navigate.test.mjs test/search.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
+    "test:mcp": "node --test test/mcp-integration.test.mjs test/mcp-contract.test.mjs",
+    "test:offline": "npm run test:unit && npm run test:mcp",
     "test:docker": "docker build --tag ddb-mcp:test . && DDB_MCP_TEST_IMAGE=ddb-mcp:test npm run test:docker:run",
     "test:docker:run": "node --test --test-concurrency=1 test/docker/*.test.mjs"
   },
