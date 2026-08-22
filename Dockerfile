@@ -22,7 +22,6 @@ WORKDIR /app
 
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
 
 # DDB MCP launches a headed Chromium instance. Playwright installs the matching
 # browser and its Linux dependencies; Xvfb supplies the virtual display.
@@ -37,6 +36,10 @@ RUN npx playwright install --with-deps chromium \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin mcp \
     && mkdir -p /home/mcp/.config/ddb-mcp \
     && chown -R mcp:mcp /home/mcp
+
+# Application output changes much more often than the browser runtime. Keep it
+# after the expensive Playwright layer so normal source edits retain the cache.
+COPY --from=build /app/dist ./dist
 
 USER mcp
 

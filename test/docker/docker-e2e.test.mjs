@@ -33,7 +33,7 @@ test("production image negotiates MCP through its normal entrypoint", { timeout:
   );
 });
 
-test("production image executes synthetic browser-backed MCP calls", { timeout: 60_000 }, async (t) => {
+test("production image executes synthetic browser-backed MCP calls", { timeout: 120_000 }, async (t) => {
   const client = await connectDockerClient(t, [
     "run",
     "--rm",

@@ -77,8 +77,18 @@ jobs:
         run: npm audit --audit-level=high --omit=dev
 
   docker:
-    name: Docker Build & Offline Browser Smoke Test
+    name: Docker MCP & Browser (${{ matrix.platform }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            tag: ddb-mcp:ci-amd64
+            cache: amd64
+          - platform: linux/arm64
+            tag: ddb-mcp:ci-arm64
+            cache: arm64
 
     steps:
       - uses: actions/checkout@v6
@@ -94,17 +104,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
       - name: Build local test image
         uses: docker/build-push-action@v7
         with:
           context: .
+          platforms: ${{ matrix.platform }}
           load: true
           push: false
-          tags: ddb-mcp:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ matrix.tag }}
+          cache-from: type=gha,scope=docker-${{ matrix.cache }}
+          cache-to: type=gha,scope=docker-${{ matrix.cache }},mode=max
 
       - name: Exercise MCP and headed Chromium inside the image
         env:
-          DDB_MCP_TEST_IMAGE: ddb-mcp:ci
+          DDB_MCP_TEST_IMAGE: ${{ matrix.tag }}
         run: npm run test:docker:run
