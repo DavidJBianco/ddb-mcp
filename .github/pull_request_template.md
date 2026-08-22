@@ -20,6 +20,8 @@
       not receive the D&D Beyond session.
 - [ ] The live-test command, commit SHA, results, and any skips are recorded in
       this PR.
+- [ ] Fresh interactive login was checked manually, or its approved exception
+      is recorded in this PR.
 - [ ] No credentials, cookies, session state, or private account data are in
       the diff, logs, fixtures, or artifacts.
 - [ ] The release is approved for merge.

@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
-import { getBrowser, getContext } from "./browser.js";
+import { closeBrowser, getBrowser, getContext } from "./browser.js";
 import { login } from "./auth.js";
 import { getCharacter, downloadCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
 import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
@@ -224,6 +224,19 @@ async function main() {
     const server = createServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
+    let closing;
+    const cleanup = () => (closing ??= closeBrowser());
+    const serverOnClose = transport.onclose;
+    transport.onclose = () => {
+        serverOnClose?.();
+        void cleanup();
+    };
+    const terminate = () => {
+        void cleanup().finally(() => process.exit(0));
+    };
+    process.once("SIGINT", terminate);
+    process.once("SIGTERM", terminate);
+    process.stdin.once("end", () => void cleanup());
     process.stderr.write("D&D Beyond MCP server running on stdio\n");
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

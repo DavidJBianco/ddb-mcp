@@ -200,7 +200,17 @@ npm run build
 
 # Watch mode
 npm run build:watch
+
+# Complete offline unit and MCP contract suite
+npm test
+
+# Production-image browser and container integration suite
+npm run test:docker
 ```
+
+Authenticated read-only release testing is deliberately separate and requires
+an explicit local opt-in. See [`LIVE_TESTING.md`](LIVE_TESTING.md); never place
+a D&D Beyond session in this repository or GitHub Actions.
 
 ## Docker MCP Toolkit
 

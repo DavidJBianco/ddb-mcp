@@ -1,9 +1,13 @@
 import { chromium } from "playwright";
 import { existsSync, mkdirSync } from "fs";
 import { homedir } from "os";
-import { join } from "path";
-export const SESSION_DIR = join(homedir(), ".config", "ddb-mcp");
-export const SESSION_PATH = join(SESSION_DIR, "session.json");
+import { dirname, isAbsolute, join } from "path";
+const configuredSessionPath = process.env.DDB_MCP_SESSION_PATH?.trim();
+if (configuredSessionPath && !isAbsolute(configuredSessionPath)) {
+    throw new Error("DDB_MCP_SESSION_PATH must be an absolute path.");
+}
+export const SESSION_PATH = configuredSessionPath ?? join(homedir(), ".config", "ddb-mcp", "session.json");
+export const SESSION_DIR = dirname(SESSION_PATH);
 let browserInstance = null;
 let contextInstance = null;
 export async function getBrowser() {

@@ -91,6 +91,9 @@ npm run typecheck
 npm run build
 npm test
 npm run test:docker
+# Explicit local release gates only; see LIVE_TESTING.md:
+npm run test:live
+npm run test:live:docker
 ```
 
 The default test suite is offline and includes unit tests plus MCP protocol
