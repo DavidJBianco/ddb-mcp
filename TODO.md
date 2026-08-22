@@ -9,14 +9,14 @@ release plan or pull request.
 - [x] Exercise the MCP server through the actual Docker image in offline CI:
   start the image over stdio, complete MCP initialization, list tools, and call
   tools against a synthetic backend with container networking disabled.
-- [ ] Maintain a coverage matrix for every registered MCP tool. Each tool
+- [x] Maintain a coverage matrix for every registered MCP tool. Each tool
   should have, at minimum, an offline successful call, MCP input/schema checks,
   and a representative dependency or browser failure asserted through
   `tools/call`.
 - [ ] Add focused offline behavior tests for all tool implementations,
   including successful extraction, empty results, logged-out state, missing or
   changed selectors, navigation failure, timeout, and malformed upstream data.
-- [ ] Add real-Playwright browser integration tests against small synthetic
+- [x] Add real-Playwright browser integration tests against small synthetic
   local HTML fixtures. Fixtures must contain no session data, account data, or
   copyrighted sourcebook text.
 - [ ] Add Docker tests for the unprivileged runtime user, writable session

@@ -90,6 +90,7 @@ npm run lint
 npm run typecheck
 npm run build
 npm test
+npm run test:docker
 ```
 
 The default test suite is offline and includes unit tests plus MCP protocol
