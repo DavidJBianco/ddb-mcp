@@ -16,6 +16,17 @@ The image installs the Chromium version matched to the locked Playwright
 dependency and runs the MCP server over standard input/output under Xvfb. The
 runtime process uses the unprivileged `mcp` user (UID 10001).
 
+Run the offline container integration suite with:
+
+```bash
+npm run test:docker
+```
+
+The suite exercises MCP initialization through the normal image entrypoint and
+uses a read-only mounted synthetic Playwright backend for browser-backed tool
+calls. Container networking is disabled, and test fixtures are not copied into
+the production image.
+
 ## Released images
 
 Each SemVer release publishes a multi-platform image for `linux/amd64` and

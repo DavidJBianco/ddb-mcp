@@ -6,7 +6,7 @@ release plan or pull request.
 
 ## Testing foundation
 
-- [ ] Exercise the MCP server through the actual Docker image in offline CI:
+- [x] Exercise the MCP server through the actual Docker image in offline CI:
   start the image over stdio, complete MCP initialization, list tools, and call
   tools against a synthetic backend with container networking disabled.
 - [ ] Maintain a coverage matrix for every registered MCP tool. Each tool

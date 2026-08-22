@@ -102,7 +102,7 @@ correspond to the edited source.
 For container-related changes, also run:
 
 ```bash
-docker build --tag ddb-mcp-local:latest .
+npm run test:docker
 ```
 
 Do not claim authenticated or live-site behavior was verified unless it was

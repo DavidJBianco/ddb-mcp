@@ -12,7 +12,9 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run test:offline",
-    "test:offline": "node --test test/*.test.mjs"
+    "test:offline": "node --test test/*.test.mjs",
+    "test:docker": "docker build --tag ddb-mcp:test . && DDB_MCP_TEST_IMAGE=ddb-mcp:test npm run test:docker:run",
+    "test:docker:run": "node --test --test-concurrency=1 test/docker/*.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
