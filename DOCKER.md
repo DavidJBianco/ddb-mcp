@@ -16,6 +16,26 @@ The image installs the Chromium version matched to the locked Playwright
 dependency and runs the MCP server over standard input/output under Xvfb. The
 runtime process uses the unprivileged `mcp` user (UID 10001).
 
+## Released images
+
+Each SemVer release publishes a multi-platform image for `linux/amd64` and
+`linux/arm64` to GitHub Container Registry:
+
+```text
+ghcr.io/davidjbianco/ddb-mcp:vX.Y.Z
+ghcr.io/davidjbianco/ddb-mcp:latest
+```
+
+Prefer the immutable release version in durable configuration:
+
+```bash
+docker pull ghcr.io/davidjbianco/ddb-mcp:v1.1.0
+```
+
+The local `docker-mcp.yaml` deliberately continues to reference
+`ddb-mcp-local:latest` so development and unreleased source builds cannot be
+confused with published releases.
+
 ## Preserve the D&D Beyond session
 
 The container stores Playwright browser state at:
