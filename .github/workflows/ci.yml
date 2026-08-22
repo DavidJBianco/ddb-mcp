@@ -96,9 +96,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Launch headed Chromium under Xvfb
-        run: |
-          docker run --rm --network none --entrypoint tini ddb-mcp:ci -- \
-            xvfb-run -a --server-args="-screen 0 1280x1024x24" \
-            node --input-type=module -e \
-            "import { chromium } from 'playwright'; const browser = await chromium.launch({ headless: false, args: ['--no-sandbox'], timeout: 15000 }); await browser.close();"
+      - name: Exercise MCP and headed Chromium inside the image
+        env:
+          DDB_MCP_TEST_IMAGE: ddb-mcp:ci
+        run: npm run test:docker:run
