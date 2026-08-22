@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -102,6 +102,29 @@ test("session directory is writable while a read-only session bind remains immut
       "test -r /home/mcp/.config/ddb-mcp/session.json && ! test -w /home/mcp/.config/ddb-mcp/session.json && echo readonly",
     ]),
     "readonly"
+  );
+});
+
+test("the non-root image can write a group-scoped external output mount", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "ddb-mcp-output-test-"));
+  t.after(async () => rm(directory, { recursive: true, force: true }));
+  await chmod(directory, 0o730);
+
+  assert.equal(
+    docker([
+      "run",
+      "--rm",
+      "--group-add",
+      String(process.getgid?.() ?? 0),
+      "--mount",
+      `type=bind,src=${directory},dst=/output`,
+      "--entrypoint",
+      "sh",
+      image,
+      "-c",
+      "touch /output/result.json && echo writable",
+    ]),
+    "writable"
   );
 });
 

@@ -1,6 +1,6 @@
 import { Browser, BrowserContext, Page } from "playwright";
-export declare const SESSION_DIR: string;
 export declare const SESSION_PATH: string;
+export declare const SESSION_DIR: string;
 export declare function getBrowser(): Promise<Browser>;
 export declare function getContext(browser: Browser): Promise<BrowserContext>;
 export declare function saveSession(context: BrowserContext): Promise<void>;

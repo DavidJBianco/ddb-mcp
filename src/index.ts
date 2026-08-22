@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import type { BrowserContext } from "playwright";
 import { z } from "zod";
 
-import { getBrowser, getContext } from "./browser.js";
+import { closeBrowser, getBrowser, getContext } from "./browser.js";
 import { login } from "./auth.js";
 import { getCharacter, downloadCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
 import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
@@ -293,6 +293,19 @@ async function main() {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  let closing: Promise<void> | undefined;
+  const cleanup = () => (closing ??= closeBrowser());
+  const serverOnClose = transport.onclose;
+  transport.onclose = () => {
+    serverOnClose?.();
+    void cleanup();
+  };
+  const terminate = () => {
+    void cleanup().finally(() => process.exit(0));
+  };
+  process.once("SIGINT", terminate);
+  process.once("SIGTERM", terminate);
+  process.stdin.once("end", () => void cleanup());
   process.stderr.write("D&D Beyond MCP server running on stdio\n");
 }
 

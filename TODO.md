@@ -28,19 +28,19 @@ release plan or pull request.
 
 ## Live test suite
 
-- [ ] Create a separately invoked, explicit-opt-in `npm run test:live` suite.
+- [x] Create a separately invoked, explicit-opt-in `npm run test:live` suite.
   It must never run in GitHub Actions and must never print or upload session or
   account content.
-- [ ] Define safe live coverage for every read-only tool: restored-session
+- [x] Define safe live coverage for every read-only tool: restored-session
   detection, character listing/retrieval, character download to a temporary
   path, campaign listing/retrieval, navigation/current-page retrieval, search,
   library listing, and sourcebook reading.
-- [ ] Decide and document safe live coverage for `ddb_login` and generic
+- [x] Decide and document safe live coverage for `ddb_login` and generic
   `ddb_interact`. Interactive login may require a manual release check;
   interaction tests must use non-destructive controls or disposable data.
-- [ ] Test both character API success and rendered-page fallback without
+- [x] Test both character API success and rendered-page fallback without
   recording private character content in assertions or logs.
-- [ ] Make live tests fail clearly on missing or expired sessions, while never
+- [x] Make live tests fail clearly on missing or expired sessions, while never
   initiating an unexpected login or weakening the offline suite.
 - [ ] Record the live command, commit SHA, result, and skips in each release PR.
 
@@ -96,6 +96,6 @@ release plan or pull request.
 - [ ] Configure GitHub branch protection/rulesets so required offline checks
   and the `dev` to `main` release flow are enforced by the repository host as
   well as documented in `AGENTS.md`.
-- [ ] Evaluate a configurable external session path or documented import helper
+- [x] Evaluate a configurable external session path or documented import helper
   for non-default host sessions without ever copying session data into the
   repository or image.

@@ -112,6 +112,9 @@ tests, but not for `ddb_login`: login saves refreshed browser state and requires
 a writable session directory. For normal Toolkit use or session refreshes, copy
 the file into the dedicated `ddb-mcp-session` named volume as described above.
 
+The explicit opt-in commands and release record are documented in
+[`LIVE_TESTING.md`](LIVE_TESTING.md).
+
 ## Add the image to Docker MCP Toolkit
 
 Docker MCP Toolkit accepts a local server definition from its trusted catalog
