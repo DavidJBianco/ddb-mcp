@@ -9,10 +9,11 @@ import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
 import { search } from "./tools/search.js";
 import { listLibrary, readBook } from "./tools/library.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 const server = new McpServer({
   name: "dndbeyond",
-  version: "1.0.0",
+  version: PACKAGE_VERSION,
 });
 
 // Lazy-initialized shared browser context

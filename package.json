@@ -10,7 +10,9 @@
     "build": "tsc",
     "build:watch": "tsc --watch",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && npm run test:offline",
+    "test:offline": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
