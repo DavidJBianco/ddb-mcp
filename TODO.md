@@ -19,7 +19,7 @@ release plan or pull request.
 - [x] Add real-Playwright browser integration tests against small synthetic
   local HTML fixtures. Fixtures must contain no session data, account data, or
   copyrighted sourcebook text.
-- [ ] Add Docker tests for the unprivileged runtime user, writable session
+- [x] Add Docker tests for the unprivileged runtime user, writable session
   volume, read-only externally mounted session, missing session, file
   permissions, process shutdown, and absence of credentials in image layers.
 - [ ] Add Docker MCP Toolkit integration coverage beyond a plain `docker run`,
@@ -72,7 +72,7 @@ release plan or pull request.
 
 ## Security and robustness
 
-- [ ] Replace prefix-based D&D Beyond URL checks with parsed origin validation
+- [x] Replace prefix-based D&D Beyond URL checks with parsed origin validation
   and add tests for lookalike hosts, credentials in URLs, alternate ports,
   fragments, redirects, and allowed canonical hosts.
 - [ ] Validate identifiers, slugs, output paths, and screenshot behavior at the

@@ -16,6 +16,7 @@
     "test:mcp": "node --test test/mcp-integration.test.mjs test/mcp-contract.test.mjs",
     "test:offline": "npm run test:unit && npm run test:mcp",
     "test:docker": "docker build --tag ddb-mcp:test . && DDB_MCP_TEST_IMAGE=ddb-mcp:test npm run test:docker:run",
+    "test:docker:architecture": "node --test --test-concurrency=1 test/docker/architecture-smoke.test.mjs test/docker/container-hardening.test.mjs test/docker/toolkit-compat.test.mjs",
     "test:docker:run": "node --test --test-concurrency=1 test/docker/*.test.mjs"
   },
   "dependencies": {

@@ -25,7 +25,15 @@ npm run test:docker
 The suite exercises MCP initialization through the normal image entrypoint and
 uses a read-only mounted synthetic Playwright backend for browser-backed tool
 calls. Container networking is disabled, and test fixtures are not copied into
-the production image.
+the production image. It also checks the non-root runtime and session mounts.
+CI runs the complete browser suite natively on AMD64. The ARM64 image runs the
+same runtime-hardening checks and an exact MCP initialization/tool-list smoke
+test under QEMU; Chromium itself is not treated as reliable under emulation.
+
+When Docker MCP Toolkit is installed and its Docker Desktop runtime is
+available, the suite also asks the Toolkit gateway to accept the candidate
+image in dry-run mode. Runners without Toolkit report that check as skipped;
+the ordinary production-entrypoint tests still run everywhere.
 
 ## Released images
 
