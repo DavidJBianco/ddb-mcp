@@ -202,6 +202,12 @@ npm run build
 npm run build:watch
 ```
 
+## Docker MCP Toolkit
+
+The fork includes a reproducible Docker build, a local Docker MCP server
+definition, release images on GitHub Container Registry, and instructions for
+persisting authenticated browser state. See [`DOCKER.md`](DOCKER.md).
+
 ## License
 
 MIT

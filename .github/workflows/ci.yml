@@ -14,6 +14,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-source:
+    name: Release PR Source
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require dev as the release source
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "Release PRs to main must come from dev; got: $HEAD_REF" >&2
+            exit 1
+          fi
+
   ci:
     name: Type Check, Lint, Build & Offline Tests
     runs-on: ubuntu-latest
@@ -38,8 +52,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Offline tests, when available
-        run: npm run test:offline --if-present
+      - name: Offline tests
+        run: npm run test:offline
 
       - name: Verify generated output is current
         run: git diff --exit-code -- dist/
@@ -59,8 +73,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The feature integration PR refreshes the legacy lockfile and restores
-      # this audit as a blocking check.
-      - name: Audit dependencies (bootstrap advisory)
-        continue-on-error: true
+      - name: Audit dependencies (production only)
         run: npm audit --audit-level=high --omit=dev
+
+  docker:
+    name: Docker Build & Offline Browser Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build local test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ddb-mcp:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Launch headed Chromium under Xvfb
+        run: |
+          docker run --rm --network none --entrypoint tini ddb-mcp:ci -- \
+            xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            node --input-type=module -e \
+            "import { chromium } from 'playwright'; const browser = await chromium.launch({ headless: false, args: ['--no-sandbox'], timeout: 15000 }); await browser.close();"

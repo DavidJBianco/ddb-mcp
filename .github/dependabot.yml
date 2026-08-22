@@ -5,6 +5,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    target-branch: dev
     commit-message:
       prefix: "chore"
     labels:
@@ -15,6 +16,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    target-branch: dev
     commit-message:
       prefix: "chore"
     labels:

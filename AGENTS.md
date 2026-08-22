@@ -22,6 +22,49 @@ Current priorities, in order:
 4. Add structured character creation and modification only when explicitly in
    scope and only with the write safeguards below.
 
+## Branch and release policy
+
+`main` is the protected release branch. `dev` is the integration branch.
+
+- Never commit, merge, or push any change directly to `main` unless the user
+  explicitly authorizes that exact exception.
+- New feature branches must start from the current `dev` branch and use a
+  `feature/<short-name>` name. Merge them back through a pull request to `dev`.
+- Bug fixes should normally use a short-lived `fix/<short-name>` branch from
+  `dev` and a pull request to `dev`. Direct fixes on `dev` require an explicit
+  user instruction; do not infer permission merely because a change is small.
+- Use `chore/<short-name>` or `docs/<short-name>` for non-feature work and merge
+  it through a pull request to `dev`.
+- Dependency automation must target `dev`, not `main`.
+- Do not merge a feature branch to `main`, and do not open a release PR from
+  any branch other than `dev`.
+- Preserve unrelated work on long-lived branches. Delete a short-lived branch
+  only after its merge and only when no follow-up work depends on it.
+
+A transition from `dev` to `main` is a release, not an ordinary merge. Every
+release requires all of the following before merge:
+
+1. Update `package.json` and `package-lock.json` to the intended Semantic
+   Version. Patch versions are compatible fixes, minor versions are compatible
+   features, and major versions contain breaking changes.
+2. Open a `dev` to `main` pull request and use its release checklist.
+3. Pass every required GitHub CI job. GitHub CI is strictly offline: it may use
+   mocks, synthetic fixtures, local browser pages, and Docker smoke tests, but
+   it must never receive a D&D Beyond session or contact D&D Beyond.
+4. Run the complete live test suite locally, outside GitHub Actions, using the
+   external session file and the explicit live-test opt-in. Record the command,
+   commit SHA, result, and any skipped tests in the release PR. If the live
+   suite does not yet exist, cannot run, or does not pass, the release is
+   blocked unless the user explicitly accepts that exception.
+5. Obtain the user's release approval after the automated and live results are
+   available. Merge or squash the release PR; do not rebase-merge it because
+   the release workflow compares the release commit with its first parent.
+
+After the release PR merges, automation may tag that exact `main` commit as
+`vX.Y.Z`, create the GitHub Release, attach the npm package archive, and publish
+`ghcr.io/davidjbianco/ddb-mcp:vX.Y.Z` plus `latest`. Release automation must not
+create a version-bump commit or otherwise modify `main`.
+
 ## Repository map
 
 - `src/index.ts`: MCP server setup, tool schemas, handlers, and stdio transport.
@@ -46,12 +89,14 @@ npm run dev
 npm run lint
 npm run typecheck
 npm run build
+npm test
 ```
 
-There is currently no automated test suite; adding one is a project priority.
-For every source change, run at least `npm run lint`, `npm run typecheck`, and
-`npm run build`, plus the relevant automated tests once test scripts exist.
-Review changes under `dist/` after building and commit the generated files that
+The default test suite is offline and includes unit tests plus MCP protocol
+integration tests over both in-memory and subprocess stdio transports with an
+injected mock Playwright context. For every source change, run at least
+`npm run lint`, `npm run typecheck`, `npm run build`, and `npm test`. Review
+changes under `dist/` after building and commit the generated files that
 correspond to the edited source.
 
 For container-related changes, also run:
@@ -110,6 +155,9 @@ confidence that cannot be established with offline fixtures.
 - Name and document them clearly as live tests; expose a separate command such
   as `npm run test:live`. Never include them in `npm test`, build, or ordinary
   CI by default.
+- Never execute live tests in GitHub Actions or upload session state to GitHub.
+  Live release verification runs locally and its summary is recorded in the
+  release pull request.
 - Do not run a live test unless the task explicitly calls for it or the user
   approves it after being told what pages and account data it will access.
 - Require an explicit opt-in environment flag in addition to the command so an
