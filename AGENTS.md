@@ -89,12 +89,14 @@ npm run dev
 npm run lint
 npm run typecheck
 npm run build
+npm test
 ```
 
-There is currently no automated test suite; adding one is a project priority.
-For every source change, run at least `npm run lint`, `npm run typecheck`, and
-`npm run build`, plus the relevant automated tests once test scripts exist.
-Review changes under `dist/` after building and commit the generated files that
+The default test suite is offline and includes unit tests plus MCP protocol
+integration tests over both in-memory and subprocess stdio transports with an
+injected mock Playwright context. For every source change, run at least
+`npm run lint`, `npm run typecheck`, `npm run build`, and `npm test`. Review
+changes under `dist/` after building and commit the generated files that
 correspond to the edited source.
 
 For container-related changes, also run:

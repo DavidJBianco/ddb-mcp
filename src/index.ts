@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { pathToFileURL } from "node:url";
+import type { BrowserContext } from "playwright";
 import { z } from "zod";
 
 import { getBrowser, getContext } from "./browser.js";
@@ -11,17 +13,20 @@ import { search } from "./tools/search.js";
 import { listLibrary, readBook } from "./tools/library.js";
 import { PACKAGE_VERSION } from "./version.js";
 
-const server = new McpServer({
-  name: "dndbeyond",
-  version: PACKAGE_VERSION,
-});
-
 // Lazy-initialized shared browser context
 async function getSharedContext() {
   const browser = await getBrowser();
   const context = await getContext(browser);
   return context;
 }
+
+export type BrowserContextProvider = () => Promise<BrowserContext>;
+
+export function createServer(getContextForTool: BrowserContextProvider = getSharedContext) {
+  const server = new McpServer({
+    name: "dndbeyond",
+    version: PACKAGE_VERSION,
+  });
 
 // ─── ddb_login ────────────────────────────────────────────────────────────────
 server.tool(
@@ -30,7 +35,7 @@ server.tool(
   {},
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const result = await login(context);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
@@ -47,7 +52,7 @@ server.tool(
   {},
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const result = await listCharacters(context);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
@@ -70,13 +75,13 @@ server.tool(
   },
   async ({ character_id, fallback_scrape }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const data = await getCharacter(context, character_id);
       return { content: [{ type: "text", text: data }] };
     } catch (err) {
       if (fallback_scrape) {
         try {
-          const context = await getSharedContext();
+          const context = await getContextForTool();
           const scraped = await scrapeCharacterSheet(context, character_id);
           return { content: [{ type: "text", text: scraped }] };
         } catch (scrapeErr) {
@@ -103,7 +108,7 @@ server.tool(
   },
   async ({ character_id, output_path }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const result = await downloadCharacter(context, character_id, output_path);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
@@ -122,7 +127,7 @@ server.tool(
   },
   async ({ campaign_id }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const data = await getCampaign(context, campaign_id);
       return { content: [{ type: "text", text: data }] };
     } catch (err) {
@@ -139,7 +144,7 @@ server.tool(
   {},
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const data = await listMyCampaigns(context);
       return { content: [{ type: "text", text: data }] };
     } catch (err) {
@@ -160,7 +165,7 @@ server.tool(
   },
   async ({ url }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const content = await navigate(context, url);
       return { content: [{ type: "text", text: content }] };
     } catch (err) {
@@ -186,7 +191,7 @@ server.tool(
   },
   async ({ action, selector, value }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const result = await interact(context, action, selector, value);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
@@ -203,7 +208,7 @@ server.tool(
   {},
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const content = await getCurrentPageContent(context);
       return { content: [{ type: "text", text: content }] };
     } catch (err) {
@@ -226,7 +231,7 @@ server.tool(
   },
   async ({ query, category }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const results = await search(context, query, category ?? "all");
       return { content: [{ type: "text", text: results }] };
     } catch (err) {
@@ -243,7 +248,7 @@ server.tool(
   {},
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const books = await listLibrary(context);
       return { content: [{ type: "text", text: books }] };
     } catch (err) {
@@ -270,7 +275,7 @@ server.tool(
   },
   async ({ book_slug, chapter_slug }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const content = await readBook(context, book_slug, chapter_slug);
       return { content: [{ type: "text", text: content }] };
     } catch (err) {
@@ -280,14 +285,20 @@ server.tool(
   }
 );
 
+  return server;
+}
+
 // ─── Start server ─────────────────────────────────────────────────────────────
 async function main() {
+  const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write("D&D Beyond MCP server running on stdio\n");
 }
 
-main().catch((err) => {
-  process.stderr.write(`Fatal error: ${err}\n`);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    process.stderr.write(`Fatal error: ${err}\n`);
+    process.exit(1);
+  });
+}
