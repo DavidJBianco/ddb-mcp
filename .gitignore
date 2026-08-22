@@ -1,2 +1,9 @@
 node_modules/
 *.js.map
+.env
+.env.*
+!.env.example
+session.json
+.config/ddb-mcp/
+.ddb-mcp/
+.DS_Store
