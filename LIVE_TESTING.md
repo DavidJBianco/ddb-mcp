@@ -70,6 +70,11 @@ Fresh interactive login remains a manual release check. Do not automate live
 click or fill operations until a disposable, verifiably safe account state is
 available.
 
+For the v2 host-authentication release, also run `ddb-mcp-auth validate --live`
+against the labeled helper volume and record the result separately. The helper
+login itself is an interactive manual check; it must never run in GitHub
+Actions or print captured browser state.
+
 ## Mutating live-test isolation
 
 The repository currently has no mutating live tests. If an explicitly
@@ -97,6 +102,7 @@ Command: DDB_MCP_LIVE_TESTS=1 DDB_MCP_SESSION_PATH=<external path> npm run test:
 Result: pass | fail
 Skips: none | <structural test names and approved reason>
 Manual fresh-login check: pass | not run with approved exception
+Helper volume validation: ddb-mcp-auth validate --live => pass | fail | not run
 ```
 
 Never paste the real session path or any returned account content into the PR.

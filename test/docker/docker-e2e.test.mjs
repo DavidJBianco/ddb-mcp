@@ -29,6 +29,18 @@ async function connectDockerClient(t, args, containerName) {
   return { client, diagnostics };
 }
 
+test("production image returns the host authentication instruction when session state is missing", { timeout: 30_000 }, async (t) => {
+  const containerName = `ddb-mcp-test-missing-auth-${process.pid}`;
+  const { client, diagnostics } = await connectDockerClient(t, [
+    "run", "--rm", "--name", containerName, "--interactive", "--network", "none", image,
+  ], containerName);
+  await withFailureDiagnostics("missing Docker authentication", diagnostics, async () => {
+    const result = await client.callTool({ name: "ddb_list_characters", arguments: {} });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /ddb-mcp-auth login/);
+  });
+});
+
 test("production image executes synthetic browser-backed MCP calls", { timeout: 120_000 }, async (t) => {
   const containerName = `ddb-mcp-test-browser-${process.pid}`;
   const { client, diagnostics } = await connectDockerClient(t, [
@@ -66,7 +78,6 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
       return result.content[0].text;
     }
 
-    await callSuccessfully("ddb_login");
     assert.equal(JSON.parse(await callSuccessfully("ddb_list_characters")).length, 1);
 
     const characterText = await callSuccessfully("ddb_get_character", { character_id: "4242" });

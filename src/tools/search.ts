@@ -1,6 +1,7 @@
 import type { BrowserContext, Page } from "playwright";
 
 import { getPage, isLoggedIn } from "../browser.js";
+import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
 import { extractLibraryBookCards, type LibraryBookCard } from "./library.js";
 
 export type SearchCategory = "spells" | "monsters" | "items" | "races" | "classes" | "feats" | "sourcebooks" | "all";
@@ -157,11 +158,12 @@ async function extractOrdinaryResults(page: Page, category: Exclude<SearchCatego
 }
 
 async function searchSourcebooks(page: Page, query: string, scope: SourceScope): Promise<{ url: string; results: SourcebookSearchResult[] }> {
-  if (!(await isLoggedIn(page))) throw new Error("Not logged in. Please run ddb_login first.");
+  if (!(await isLoggedIn(page))) throw new AuthenticationRequiredError();
 
   const ownership = scope === "accessible" ? "&ownership=owned-shared" : "";
   const url = `${DDB_ORIGIN}/en/library?type=sourcebooks${ownership}`;
   await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+  throwIfAuthenticationRedirect(page);
 
   const filter = page.locator("input[placeholder*='Filter by title' i]:visible").first();
   if ((await filter.count()) === 0) {
@@ -215,6 +217,7 @@ export async function search(
       ? `${DDB_ORIGIN}/search?q=${encodedQuery}`
       : `${DDB_ORIGIN}/${path}?filter-search=${encodedQuery}`;
     await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30_000 });
+    throwIfAuthenticationRedirect(page);
     await page.waitForTimeout(1500);
     results = await extractOrdinaryResults(page, category);
   }

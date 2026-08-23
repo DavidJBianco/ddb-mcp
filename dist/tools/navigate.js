@@ -1,4 +1,5 @@
 import { getPage } from "../browser.js";
+import { AuthenticationRequiredError, isLoggedInOnCurrentPage } from "../session-state.js";
 export async function navigate(context, url) {
     const page = await getPage(context);
     if (!isAllowedDdbUrl(url)) {
@@ -8,6 +9,8 @@ export async function navigate(context, url) {
     if (!isAllowedDdbUrl(page.url())) {
         throw new Error("Navigation redirected outside D&D Beyond and was blocked.");
     }
+    if (!(await isLoggedInOnCurrentPage(page)))
+        throw new AuthenticationRequiredError();
     await page.waitForTimeout(1500);
     // Extract page text content and convert to readable markdown-ish format
     const content = await page.evaluate(() => {
@@ -35,6 +38,10 @@ export function isAllowedDdbUrl(value) {
 }
 export async function interact(context, action, selector, value) {
     const page = await getPage(context);
+    if (action === "fill" && value === undefined)
+        throw new Error("'value' is required for fill action.");
+    if (!(await isLoggedInOnCurrentPage(page)))
+        throw new AuthenticationRequiredError();
     switch (action) {
         case "click": {
             await page.locator(selector).first().click();
@@ -42,8 +49,6 @@ export async function interact(context, action, selector, value) {
             return `Clicked element: ${selector}`;
         }
         case "fill": {
-            if (value === undefined)
-                throw new Error("'value' is required for fill action.");
             await page.locator(selector).first().fill(value);
             await page.waitForTimeout(500);
             return `Filled '${selector}' with: ${value}`;
@@ -59,6 +64,8 @@ export async function interact(context, action, selector, value) {
 }
 export async function getCurrentPageContent(context) {
     const page = await getPage(context);
+    if (!(await isLoggedInOnCurrentPage(page)))
+        throw new AuthenticationRequiredError();
     const url = page.url();
     const content = await page.evaluate(() => {
         document.querySelectorAll("script, style, nav, footer, .ad-container").forEach((el) => el.remove());

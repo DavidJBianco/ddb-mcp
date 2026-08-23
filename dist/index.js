@@ -2,8 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
-import { closeBrowser, getBrowser, getContext } from "./browser.js";
-import { login } from "./auth.js";
+import { closeBrowser, getAuthenticatedContext } from "./browser.js";
 import { getCharacter, downloadCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
 import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
@@ -12,28 +11,14 @@ import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from
 import { PACKAGE_VERSION } from "./version.js";
 // Lazy-initialized shared browser context
 async function getSharedContext() {
-    const browser = await getBrowser();
-    const context = await getContext(browser);
-    return context;
+    return getAuthenticatedContext();
 }
 export function createServer(getContextForTool = getSharedContext) {
     const server = new McpServer({
         name: "dndbeyond",
         version: PACKAGE_VERSION,
     }, {
-        instructions: "Use ddb_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to ddb_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use ddb_list_library to list accessible sourcebooks. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
-    });
-    // ─── ddb_login ────────────────────────────────────────────────────────────────
-    server.tool("ddb_login", "Launch a browser and log into D&D Beyond via Google OAuth. Run this once to save your session to disk. Subsequent tool calls restore the session automatically.", {}, async () => {
-        try {
-            const context = await getContextForTool();
-            const result = await login(context);
-            return { content: [{ type: "text", text: result }] };
-        }
-        catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { content: [{ type: "text", text: `Login failed: ${msg}` }], isError: true };
-        }
+        instructions: "Authentication is managed on the Docker host with ddb-mcp-auth login; authenticated tool errors explain when the user must run it. Use ddb_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to ddb_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use ddb_list_library to list accessible sourcebooks. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
     });
     // ─── ddb_list_characters ──────────────────────────────────────────────────────
     server.tool("ddb_list_characters", "List all characters in your D&D Beyond account, including their ID, level, race, and class.", {}, async () => {

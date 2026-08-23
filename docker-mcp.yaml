@@ -6,4 +6,4 @@ description: >-
   A locally built MCP server for authenticated D&D Beyond characters,
   campaigns, sourcebooks, and rules content.
 volumes:
-  - ddb-mcp-session:/home/mcp/.config/ddb-mcp
+  - ddb-mcp-session:/home/mcp/.config/ddb-mcp:ro

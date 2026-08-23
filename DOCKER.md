@@ -52,7 +52,7 @@ ghcr.io/davidjbianco/ddb-mcp:latest
 Prefer the immutable release version in durable configuration:
 
 ```bash
-docker pull ghcr.io/davidjbianco/ddb-mcp:v1.1.0
+docker pull ghcr.io/davidjbianco/ddb-mcp:v2.0.0
 ```
 
 The local `docker-mcp.yaml` deliberately continues to reference
@@ -67,54 +67,50 @@ The container stores Playwright browser state at:
 /home/mcp/.config/ddb-mcp/session.json
 ```
 
-The supplied `docker-mcp.yaml` mounts the named volume `ddb-mcp-session` at
-that directory. Do not add `session.json` to the repository or container image;
-it grants access to the associated D&D Beyond account.
+The supplied `docker-mcp.yaml` mounts the named volume `ddb-mcp-session`
+read-only at that directory. Do not add `session.json` to the repository or
+container image; it grants access to the associated D&D Beyond account.
 
-The container's browser runs on a virtual display, so initial interactive login
-is best completed with the server running locally:
-
-1. Build and register the local Node server with an MCP client.
-2. Call `ddb_login` and complete the visible Wizards ID login.
-3. Copy the resulting local session into the named Docker volume:
+Download the standalone `ddb-mcp-auth` executable from the same GitHub Release
+as the image, then authenticate on the Docker host:
 
 ```bash
-DDB_MCP_SESSION_FILE="${HOME}/.config/ddb-mcp/session.json"
-
-docker volume create ddb-mcp-session
-
-docker run --rm \
-  --volume ddb-mcp-session:/target \
-  --mount "type=bind,src=${DDB_MCP_SESSION_FILE},dst=/source/session.json,readonly" \
-  alpine:3.22 \
-  sh -c 'cp /source/session.json /target/session.json && chown 10001:10001 /target/session.json && chmod 600 /target/session.json'
+ddb-mcp-auth login
 ```
 
-Change `DDB_MCP_SESSION_FILE` to the session's actual absolute path when it is
-stored elsewhere.
+The helper creates and labels `ddb-mcp-session` when necessary, uses an
+installed Chromium-compatible browser for the interactive login, streams only
+D&D Beyond state to a short-lived session-administration invocation of the
+matching image, and validates the candidate before atomically replacing prior
+state. The helper's administration container is the only component that mounts
+the volume read-write.
 
-Repeat the local login and copy if the saved session expires. Do not transmit a
-Wizards password through an MCP tool call or bake the session into an image.
+The helper checks image compatibility before opening a login browser. If a
+local source build reports an incompatible image, rebuild it with
+`docker build --tag ddb-mcp-local:latest .`; released helpers should use the
+image from the same GitHub Release.
 
-### Use a non-default session for read-only live tests
+Existing-browser reuse is optional. Chrome 144 and later require “Allow remote
+debugging for this browser instance” at `chrome://inspect/#remote-debugging`.
+The helper offers reuse only when it detects a usable standard CDP endpoint;
+permission-proxy-only or otherwise incompatible browser versions fall back
+immediately to the isolated temporary profile, which needs no browser setting.
+Authentication itself occurs before automation is attached, so OAuth providers
+and password managers interact with an ordinary browser window. The helper
+uses CDP only after the user confirms that D&D Beyond is signed in.
 
-The container does not automatically load a host session file. If an existing
-`session.json` is stored outside the default host location, bind that exact file
-into the container for an explicitly requested read-only live test:
+Run `ddb-mcp-auth info`, `ddb-mcp-auth validate`, or the explicitly live
+`ddb-mcp-auth validate --live` to diagnose it. Reauthenticate with `login` when
+the session expires. Never transmit a password or cookie through an MCP tool.
+Use `--json` with diagnostics for machine-readable output. The helper also
+accepts `--browser-path`, `--volume`, `--image`, and `--timeout` overrides.
 
-```bash
-DDB_MCP_SESSION_FILE=/absolute/path/to/session.json
-
-docker run --rm --interactive \
-  --mount "type=bind,src=${DDB_MCP_SESSION_FILE},dst=/home/mcp/.config/ddb-mcp/session.json,readonly" \
-  ddb-mcp-local:latest
-```
-
-Keep the session outside the repository, even when repository ignore rules
-would exclude it. The read-only bind is suitable for retrieval and scraping
-tests, but not for `ddb_login`: login saves refreshed browser state and requires
-a writable session directory. For normal Toolkit use or session refreshes, copy
-the file into the dedicated `ddb-mcp-session` named volume as described above.
+`ddb-mcp-auth reset` removes saved files but preserves the volume and does not
+revoke the server-side D&D Beyond session. `ddb-mcp-auth volume remove` removes
+the whole helper-owned volume and refuses while a running container mounts it;
+both commands prompt unless `--force` is supplied. An unlabeled empty volume is
+recreated with the helper labels. An unlabeled nonempty volume is never adopted
+or overwritten; use `info` to identify that condition and resolve it manually.
 
 The explicit opt-in commands and release record are documented in
 [`LIVE_TESTING.md`](LIVE_TESTING.md).
@@ -143,10 +139,11 @@ An MCP client can also launch the image directly over stdio:
 
 ```bash
 docker run --rm --interactive \
-  --volume ddb-mcp-session:/home/mcp/.config/ddb-mcp \
+  --volume ddb-mcp-session:/home/mcp/.config/ddb-mcp:ro \
   ddb-mcp-local:latest
 ```
 
-The container needs outbound HTTPS access to D&D Beyond and the Wizards login
-service. No host directories are mounted by the supplied Toolkit definition;
-only the named session volume is writable.
+The container needs outbound HTTPS access to D&D Beyond. Authentication-provider
+traffic occurs only in the host browser. No host directories are mounted by the
+supplied Toolkit definition; the named session volume is read-only in the
+normal MCP runtime.

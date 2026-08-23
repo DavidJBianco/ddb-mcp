@@ -10,7 +10,6 @@ const server = new McpServer({ name: "ddb-mcp-live-mock", version: "1.0.0" });
 const text = (value) => ({ content: [{ type: "text", text: value }] });
 const sensitive = "SYNTHETIC_PRIVATE_MARKER";
 
-server.tool("ddb_login", "mock", {}, async () => text("Already logged in"));
 server.tool("ddb_list_characters", "mock", {}, async () => {
   if (process.env.DDB_MCP_LIVE_MOCK_FAIL_TOOL === "ddb_list_characters") {
     process.stderr.write(`HTTP 403 while reading ${process.env.DDB_MCP_SESSION_PATH} for ${sensitive}\n`);

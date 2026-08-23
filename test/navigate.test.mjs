@@ -11,6 +11,8 @@ function contextWith(page) {
 
 test("navigate rejects non-D&D Beyond URLs without loading them", async () => {
   const page = {
+    url: () => "https://www.dndbeyond.com/synthetic-page",
+    evaluate: async () => true,
     goto: async () => assert.fail("goto must not be called for a rejected URL"),
   };
 
@@ -45,6 +47,8 @@ test("navigate blocks a redirect outside D&D Beyond", async () => {
 test("interact clicks the first matching element", async () => {
   const events = [];
   const page = {
+    url: () => "https://www.dndbeyond.com/synthetic-page",
+    evaluate: async () => true,
     locator: (selector) => {
       events.push(["locator", selector]);
       return {
@@ -80,6 +84,8 @@ test("interact requires a value before filling a field", async () => {
 test("interact fills a field and records a screenshot", async () => {
   const events = [];
   const page = {
+    url: () => "https://www.dndbeyond.com/synthetic-page",
+    evaluate: async () => true,
     locator: (selector) => ({
       first: () => ({
         fill: async (value) => events.push(["fill", selector, value]),

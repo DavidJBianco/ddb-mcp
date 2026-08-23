@@ -1,5 +1,6 @@
 import { BrowserContext } from "playwright";
 import { getPage } from "../browser.js";
+import { AuthenticationRequiredError, isLoggedInOnCurrentPage } from "../session-state.js";
 
 export async function navigate(context: BrowserContext, url: string): Promise<string> {
   const page = await getPage(context);
@@ -12,6 +13,7 @@ export async function navigate(context: BrowserContext, url: string): Promise<st
   if (!isAllowedDdbUrl(page.url())) {
     throw new Error("Navigation redirected outside D&D Beyond and was blocked.");
   }
+  if (!(await isLoggedInOnCurrentPage(page))) throw new AuthenticationRequiredError();
   await page.waitForTimeout(1500);
 
   // Extract page text content and convert to readable markdown-ish format
@@ -55,6 +57,8 @@ export async function interact(
   value?: string
 ): Promise<string> {
   const page = await getPage(context);
+  if (action === "fill" && value === undefined) throw new Error("'value' is required for fill action.");
+  if (!(await isLoggedInOnCurrentPage(page))) throw new AuthenticationRequiredError();
 
   switch (action) {
     case "click": {
@@ -64,8 +68,7 @@ export async function interact(
     }
 
     case "fill": {
-      if (value === undefined) throw new Error("'value' is required for fill action.");
-      await page.locator(selector).first().fill(value);
+      await page.locator(selector).first().fill(value!);
       await page.waitForTimeout(500);
       return `Filled '${selector}' with: ${value}`;
     }
@@ -83,6 +86,7 @@ export async function interact(
 
 export async function getCurrentPageContent(context: BrowserContext): Promise<string> {
   const page = await getPage(context);
+  if (!(await isLoggedInOnCurrentPage(page))) throw new AuthenticationRequiredError();
   const url = page.url();
   const content = await page.evaluate(() => {
     document.querySelectorAll("script, style, nav, footer, .ad-container").forEach((el) => el.remove());

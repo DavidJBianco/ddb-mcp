@@ -52,7 +52,7 @@ test("an MCP client can discover and call tools through the real server", async 
   const listed = await client.listTools();
   assert.equal(
     client.getInstructions(),
-    "Use ddb_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to ddb_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use ddb_list_library to list accessible sourcebooks. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes."
+    "Authentication is managed on the Docker host with ddb-mcp-auth login; authenticated tool errors explain when the user must run it. Use ddb_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to ddb_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use ddb_list_library to list accessible sourcebooks. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes."
   );
   const toolNames = listed.tools.map(({ name }) => name);
   assert.ok(toolNames.includes("ddb_current_page"));
@@ -202,7 +202,7 @@ test("the production entrypoint negotiates MCP without initializing a browser", 
     await client.connect(transport);
 
     const listed = await client.listTools();
-    assert.ok(listed.tools.some(({ name }) => name === "ddb_login"));
+    assert.ok(!listed.tools.some(({ name }) => name === "ddb_login"));
     assert.ok(listed.tools.some(({ name }) => name === "ddb_read_book"));
   });
 });

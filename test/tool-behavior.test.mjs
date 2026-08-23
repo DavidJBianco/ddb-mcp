@@ -7,6 +7,7 @@ import test from "node:test";
 import { getCampaign, listMyCampaigns } from "../dist/tools/campaign.js";
 import { downloadCharacter, getCharacter, listCharacters } from "../dist/tools/character.js";
 import { listLibrary, readBook } from "../dist/tools/library.js";
+import { getCurrentPageContent, interact } from "../dist/tools/navigate.js";
 
 function contextFor(finalValue) {
   let currentUrl = "about:blank";
@@ -72,8 +73,17 @@ test("authenticated tools reject a logged-out synthetic page", async () => {
   };
   const context = { pages: () => [page] };
 
-  await assert.rejects(listCharacters(context), /Not logged in/);
-  await assert.rejects(listMyCampaigns(context), /Not logged in/);
-  await assert.rejects(listLibrary(context), /Not logged in/);
-  await assert.rejects(readBook(context, { bookSlug: "synthetic-handbook" }), /Not logged in/);
+  await assert.rejects(listCharacters(context), /ddb-mcp-auth login/);
+  await assert.rejects(listMyCampaigns(context), /ddb-mcp-auth login/);
+  await assert.rejects(listLibrary(context), /ddb-mcp-auth login/);
+  await assert.rejects(readBook(context, { bookSlug: "synthetic-handbook" }), /ddb-mcp-auth login/);
+  await assert.rejects(interact(context, "click", "button"), /ddb-mcp-auth login/);
+  await assert.rejects(getCurrentPageContent(context), /ddb-mcp-auth login/);
+});
+
+test("character-service authorization failures use the shared authentication error", async () => {
+  const context = contextFor(() => {
+    throw new Error("API returned 403: Forbidden");
+  });
+  await assert.rejects(getCharacter(context, "4242"), /ddb-mcp-auth login/);
 });

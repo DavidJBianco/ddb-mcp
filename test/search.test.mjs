@@ -10,8 +10,13 @@ import {
 
 function searchHarness(results) {
   const visits = [];
+  let currentUrl = "about:blank";
   const page = {
-    goto: async (url, options) => visits.push({ url, options }),
+    goto: async (url, options) => {
+      currentUrl = url;
+      visits.push({ url, options });
+    },
+    url: () => currentUrl,
     waitForTimeout: async () => {},
     evaluate: async (_extractor, category) => {
       assert.equal(category, "spells");
@@ -229,7 +234,7 @@ test("sourcebook search fails clearly when the title filter is missing", async (
 
 test("sourcebook search rejects a logged-out session without opening the library", async () => {
   const harness = sourcebookHarness([], { authenticated: false });
-  await assert.rejects(search(harness.context, "handbook", "sourcebooks"), /Not logged in/);
+  await assert.rejects(search(harness.context, "handbook", "sourcebooks"), /ddb-mcp-auth login/);
   assert.equal(harness.visits.length, 1);
 });
 

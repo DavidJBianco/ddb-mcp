@@ -7,7 +7,6 @@ export const EXPECTED_TOOLS = [
   "ddb_list_campaigns",
   "ddb_list_characters",
   "ddb_list_library",
-  "ddb_login",
   "ddb_navigate",
   "ddb_read_book",
   "ddb_search",

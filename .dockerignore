@@ -3,6 +3,7 @@
 node_modules
 dist
 coverage
+cmd
 *.log
 npm-debug.log*
 .env
