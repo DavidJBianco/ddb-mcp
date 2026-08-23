@@ -13,7 +13,8 @@ function codePoints(value) {
     return Array.from(value);
 }
 function stableFingerprint(blocks, images) {
-    return createHash("sha256").update(JSON.stringify({ blocks, images })).digest("hex");
+    const stableImages = images.map(({ id, alt, caption }) => ({ id, alt, caption }));
+    return createHash("sha256").update(JSON.stringify({ blocks, images: stableImages })).digest("hex");
 }
 export function encodeCursor(payload) {
     return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
@@ -201,7 +202,8 @@ async function extractBookPage(context, request) {
         const liveRoot = document.querySelector("article") ??
             document.querySelector(".content-container") ??
             document.querySelector(".p-content") ??
-            document.querySelector("main [class*='content']");
+            document.querySelector("main [class*='content']") ??
+            (isBookOutline ? document.querySelector("main") : null);
         if (!liveRoot)
             return null;
         const root = liveRoot.cloneNode(true);

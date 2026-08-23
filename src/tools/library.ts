@@ -83,7 +83,8 @@ function codePoints(value: string): string[] {
 }
 
 function stableFingerprint(blocks: ContentBlock[], images: ImageMetadata[]): string {
-  return createHash("sha256").update(JSON.stringify({ blocks, images })).digest("hex");
+  const stableImages = images.map(({ id, alt, caption }) => ({ id, alt, caption }));
+  return createHash("sha256").update(JSON.stringify({ blocks, images: stableImages })).digest("hex");
 }
 
 export function encodeCursor(payload: CursorPayload): string {
@@ -309,7 +310,8 @@ async function extractBookPage(context: BrowserContext, request: ReturnType<type
       document.querySelector("article") ??
       document.querySelector(".content-container") ??
       document.querySelector(".p-content") ??
-      document.querySelector("main [class*='content']");
+      document.querySelector("main [class*='content']") ??
+      (isBookOutline ? document.querySelector("main") : null);
     if (!liveRoot) return null;
 
     const root = liveRoot.cloneNode(true) as Element;
