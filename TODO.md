@@ -22,7 +22,7 @@ release plan or pull request.
 - [x] Add Docker tests for the unprivileged runtime user, writable session
   volume, read-only externally mounted session, missing session, file
   permissions, process shutdown, and absence of credentials in image layers.
-- [ ] Add Docker MCP Toolkit integration coverage beyond a plain `docker run`,
+- [x] Add Docker MCP Toolkit integration coverage beyond a plain `docker run`,
   including catalog loading and an MCP call through a Toolkit profile where
   the test environment supports it.
 
