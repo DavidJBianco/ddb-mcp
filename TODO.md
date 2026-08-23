@@ -84,6 +84,18 @@ release plan or pull request.
 - [ ] Replace brittle fixed waits with bounded waits for meaningful page state
   as tool-specific tests make those changes safe.
 
+## Authentication experience
+
+- [ ] Decide whether interactive authentication should remain an MCP tool or
+  move to a dedicated login/bootstrap CLI that launches a visible browser and
+  writes the external Playwright session file.
+- [ ] Evaluate an optional localhost-only VNC/noVNC login workflow for Docker,
+  using the same external session volume without exposing a remote display in
+  the normal MCP server configuration.
+- [ ] Define the compatibility and migration path for `ddb_login`; removing a
+  registered tool is a breaking change and should not happen without an
+  intentional versioned transition.
+
 ## Packaging and releases
 
 - [ ] Complete the first governed `dev` to `main` release, including the local
