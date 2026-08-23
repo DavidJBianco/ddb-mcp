@@ -24,8 +24,10 @@ npm run test:docker
 
 The suite exercises MCP initialization through the normal image entrypoint and
 uses a read-only mounted synthetic Playwright backend for browser-backed tool
-calls. Container networking is disabled, and test fixtures are not copied into
-the production image. It also checks the non-root runtime and session mounts.
+calls, including normalized search attribution and both accessible and catalog
+sourcebook-search scopes. Container networking is disabled, and test fixtures
+are not copied into the production image. It also checks the non-root runtime
+and session mounts.
 CI runs the complete browser suite natively on AMD64. The ARM64 image runs the
 same runtime-hardening checks and an exact MCP initialization/tool-list smoke
 test under QEMU; Chromium itself is not treated as reliable under emulation.

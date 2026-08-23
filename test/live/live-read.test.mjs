@@ -259,9 +259,28 @@ test(
     await t.test("performs a read-only search", async () => {
       const results = await callText(client, diagnostics, "ddb_search", { query: "shield", category: "spells" });
       requireStructure(results.length > 0, "search returned an empty response");
-      if (!results.startsWith("No results found")) {
-        const parsed = parseJson(results, "ddb_search");
-        requireStructure(Array.isArray(parsed.results), "search results shape changed");
+      const parsed = parseJson(results, "ddb_search");
+      requireStructure(Array.isArray(parsed.results), "search results shape changed");
+      requireStructure(parsed.results.every((result) => Array.isArray(result.sources)), "search source attribution shape changed");
+    });
+
+    await t.test("searches accessible and catalog sourcebooks without reading them", async () => {
+      for (const sourceScope of [undefined, "all"]) {
+        const parsed = parseJson(
+          await callText(client, diagnostics, "ddb_search", {
+            query: "handbook",
+            category: "sourcebooks",
+            ...(sourceScope ? { source_scope: sourceScope } : {}),
+          }),
+          "ddb_search sourcebooks"
+        );
+        requireStructure(Array.isArray(parsed.results), "sourcebook search results shape changed");
+        requireStructure(typeof parsed.count === "number", "sourcebook search count shape changed");
+        for (const result of parsed.results) {
+          requireStructure(["accessible", "unavailable", "unknown"].includes(result.access), "sourcebook access shape changed");
+          requireStructure(Array.isArray(result.sources), "sourcebook sources shape changed");
+          requireStructure(result.bookSlug === null || typeof result.bookSlug === "string", "sourcebook slug shape changed");
+        }
       }
     });
 

@@ -95,7 +95,30 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
       query: "shield",
       category: "spells",
     });
-    assert.equal(JSON.parse(searchText).results[0].name, "Synthetic Shield");
+    const searchResult = JSON.parse(searchText).results[0];
+    assert.equal(searchResult.name, "Synthetic Shield");
+    assert.deepEqual(searchResult.sources, [{
+      title: "Synthetic Handbook",
+      url: "https://www.dndbeyond.com/sources/synthetic-handbook",
+      bookSlug: "synthetic-handbook",
+      chapterSlug: null,
+    }]);
+
+    const accessibleSources = JSON.parse(await callSuccessfully("ddb_search", {
+      query: "handbook",
+      category: "sourcebooks",
+    }));
+    assert.equal(accessibleSources.count, 1);
+    assert.equal(accessibleSources.results[0].access, "accessible");
+    assert.equal(accessibleSources.results[0].bookSlug, "synthetic-handbook");
+
+    const catalogSources = JSON.parse(await callSuccessfully("ddb_search", {
+      query: "book",
+      category: "sourcebooks",
+      source_scope: "all",
+    }));
+    assert.deepEqual(catalogSources.results.map(({ access }) => access), ["accessible", "unavailable"]);
+    assert.match(catalogSources.results[1].url, /marketplace\.dndbeyond\.com/);
 
     assert.equal(JSON.parse(await callSuccessfully("ddb_list_library")).count, 1);
     const bookOutline = JSON.parse(await callSuccessfully("ddb_read_book", {

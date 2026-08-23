@@ -63,8 +63,21 @@ server.tool("ddb_current_page", "mock", {}, async () =>
 server.tool(
   "ddb_search",
   "mock",
-  { query: z.string(), category: z.string().optional() },
-  async () => text(JSON.stringify({ results: [{ name: sensitive }] }))
+  { query: z.string(), category: z.string().optional(), source_scope: z.enum(["accessible", "all"]).optional() },
+  async ({ query, category, source_scope }) => {
+    const sourcebook = category === "sourcebooks";
+    const results = sourcebook
+      ? [{
+          name: sensitive,
+          type: "sourcebook",
+          url: source_scope === "all" ? "https://marketplace.dndbeyond.com/synthetic" : "https://www.dndbeyond.com/sources/synthetic-book",
+          bookSlug: source_scope === "all" ? null : "synthetic-book",
+          access: source_scope === "all" ? "unavailable" : "accessible",
+          sources: [],
+        }]
+      : [{ name: sensitive, type: "1st Level", url: "https://www.dndbeyond.com/spells/synthetic", sources: [] }];
+    return text(JSON.stringify({ query, category: category ?? "all", count: results.length, results }));
+  }
 );
 server.tool("ddb_list_library", "mock", {}, async () =>
   text(JSON.stringify({ books: [{ slug: "synthetic-book", title: sensitive }] }))

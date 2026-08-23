@@ -54,7 +54,7 @@ release plan or pull request.
   block-aware boundaries, oversized blocks, lists, tables, repeated headings,
   malformed cursors, and changed content.
 - [x] Add section-level sourcebook retrieval with pagination.
-- [ ] Add sourcebook search and normalized source attribution to `ddb_search`
+- [x] Add sourcebook search and normalized source attribution to `ddb_search`
   so callers can pivot from standalone results into a sourcebook when D&D
   Beyond exposes that relationship.
 - [x] Preserve document structure without mutating the rendered live DOM or

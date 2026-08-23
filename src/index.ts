@@ -9,7 +9,7 @@ import { login } from "./auth.js";
 import { getCharacter, downloadCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
 import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
-import { search } from "./tools/search.js";
+import { search, validateSearchRequest } from "./tools/search.js";
 import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
 import { PACKAGE_VERSION } from "./version.js";
 
@@ -27,7 +27,7 @@ export function createServer(getContextForTool: BrowserContextProvider = getShar
     name: "dndbeyond",
     version: PACKAGE_VERSION,
   }, {
-    instructions: "Use ddb_list_library to discover accessible sourcebooks and their slugs. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Use ddb_search for corpus results; search result URLs are not guaranteed to identify a parent sourcebook. Sourcebook responses include image metadata, not image bytes.",
+    instructions: "Use ddb_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to ddb_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use ddb_list_library to list accessible sourcebooks. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
   });
 
 // ─── ddb_login ────────────────────────────────────────────────────────────────
@@ -223,18 +223,23 @@ server.tool(
 // ─── ddb_search ───────────────────────────────────────────────────────────────
 server.tool(
   "ddb_search",
-  "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, or general results. Returned URLs are standalone results and may not identify a parent sourcebook.",
+  "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, sourcebooks, or general results. Results include normalized source attribution when D&D Beyond exposes it. Sourcebook searches default to accessible books.",
   {
     query: z.string().describe("The search query (e.g. 'Fireball', 'Beholder', 'Vorpal Sword')"),
     category: z
-      .enum(["spells", "monsters", "items", "races", "classes", "feats", "all"])
+      .enum(["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"])
       .optional()
-      .describe("Category to search within (defaults to 'all')"),
+      .describe("Category to search within (defaults to 'all'). Use 'sourcebooks' to search the rendered D&D Beyond library by title."),
+    source_scope: z
+      .enum(["accessible", "all"])
+      .optional()
+      .describe("Sourcebook availability scope. Defaults to 'accessible'; 'all' also returns unavailable catalog/store results. Valid only with category 'sourcebooks'."),
   },
-  async ({ query, category }) => {
+  async ({ query, category, source_scope }) => {
     try {
+      validateSearchRequest(category ?? "all", source_scope);
       const context = await getContextForTool();
-      const results = await search(context, query, category ?? "all");
+      const results = await search(context, query, category ?? "all", source_scope);
       return { content: [{ type: "text", text: results }] };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -14,7 +14,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that gi
 | `ddb_get_campaign` | Fetch campaign details — DM, description, and active characters. |
 | `ddb_list_library` | List sourcebooks you own or can access through sharing, including their slugs. |
 | `ddb_read_book` | Discover book/chapter outlines and read bounded chapter or section content with cursor pagination. |
-| `ddb_search` | Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, or general results. |
+| `ddb_search` | Search D&D Beyond indexes and accessible or catalog sourcebooks, with normalized source attribution when exposed. |
 | `ddb_navigate` | Navigate to any D&D Beyond URL and return its text content. |
 | `ddb_interact` | Click, fill, or screenshot the currently loaded browser page. |
 | `ddb_current_page` | Return the text content of whatever page is currently loaded. |
@@ -134,6 +134,23 @@ Show me the table of contents for the Player's Handbook
 Read the Barbarian class section from the Player's Handbook
 ```
 
+**Search accessible sourcebooks by title:**
+```json
+{
+  "query": "Player's Handbook",
+  "category": "sourcebooks"
+}
+```
+
+**Include unavailable catalog sourcebooks:**
+```json
+{
+  "query": "handbook",
+  "category": "sourcebooks",
+  "source_scope": "all"
+}
+```
+
 **Download a character:**
 ```
 Download the character data for Roland Stonehelm to my Downloads folder
@@ -188,9 +205,22 @@ but an individually oversized block is split. To read only one section, pass a
 stable `section` ID returned by the chapter outline, or an exact heading name
 when that name is unique.
 
-Search results are standalone D&D Beyond URLs and do not necessarily identify
-a parent sourcebook. Use `ddb_list_library` and book outlines to navigate
-within a sourcebook. Image bytes are not downloaded or embedded.
+`ddb_search` always returns a JSON envelope, including `count: 0` and an empty
+`results` array when nothing matches. Ordinary spell, monster, item, race,
+class, feat, and general results include a `sources` array. Each normalized
+source has nullable `title`, `url`, `bookSlug`, and `chapterSlug` fields. The
+array is empty when the rendered D&D Beyond listing does not expose source
+attribution; the server does not open every result page to fill it in.
+
+With `category: "sourcebooks"`, `source_scope` defaults to `"accessible"` and
+searches owned/shared books by title. Set it to `"all"` to include catalog
+books. Sourcebook results have an `access` value of `"accessible"`,
+`"unavailable"`, or `"unknown"`. Only pass a result to `ddb_read_book` when
+`access` is `"accessible"` and `bookSlug` is non-null. Unavailable results may
+instead contain the D&D Beyond store URL. `source_scope` is invalid for every
+other category.
+
+Image bytes are not downloaded or embedded.
 
 ## Upgrading
 
