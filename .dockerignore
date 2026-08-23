@@ -13,5 +13,5 @@ npm-debug.log*
 
 # Never send D&D Beyond browser sessions or local credentials to the daemon.
 session.json
-.config/ddb-mcp
-.ddb-mcp
+.config/mysterium
+.mysterium

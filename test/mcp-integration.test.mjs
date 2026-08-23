@@ -11,7 +11,7 @@ import { captureStderr, withFailureDiagnostics } from "./support/failure-diagnos
 
 async function connectClient(t, contextProvider) {
   const server = createServer(contextProvider);
-  const client = new Client({ name: "ddb-mcp-offline-test", version: "1.0.0" });
+  const client = new Client({ name: "mysterium-offline-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
   await server.connect(serverTransport);
@@ -52,13 +52,13 @@ test("an MCP client can discover and call tools through the real server", async 
   const listed = await client.listTools();
   assert.equal(
     client.getInstructions(),
-    "Authentication is managed on the Docker host with ddb-mcp-auth login; authenticated tool errors explain when the user must run it. Use ddb_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to ddb_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use ddb_list_library to list accessible sourcebooks. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes."
+    "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes."
   );
   const toolNames = listed.tools.map(({ name }) => name);
-  assert.ok(toolNames.includes("ddb_current_page"));
-  assert.ok(toolNames.includes("ddb_search"));
-  assert.ok(toolNames.includes("ddb_read_book"));
-  const searchTool = listed.tools.find(({ name }) => name === "ddb_search");
+  assert.ok(toolNames.includes("mysterium_current_page"));
+  assert.ok(toolNames.includes("mysterium_search"));
+  assert.ok(toolNames.includes("mysterium_read_book"));
+  const searchTool = listed.tools.find(({ name }) => name === "mysterium_search");
   assert.equal(
     searchTool.description,
     "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, sourcebooks, or general results. Results include normalized source attribution when D&D Beyond exposes it. Sourcebook searches default to accessible books."
@@ -76,12 +76,12 @@ test("an MCP client can discover and call tools through the real server", async 
   ]);
   assert.deepEqual(searchTool.inputSchema.properties.source_scope.enum, ["accessible", "all"]);
   assert.match(searchTool.inputSchema.properties.source_scope.description, /unavailable catalog\/store/);
-  const libraryTool = listed.tools.find(({ name }) => name === "ddb_list_library");
+  const libraryTool = listed.tools.find(({ name }) => name === "mysterium_list_library");
   assert.equal(
     libraryTool.description,
-    "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with ddb_read_book."
+    "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with mysterium_read_book."
   );
-  const readTool = listed.tools.find(({ name }) => name === "ddb_read_book");
+  const readTool = listed.tools.find(({ name }) => name === "mysterium_read_book");
   assert.equal(
     readTool.description,
     "Discover an accessible D&D Beyond sourcebook's table of contents or chapter headings, or read bounded chapter or section Markdown with cursor pagination. Returns a JSON envelope with nextCursor and done."
@@ -95,7 +95,7 @@ test("an MCP client can discover and call tools through the real server", async 
   assert.match(readTool.inputSchema.properties.cursor.description, /same book_slug/);
   assert.match(readTool.inputSchema.properties.max_chars.description, /25000/);
 
-  const pageResult = await client.callTool({ name: "ddb_current_page", arguments: {} });
+  const pageResult = await client.callTool({ name: "mysterium_current_page", arguments: {} });
   assert.equal(pageResult.isError, undefined);
   assert.equal(
     pageResult.content[0].text,
@@ -103,7 +103,7 @@ test("an MCP client can discover and call tools through the real server", async 
   );
 
   const searchResult = await client.callTool({
-    name: "ddb_search",
+    name: "mysterium_search",
     arguments: { query: "shield", category: "spells" },
   });
   assert.equal(searchResult.isError, undefined);
@@ -120,7 +120,7 @@ test("MCP input validation rejects invalid arguments before browser access", asy
   });
 
   const result = await client.callTool({
-    name: "ddb_search",
+    name: "mysterium_search",
     arguments: { query: "shield", category: "not-a-category" },
   });
 
@@ -129,7 +129,7 @@ test("MCP input validation rejects invalid arguments before browser access", asy
   assert.equal(contextRequested, false);
 });
 
-test("ddb_search rejects source_scope for other categories before browser access", async (t) => {
+test("mysterium_search rejects source_scope for other categories before browser access", async (t) => {
   let contextRequested = false;
   const client = await connectClient(t, async () => {
     contextRequested = true;
@@ -137,7 +137,7 @@ test("ddb_search rejects source_scope for other categories before browser access
   });
 
   const result = await client.callTool({
-    name: "ddb_search",
+    name: "mysterium_search",
     arguments: { query: "shield", category: "spells", source_scope: "all" },
   });
 
@@ -151,7 +151,7 @@ test("MCP tool failures are returned as tool errors", async (t) => {
     throw new Error("synthetic browser failure");
   });
 
-  const result = await client.callTool({ name: "ddb_current_page", arguments: {} });
+  const result = await client.callTool({ name: "mysterium_current_page", arguments: {} });
 
   assert.equal(result.isError, true);
   assert.equal(result.content[0].text, "Failed to get page content: synthetic browser failure");
@@ -165,7 +165,7 @@ test("a separate process serves MCP tools over stdio", async (t) => {
     stderr: "pipe",
   });
   const diagnostics = captureStderr(transport);
-  const client = new Client({ name: "ddb-mcp-stdio-test", version: "1.0.0" });
+  const client = new Client({ name: "mysterium-stdio-test", version: "1.0.0" });
 
   t.after(async () => {
     await client.close();
@@ -174,9 +174,9 @@ test("a separate process serves MCP tools over stdio", async (t) => {
     await client.connect(transport);
 
     const listed = await client.listTools();
-    assert.ok(listed.tools.some(({ name }) => name === "ddb_current_page"));
+    assert.ok(listed.tools.some(({ name }) => name === "mysterium_current_page"));
 
-    const result = await client.callTool({ name: "ddb_current_page", arguments: {} });
+    const result = await client.callTool({ name: "mysterium_current_page", arguments: {} });
     assert.equal(result.isError, undefined);
     assert.equal(
       result.content[0].text,
@@ -193,7 +193,7 @@ test("the production entrypoint negotiates MCP without initializing a browser", 
     stderr: "pipe",
   });
   const diagnostics = captureStderr(transport);
-  const client = new Client({ name: "ddb-mcp-entrypoint-test", version: "1.0.0" });
+  const client = new Client({ name: "mysterium-entrypoint-test", version: "1.0.0" });
 
   t.after(async () => {
     await client.close();
@@ -202,7 +202,7 @@ test("the production entrypoint negotiates MCP without initializing a browser", 
     await client.connect(transport);
 
     const listed = await client.listTools();
-    assert.ok(!listed.tools.some(({ name }) => name === "ddb_login"));
-    assert.ok(listed.tools.some(({ name }) => name === "ddb_read_book"));
+    assert.ok(!listed.tools.some(({ name }) => name === "mysterium_login"));
+    assert.ok(listed.tools.some(({ name }) => name === "mysterium_read_book"));
   });
 });

@@ -30,7 +30,7 @@ export function decodeCursor(cursor) {
         parsed = JSON.parse(decoded);
     }
     catch {
-        throw new Error("Invalid cursor: expected an opaque cursor returned by ddb_read_book.");
+        throw new Error("Invalid cursor: expected an opaque cursor returned by mysterium_read_book.");
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new Error("Invalid cursor: cursor payload must be an object.");

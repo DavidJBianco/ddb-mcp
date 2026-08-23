@@ -8,7 +8,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { EXPECTED_TOOLS } from "../support/tool-manifest.mjs";
 import { captureStderr, withFailureDiagnostics } from "../support/failure-diagnostics.mjs";
 
-const image = process.env.DDB_MCP_TEST_IMAGE ?? "ddb-mcp:test";
+const image = process.env.MYSTERIUM_TEST_IMAGE ?? "mysterium:test";
 const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 const testRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -20,7 +20,7 @@ async function connectDockerClient(t, args, containerName) {
     stderr: "pipe",
   });
   const diagnostics = captureStderr(transport);
-  const client = new Client({ name: "ddb-mcp-docker-test", version: "1.0.0" });
+  const client = new Client({ name: "mysterium-docker-test", version: "1.0.0" });
   t.after(async () => {
     await client.close();
     spawnSync("docker", ["rm", "--force", containerName], { stdio: "ignore" });
@@ -30,19 +30,19 @@ async function connectDockerClient(t, args, containerName) {
 }
 
 test("production image returns the host authentication instruction when session state is missing", { timeout: 30_000 }, async (t) => {
-  const containerName = `ddb-mcp-test-missing-auth-${process.pid}`;
+  const containerName = `mysterium-test-missing-auth-${process.pid}`;
   const { client, diagnostics } = await connectDockerClient(t, [
     "run", "--rm", "--name", containerName, "--interactive", "--network", "none", image,
   ], containerName);
   await withFailureDiagnostics("missing Docker authentication", diagnostics, async () => {
-    const result = await client.callTool({ name: "ddb_list_characters", arguments: {} });
+    const result = await client.callTool({ name: "mysterium_list_characters", arguments: {} });
     assert.equal(result.isError, true);
-    assert.match(result.content[0].text, /ddb-mcp-auth login/);
+    assert.match(result.content[0].text, /mysterium-auth login/);
   });
 });
 
 test("production image executes synthetic browser-backed MCP calls", { timeout: 120_000 }, async (t) => {
-  const containerName = `ddb-mcp-test-browser-${process.pid}`;
+  const containerName = `mysterium-test-browser-${process.pid}`;
   const { client, diagnostics } = await connectDockerClient(t, [
     "run",
     "--rm",
@@ -78,31 +78,31 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
       return result.content[0].text;
     }
 
-    assert.equal(JSON.parse(await callSuccessfully("ddb_list_characters")).length, 1);
+    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_characters")).length, 1);
 
-    const characterText = await callSuccessfully("ddb_get_character", { character_id: "4242" });
+    const characterText = await callSuccessfully("mysterium_get_character", { character_id: "4242" });
     assert.equal(JSON.parse(characterText).data.name, "Synthetic Hero");
-    await callSuccessfully("ddb_download_character", {
+    await callSuccessfully("mysterium_download_character", {
       character_id: "4242",
       output_path: "/tmp/synthetic-character.json",
     });
 
     assert.equal(
-      JSON.parse(await callSuccessfully("ddb_get_campaign", { campaign_id: "7" })).name,
+      JSON.parse(await callSuccessfully("mysterium_get_campaign", { campaign_id: "7" })).name,
       "Synthetic Campaign"
     );
-    assert.equal(JSON.parse(await callSuccessfully("ddb_list_campaigns")).length, 1);
+    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_campaigns")).length, 1);
 
-    await callSuccessfully("ddb_navigate", {
+    await callSuccessfully("mysterium_navigate", {
       url: "https://www.dndbeyond.com/synthetic-page",
     });
-    await callSuccessfully("ddb_interact", {
+    await callSuccessfully("mysterium_interact", {
       action: "click",
       selector: "#synthetic-button",
     });
-    assert.match(await callSuccessfully("ddb_current_page"), /Synthetic Page/);
+    assert.match(await callSuccessfully("mysterium_current_page"), /Synthetic Page/);
 
-    const searchText = await callSuccessfully("ddb_search", {
+    const searchText = await callSuccessfully("mysterium_search", {
       query: "shield",
       category: "spells",
     });
@@ -130,7 +130,7 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     ]);
     assert.deepEqual(JSON.parse(searchText).results[1].sources, []);
 
-    const accessibleSources = JSON.parse(await callSuccessfully("ddb_search", {
+    const accessibleSources = JSON.parse(await callSuccessfully("mysterium_search", {
       query: "handbook",
       category: "sourcebooks",
     }));
@@ -138,7 +138,7 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.equal(accessibleSources.results[0].access, "accessible");
     assert.equal(accessibleSources.results[0].bookSlug, "synthetic-handbook");
 
-    const catalogSources = JSON.parse(await callSuccessfully("ddb_search", {
+    const catalogSources = JSON.parse(await callSuccessfully("mysterium_search", {
       query: "book",
       category: "sourcebooks",
       source_scope: "all",
@@ -146,14 +146,14 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.deepEqual(catalogSources.results.map(({ access }) => access), ["accessible", "unavailable"]);
     assert.match(catalogSources.results[1].url, /marketplace\.dndbeyond\.com/);
 
-    assert.equal(JSON.parse(await callSuccessfully("ddb_list_library")).count, 1);
-    const bookOutline = JSON.parse(await callSuccessfully("ddb_read_book", {
+    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_library")).count, 1);
+    const bookOutline = JSON.parse(await callSuccessfully("mysterium_read_book", {
       book_slug: "synthetic-handbook",
     }));
     assert.equal(bookOutline.kind, "outline");
     assert.equal(bookOutline.entries[0].chapterSlug, "safe-examples");
 
-    const chapterOutline = JSON.parse(await callSuccessfully("ddb_read_book", {
+    const chapterOutline = JSON.parse(await callSuccessfully("mysterium_read_book", {
       book_slug: "synthetic-handbook",
       chapter_slug: "safe-examples",
       mode: "outline",
@@ -163,7 +163,7 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     const contentPages = [];
     let cursor;
     do {
-      const page = JSON.parse(await callSuccessfully("ddb_read_book", {
+      const page = JSON.parse(await callSuccessfully("mysterium_read_book", {
         book_slug: "synthetic-handbook",
         chapter_slug: "safe-examples",
         section: "section-details-1",
@@ -178,23 +178,23 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.match(combinedContent, /1\. First ordered step/);
     assert.match(combinedContent, /\| Kind \| Value \|/);
     assert.deepEqual(contentPages.flatMap(({ images }) => images).map(({ alt }) => alt), ["Synthetic diagram"]);
-    assert.match(await callSuccessfully("ddb_current_page"), /Preserved navigation marker/);
+    assert.match(await callSuccessfully("mysterium_current_page"), /Preserved navigation marker/);
 
-    const alternate = JSON.parse(await callSuccessfully("ddb_read_book", {
+    const alternate = JSON.parse(await callSuccessfully("mysterium_read_book", {
       book_slug: "synthetic-handbook",
       chapter_slug: "alternate-layout",
     }));
     assert.match(alternate.text, /Alternate supported sourcebook structure/);
 
     const changedLayout = await client.callTool({
-      name: "ddb_read_book",
+      name: "mysterium_read_book",
       arguments: { book_slug: "synthetic-handbook", chapter_slug: "changed-layout" },
     });
     assert.equal(changedLayout.isError, true);
     assert.match(changedLayout.content[0].text, /layout was not recognized/);
 
     const fallbackResult = await client.callTool({
-      name: "ddb_get_character",
+      name: "mysterium_get_character",
       arguments: { character_id: "999", fallback_scrape: true },
     });
     assert.equal(fallbackResult.isError, undefined);
@@ -203,7 +203,7 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.deepEqual(calledTools.sort(), EXPECTED_TOOLS);
 
     const failureResult = await client.callTool({
-      name: "ddb_get_campaign",
+      name: "mysterium_get_campaign",
       arguments: { campaign_id: "network-error" },
     });
     assert.equal(failureResult.isError, true);

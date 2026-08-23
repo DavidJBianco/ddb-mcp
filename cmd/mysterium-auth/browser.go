@@ -175,7 +175,7 @@ func temporaryProfile(prefix string) (string, func(), error) {
 }
 
 func probeBrowser(ctx context.Context, candidate browserCandidate) error {
-	profile, cleanup, err := temporaryProfile("ddb-mcp-auth-probe-")
+	profile, cleanup, err := temporaryProfile("mysterium-auth-probe-")
 	if err != nil {
 		return err
 	}
@@ -192,10 +192,10 @@ func probeBrowser(ctx context.Context, candidate browserCandidate) error {
 	browserContext, cancelBrowser := chromedp.NewContext(allocatorContext)
 	defer cancelBrowser()
 	var value string
-	if err := chromedp.Run(browserContext, chromedp.Navigate("about:blank"), chromedp.Evaluate(`"ddb-mcp-cdp"`, &value)); err != nil {
+	if err := chromedp.Run(browserContext, chromedp.Navigate("about:blank"), chromedp.Evaluate(`"mysterium-cdp"`, &value)); err != nil {
 		return err
 	}
-	if value != "ddb-mcp-cdp" {
+	if value != "mysterium-cdp" {
 		return errors.New("CDP evaluation returned an unexpected result")
 	}
 	return nil
@@ -302,7 +302,7 @@ func loginInExistingBrowser(ctx context.Context, candidate browserCandidate, end
 }
 
 func loginInEphemeralBrowser(ctx context.Context, candidate browserCandidate, reader *bufio.Reader) (storageState, error) {
-	profile, cleanup, err := temporaryProfile("ddb-mcp-auth-browser-")
+	profile, cleanup, err := temporaryProfile("mysterium-auth-browser-")
 	if err != nil {
 		return storageState{}, fmt.Errorf("create temporary browser profile: %w", err)
 	}

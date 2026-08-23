@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	defaultVolume = "ddb-mcp-session"
-	purposeLabel  = "io.github.davidjbianco.ddb-mcp.purpose=session"
-	managerLabel  = "io.github.davidjbianco.ddb-mcp.managed-by=ddb-mcp-auth"
+	defaultVolume = "mysterium-session"
+	purposeLabel  = "io.github.davidjbianco.mysterium.purpose=session"
+	managerLabel  = "io.github.davidjbianco.mysterium.managed-by=mysterium-auth"
 )
 
 type commandRunner interface {
@@ -96,8 +96,8 @@ func (client dockerClient) inspectVolume() (*volumeInspection, error) {
 }
 
 func labelsOwned(labels map[string]string) bool {
-	return labels["io.github.davidjbianco.ddb-mcp.purpose"] == "session" &&
-		labels["io.github.davidjbianco.ddb-mcp.managed-by"] == "ddb-mcp-auth"
+	return labels["io.github.davidjbianco.mysterium.purpose"] == "session" &&
+		labels["io.github.davidjbianco.mysterium.managed-by"] == "mysterium-auth"
 }
 
 func (client dockerClient) createVolume() error {
@@ -142,18 +142,18 @@ func (client dockerClient) requireOwnedVolume() (*volumeInspection, error) {
 		return nil, fmt.Errorf("the labeled session volume %q does not exist", client.volume)
 	}
 	if !labelsOwned(inspection.Labels) {
-		return nil, fmt.Errorf("volume %q is not labeled as ddb-mcp-auth state; refusing to modify it", client.volume)
+		return nil, fmt.Errorf("volume %q is not labeled as mysterium-auth state; refusing to modify it", client.volume)
 	}
 	return inspection, nil
 }
 
 func (client dockerClient) runAdmin(stdin []byte, command string, live, writable bool) (adminResult, error) {
-	mount := fmt.Sprintf("type=volume,src=%s,dst=/home/mcp/.config/ddb-mcp", client.volume)
+	mount := fmt.Sprintf("type=volume,src=%s,dst=/home/mcp/.config/mysterium", client.volume)
 	if !writable {
 		mount += ",readonly"
 	}
 	args := []string{"run", "--rm", "--interactive", "--mount", mount,
-		"--env", "DDB_MCP_AUTH_HELPER_VERSION=" + client.helperVersion,
+		"--env", "MYSTERIUM_AUTH_HELPER_VERSION=" + client.helperVersion,
 		"--entrypoint", "node"}
 	if !live {
 		args = append(args, "--network", "none")
@@ -191,7 +191,7 @@ func (client dockerClient) ensureVolume() error {
 		}
 		return client.createVolume()
 	}
-	return fmt.Errorf("volume %q is not labeled as ddb-mcp-auth state and is not empty; refusing to adopt or overwrite it", client.volume)
+	return fmt.Errorf("volume %q is not labeled as mysterium-auth state and is not empty; refusing to adopt or overwrite it", client.volume)
 }
 
 func (client dockerClient) importState(state []byte) (adminResult, error) {

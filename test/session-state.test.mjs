@@ -33,8 +33,8 @@ function admin(sessionPath, args, input = "") {
     cwd: new URL("..", import.meta.url),
     env: {
       ...process.env,
-      DDB_MCP_SESSION_PATH: sessionPath,
-      DDB_MCP_AUTH_HELPER_VERSION: "test-helper",
+      MYSTERIUM_SESSION_PATH: sessionPath,
+      MYSTERIUM_AUTH_HELPER_VERSION: "test-helper",
     },
     input,
     encoding: "utf8",
@@ -56,12 +56,12 @@ test("storage-state validation accepts only D&D Beyond state", () => {
 });
 
 test("authentication errors give the host-helper instruction", () => {
-  assert.match(AUTH_REQUIRED_MESSAGE, /ddb-mcp-auth login/);
+  assert.match(AUTH_REQUIRED_MESSAGE, /mysterium-auth login/);
   assert.equal(new AuthenticationRequiredError().message, AUTH_REQUIRED_MESSAGE);
 });
 
 test("session admin imports atomically, validates, preserves prior state, and resets", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "ddb-session-admin-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "mysterium-session-admin-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const sessionPath = join(directory, "session.json");
 
@@ -94,7 +94,7 @@ test("session admin imports atomically, validates, preserves prior state, and re
 });
 
 test("session admin refuses to classify an unlabeled nonempty directory as empty", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "ddb-session-status-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "mysterium-session-status-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(join(directory, "unrelated-data"), "keep me");
   const result = admin(join(directory, "session.json"), ["status"]);
@@ -103,7 +103,7 @@ test("session admin refuses to classify an unlabeled nonempty directory as empty
 });
 
 test("missing session state is rejected before requesting a browser context", () => {
-  const sessionPath = join(tmpdir(), `missing-ddb-session-${process.pid}.json`);
+  const sessionPath = join(tmpdir(), `missing-mysterium-session-${process.pid}.json`);
   const script = `
     import('./dist/browser.js').then(async ({ getContext }) => {
       let requested = false;
@@ -116,17 +116,17 @@ test("missing session state is rejected before requesting a browser context", ()
   `;
   const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
     cwd: new URL("..", import.meta.url),
-    env: { ...process.env, DDB_MCP_SESSION_PATH: sessionPath },
+    env: { ...process.env, MYSTERIUM_SESSION_PATH: sessionPath },
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
   assert.equal(output.requested, false);
-  assert.match(output.message, /ddb-mcp-auth login/);
+  assert.match(output.message, /mysterium-auth login/);
 });
 
 test("browser context is reused until an atomic session replacement is detected", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "ddb-session-reload-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "mysterium-session-reload-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const sessionPath = join(directory, "session.json");
   await writeFile(sessionPath, JSON.stringify(validState), { mode: 0o600 });
@@ -146,16 +146,16 @@ test("browser context is reused until an atomic session replacement is detected"
       }) };
       const first = await getContext(browser);
       const second = await getContext(browser);
-      const replacement = process.env.DDB_MCP_SESSION_PATH + '.replacement';
+      const replacement = process.env.MYSTERIUM_SESSION_PATH + '.replacement';
       await writeFile(replacement, ${JSON.stringify(JSON.stringify(validState))}, { mode: 0o600 });
-      await rename(replacement, process.env.DDB_MCP_SESSION_PATH);
+      await rename(replacement, process.env.MYSTERIUM_SESSION_PATH);
       const third = await getContext(browser);
       process.stdout.write(JSON.stringify({ creations, closes, same: first === second, changed: second !== third }));
     });
   `;
   const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
     cwd: new URL("..", import.meta.url),
-    env: { ...process.env, DDB_MCP_SESSION_PATH: sessionPath },
+    env: { ...process.env, MYSTERIUM_SESSION_PATH: sessionPath },
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
@@ -163,7 +163,7 @@ test("browser context is reused until an atomic session replacement is detected"
 });
 
 test("missing session state closes the previously authenticated browser context", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "ddb-session-removal-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "mysterium-session-removal-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const sessionPath = join(directory, "session.json");
   await writeFile(sessionPath, JSON.stringify(validState), { mode: 0o600 });
@@ -182,7 +182,7 @@ test("missing session state closes the previously authenticated browser context"
       }) };
       await getContext(browser);
       creations += 1;
-      await rm(process.env.DDB_MCP_SESSION_PATH);
+      await rm(process.env.MYSTERIUM_SESSION_PATH);
       let message = '';
       try {
         await getContext(browser);
@@ -194,11 +194,11 @@ test("missing session state closes the previously authenticated browser context"
   `;
   const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
     cwd: new URL("..", import.meta.url),
-    env: { ...process.env, DDB_MCP_SESSION_PATH: sessionPath },
+    env: { ...process.env, MYSTERIUM_SESSION_PATH: sessionPath },
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
   assert.deepEqual({ creations: output.creations, closes: output.closes }, { creations: 1, closes: 1 });
-  assert.match(output.message, /ddb-mcp-auth login/);
+  assert.match(output.message, /mysterium-auth login/);
 });

@@ -3,7 +3,7 @@ import type { BrowserContext, Page } from "playwright";
 export const SESSION_SCHEMA_VERSION = 1;
 export const MAX_SESSION_BYTES = 1_048_576;
 export const AUTH_REQUIRED_MESSAGE =
-  "D&D Beyond authentication is missing or expired. Ask the user to run ddb-mcp-auth login on the Docker host, complete authentication in the browser, and then retry this request.";
+  "D&D Beyond authentication is missing or expired. Ask the user to run mysterium-auth login on the Docker host, complete authentication in the browser, and then retry this request.";
 
 export interface StorageState {
   cookies: Array<Record<string, unknown>>;

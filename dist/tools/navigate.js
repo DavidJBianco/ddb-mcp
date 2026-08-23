@@ -20,7 +20,7 @@ export async function navigate(context, url) {
         const main = document.querySelector("main, article, .main-content, .page-content, #content") ?? document.body;
         return main.innerText;
     });
-    const truncated = content.length > 8000 ? content.slice(0, 8000) + "\n\n[Content truncated — use ddb_read_book or a more specific URL to get full content]" : content;
+    const truncated = content.length > 8000 ? content.slice(0, 8000) + "\n\n[Content truncated — use mysterium_read_book or a more specific URL to get full content]" : content;
     return `URL: ${url}\n\n${truncated}`;
 }
 export function isAllowedDdbUrl(value) {
@@ -54,7 +54,7 @@ export async function interact(context, action, selector, value) {
             return `Filled '${selector}' with: ${value}`;
         }
         case "screenshot": {
-            const screenshotPath = `/tmp/ddb-screenshot-${Date.now()}.png`;
+            const screenshotPath = `/tmp/mysterium-screenshot-${Date.now()}.png`;
             await page.screenshot({ path: screenshotPath, fullPage: false });
             return `Screenshot saved to: ${screenshotPath}`;
         }

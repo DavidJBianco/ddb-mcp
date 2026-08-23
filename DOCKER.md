@@ -9,8 +9,14 @@ included in the build.
 From the repository root:
 
 ```bash
-docker build --tag ddb-mcp-local:latest .
+make build
 ```
+
+This regenerates the committed TypeScript output, builds
+`mysterium:local`, and creates a matching host executable at
+`bin/mysterium-auth`. Use `make image` or `make helper` when only one artifact
+is needed. Override the local image tag with `make build IMAGE=example:tag`;
+the selected tag is embedded as the helper's default administration image.
 
 The image installs the Chromium version matched to the locked Playwright
 dependency and runs the MCP server over standard input/output under Xvfb. The
@@ -19,8 +25,12 @@ runtime process uses the unprivileged `mcp` user (UID 10001).
 Run the offline container integration suite with:
 
 ```bash
-npm run test:docker
+make test-docker
 ```
+
+`make test` runs linting, type checks, offline MCP tests, and the Go helper
+tests without building the production container. `make test-all` adds the
+container suite.
 
 The suite exercises MCP initialization through the normal image entrypoint and
 uses a read-only mounted synthetic Playwright backend for browser-backed tool
@@ -45,40 +55,41 @@ Each SemVer release publishes a multi-platform image for `linux/amd64` and
 `linux/arm64` to GitHub Container Registry:
 
 ```text
-ghcr.io/davidjbianco/ddb-mcp:vX.Y.Z
-ghcr.io/davidjbianco/ddb-mcp:latest
+ghcr.io/davidjbianco/mysterium:vX.Y.Z
+ghcr.io/davidjbianco/mysterium:latest
 ```
 
 Prefer the immutable release version in durable configuration:
 
 ```bash
-docker pull ghcr.io/davidjbianco/ddb-mcp:v2.0.0
+docker pull ghcr.io/davidjbianco/mysterium:vX.Y.Z
 ```
 
-The local `docker-mcp.yaml` deliberately continues to reference
-`ddb-mcp-local:latest` so development and unreleased source builds cannot be
-confused with published releases.
+The checked-in `mysterium.yaml` references `mysterium:local` for source builds.
+Each GitHub Release includes another `mysterium.yaml` with the same server name
+and an image reference pinned to that release's immutable SemVer tag. Nothing
+in the checked-in catalog needs to be edited for an ordinary release.
 
 ## Preserve the D&D Beyond session
 
 The container stores Playwright browser state at:
 
 ```text
-/home/mcp/.config/ddb-mcp/session.json
+/home/mcp/.config/mysterium/session.json
 ```
 
-The supplied `docker-mcp.yaml` mounts the named volume `ddb-mcp-session`
+The supplied `mysterium.yaml` mounts the named volume `mysterium-session`
 read-only at that directory. Do not add `session.json` to the repository or
 container image; it grants access to the associated D&D Beyond account.
 
-Download the standalone `ddb-mcp-auth` executable from the same GitHub Release
+Download the standalone `mysterium-auth` executable from the same GitHub Release
 as the image, then authenticate on the Docker host:
 
 ```bash
-ddb-mcp-auth login
+mysterium-auth login
 ```
 
-The helper creates and labels `ddb-mcp-session` when necessary, uses an
+The helper creates and labels `mysterium-session` when necessary, uses an
 installed Chromium-compatible browser for the interactive login, streams only
 D&D Beyond state to a short-lived session-administration invocation of the
 matching image, and validates the candidate before atomically replacing prior
@@ -87,8 +98,10 @@ the volume read-write.
 
 The helper checks image compatibility before opening a login browser. If a
 local source build reports an incompatible image, rebuild it with
-`docker build --tag ddb-mcp-local:latest .`; released helpers should use the
+`make build`; released helpers should use the
 image from the same GitHub Release.
+The helper's `version` command is generated from the server's `package.json`;
+`make test` rejects a stale generated version before running the Go suite.
 
 Existing-browser reuse is optional. Chrome 144 and later require “Allow remote
 debugging for this browser instance” at `chrome://inspect/#remote-debugging`.
@@ -99,14 +112,14 @@ Authentication itself occurs before automation is attached, so OAuth providers
 and password managers interact with an ordinary browser window. The helper
 uses CDP only after the user confirms that D&D Beyond is signed in.
 
-Run `ddb-mcp-auth info`, `ddb-mcp-auth validate`, or the explicitly live
-`ddb-mcp-auth validate --live` to diagnose it. Reauthenticate with `login` when
+Run `mysterium-auth info`, `mysterium-auth validate`, or the explicitly live
+`mysterium-auth validate --live` to diagnose it. Reauthenticate with `login` when
 the session expires. Never transmit a password or cookie through an MCP tool.
 Use `--json` with diagnostics for machine-readable output. The helper also
 accepts `--browser-path`, `--volume`, `--image`, and `--timeout` overrides.
 
-`ddb-mcp-auth reset` removes saved files but preserves the volume and does not
-revoke the server-side D&D Beyond session. `ddb-mcp-auth volume remove` removes
+`mysterium-auth reset` removes saved files but preserves the volume and does not
+revoke the server-side D&D Beyond session. `mysterium-auth volume remove` removes
 the whole helper-owned volume and refuses while a running container mounts it;
 both commands prompt unless `--force` is supplied. An unlabeled empty volume is
 recreated with the helper labels. An unlabeled nonempty volume is never adopted
@@ -122,14 +135,14 @@ directory. After building the image:
 
 ```bash
 mkdir -p "$HOME/.docker/mcp/catalogs"
-cp docker-mcp.yaml "$HOME/.docker/mcp/catalogs/ddb-mcp-local.yaml"
+cp mysterium.yaml "$HOME/.docker/mcp/catalogs/mysterium.yaml"
 
-docker mcp profile create --name ddb-development
-docker mcp profile server add ddb-development \
-  --server file://ddb-mcp-local.yaml
+docker mcp profile create --name mysterium
+docker mcp profile server add mysterium \
+  --server file://mysterium.yaml
 ```
 
-Connect the desired MCP client to the `ddb-development` profile using Docker
+Connect the desired MCP client to the `mysterium` profile using Docker
 Desktop or the Docker MCP CLI. Current Docker Desktop releases may require the
 profiles feature to be enabled first.
 
@@ -139,8 +152,8 @@ An MCP client can also launch the image directly over stdio:
 
 ```bash
 docker run --rm --interactive \
-  --volume ddb-mcp-session:/home/mcp/.config/ddb-mcp:ro \
-  ddb-mcp-local:latest
+  --volume mysterium-session:/home/mcp/.config/mysterium:ro \
+  mysterium:local
 ```
 
 The container needs outbound HTTPS access to D&D Beyond. Authentication-provider

@@ -57,12 +57,12 @@ func TestEndpointFromActivePortRequiresLiveLocalEndpoint(t *testing.T) {
 func TestDDBDomainMatching(t *testing.T) {
 	for _, domain := range []string{"dndbeyond.com", ".dndbeyond.com", "character-service.dndbeyond.com"} {
 		if !isDDBDomain(domain) {
-			t.Fatalf("expected DDB domain: %s", domain)
+			t.Fatalf("expected D&D Beyond domain: %s", domain)
 		}
 	}
 	for _, domain := range []string{"example.com", "dndbeyond.com.example.com"} {
 		if isDDBDomain(domain) {
-			t.Fatalf("unexpected DDB domain: %s", domain)
+			t.Fatalf("unexpected D&D Beyond domain: %s", domain)
 		}
 	}
 }
@@ -207,7 +207,7 @@ func TestSyntheticLoginRedirectClassification(t *testing.T) {
 }
 
 func TestTemporaryProfileCleanup(t *testing.T) {
-	profile, cleanup, err := temporaryProfile("ddb-mcp-auth-cleanup-test-")
+	profile, cleanup, err := temporaryProfile("mysterium-auth-cleanup-test-")
 	if err != nil {
 		t.Fatal(err)
 	}

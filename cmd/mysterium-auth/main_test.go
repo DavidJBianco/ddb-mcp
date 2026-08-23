@@ -1,9 +1,27 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
+
+func TestVersionMatchesServerPackage(t *testing.T) {
+	contents, err := os.ReadFile("../../package.json")
+	if err != nil {
+		t.Fatalf("read package.json: %v", err)
+	}
+	var manifest struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(contents, &manifest); err != nil {
+		t.Fatalf("parse package.json: %v", err)
+	}
+	if version != manifest.Version {
+		t.Fatalf("helper version %q does not match server version %q", version, manifest.Version)
+	}
+}
 
 func TestHelpDocumentsCommands(t *testing.T) {
 	var output strings.Builder

@@ -1,50 +1,49 @@
 # Live read-only testing
 
-Live tests are a local release gate, not a GitHub Actions job. They use an
-external Playwright storage-state file and make authenticated, read-only
-requests to D&D Beyond. The suite never performs a fresh login, clicks account
-controls, fills forms, or modifies D&D Beyond data.
+Live tests are a local release gate, not a GitHub Actions job. They make
+authenticated, read-only requests to D&D Beyond. The suite never performs a
+fresh login, clicks account controls, fills forms, or modifies D&D Beyond data.
 
-## Required opt-in
+Invoking a dedicated live-test Make target is the explicit opt-in. No additional
+authorization environment flag is required.
 
-Both environment variables are required:
+## Docker live suite
 
-```bash
-export DDB_MCP_LIVE_TESTS=1
-export DDB_MCP_SESSION_PATH=/absolute/path/to/session.json
-```
-
-`DDB_MCP_SESSION_PATH` must be an existing absolute file path. To deliberately
-use the historic default, set it explicitly:
+The normal Docker suite uses the helper-managed `mysterium-session` volume.
+Authenticate first if necessary, then run:
 
 ```bash
-export DDB_MCP_SESSION_PATH="$HOME/.config/ddb-mcp/session.json"
+make login
+make live-test
 ```
 
-Keep the file outside this repository. Do not copy it into a test fixture,
-container layer, log, CI secret, or artifact.
-
-Run against the local Node server:
+`make live-test` verifies that the volume exists and has the `mysterium-auth`
+ownership labels before building and running the candidate image. The volume is
+mounted read-only at `/home/mcp/.config/mysterium`; session state is never
+copied to a host test file. Override the volume only when deliberately using a
+separately helper-managed volume:
 
 ```bash
-npm run test:live
+MYSTERIUM_SESSION_VOLUME=another-managed-volume make live-test
 ```
 
-Run the release-candidate production image with the session mounted read-only:
+The Docker command builds `mysterium:live` before testing. Set
+`MYSTERIUM_LIVE_IMAGE` only when a different local candidate tag is required.
+The test container has a recognizable `mysterium-live-test-<runner-pid>` name
+and an `org.mysterium.test-suite=live` label. Normal MCP shutdown removes it
+through Docker's `--rm`; the runner also force-removes that exact name after
+failures or incomplete child shutdown.
+
+## Host diagnostic suite
+
+The secondary host suite requires an external Playwright storage-state file:
 
 ```bash
-npm run test:live:docker
+MYSTERIUM_SESSION_PATH=/absolute/path/to/session.json make live-test-host
 ```
 
-The Docker command builds `ddb-mcp:live` before testing. Set
-`DDB_MCP_LIVE_IMAGE` only when a different local candidate tag is required.
-To accommodate host session files with mode `0600`, the runner creates a
-permission-normalized temporary copy outside the repository, mounts that copy
-read-only, and removes it unconditionally when the test process finishes.
-The test container has a recognizable `ddb-mcp-live-test-<runner-pid>` name and
-an `org.ddb-mcp.test-suite=live` label. Normal MCP shutdown removes it through
-Docker's `--rm`; the runner also force-removes that exact name in a `finally`
-block after failures or incomplete child shutdown.
+The path must identify an existing file outside the repository. Do not copy it
+into a fixture, container layer, log, CI secret, or artifact.
 
 ## Coverage and privacy
 
@@ -70,7 +69,8 @@ Fresh interactive login remains a manual release check. Do not automate live
 click or fill operations until a disposable, verifiably safe account state is
 available.
 
-For the v2 host-authentication release, also run `ddb-mcp-auth validate --live`
+For releases that include the host authentication helper, also run
+`mysterium-auth validate --live`
 against the labeled helper volume and record the result separately. The helper
 login itself is an interactive manual check; it must never run in GitHub
 Actions or print captured browser state.
@@ -79,14 +79,14 @@ Actions or print captured browser state.
 
 The repository currently has no mutating live tests. If an explicitly
 authorized write workflow gains live coverage, keep it out of both read-only
-commands above. Expose separate host and Docker commands named
-`npm run test:live:write` and `npm run test:live:write:docker`, and require a
-dedicated write-test opt-in in addition to `DDB_MCP_LIVE_TESTS=1` and the
-external session path.
+commands above. Expose separate host and Docker Make targets named
+`make live-test-write-host` and `make live-test-write`, and require a dedicated
+write-test authorization flag in addition to the normal live-session
+prerequisites.
 
 The Docker write-test runner must build or select the same release-candidate
-image without embedding session state, mount the external session separately,
-and remain independently runnable from `npm run test:live:docker`. Before
+image without embedding session state, mount the helper-managed volume read-only,
+and remain independently runnable from `make live-test`. Before
 either write command is run, its documentation must identify the exact account
 changes, disposable-data requirements, dry run, before/after checks, cleanup,
 and expected partial-failure behavior. A write suite is never part of the
@@ -98,11 +98,11 @@ Add a record like this to the `dev` to `main` release PR:
 
 ```text
 Live test commit: <full commit SHA>
-Command: DDB_MCP_LIVE_TESTS=1 DDB_MCP_SESSION_PATH=<external path> npm run test:live:docker
+Command: make live-test
 Result: pass | fail
 Skips: none | <structural test names and approved reason>
 Manual fresh-login check: pass | not run with approved exception
-Helper volume validation: ddb-mcp-auth validate --live => pass | fail | not run
+Helper volume validation: mysterium-auth validate --live => pass | fail | not run
 ```
 
 Never paste the real session path or any returned account content into the PR.

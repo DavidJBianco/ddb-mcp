@@ -44,7 +44,7 @@ async function importSession(live) {
     const suffix = `${process.pid}-${Date.now()}`;
     const candidatePath = join(sessionDirectory, `.session-${suffix}.json`);
     const metadataCandidate = join(sessionDirectory, `.session-meta-${suffix}.json`);
-    const helperVersion = process.env.DDB_MCP_AUTH_HELPER_VERSION?.trim() || "unknown";
+    const helperVersion = process.env.MYSTERIUM_AUTH_HELPER_VERSION?.trim() || "unknown";
     const createdAt = new Date().toISOString();
     try {
         await writeFile(candidatePath, candidate, { mode: 0o600, flag: "wx" });
@@ -69,13 +69,13 @@ async function validateSession(live) {
         metadata = JSON.parse(await readFile(METADATA_PATH, "utf8"));
     }
     catch {
-        throw new Error("Session metadata is missing or malformed; run ddb-mcp-auth login.");
+        throw new Error("Session metadata is missing or malformed; run mysterium-auth login.");
     }
     if (metadata.schemaVersion !== SESSION_SCHEMA_VERSION ||
         typeof metadata.helperVersion !== "string" || metadata.helperVersion.length === 0 ||
         typeof metadata.serverVersion !== "string" || metadata.serverVersion.length === 0 ||
         typeof metadata.createdAt !== "string" || Number.isNaN(Date.parse(metadata.createdAt))) {
-        throw new Error("Session metadata is incompatible; run ddb-mcp-auth login.");
+        throw new Error("Session metadata is incompatible; run mysterium-auth login.");
     }
     if (live)
         await verifyLive(SESSION_PATH);

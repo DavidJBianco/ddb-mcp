@@ -37,7 +37,7 @@ func (runner *fakeRunner) Run(stdin []byte, name string, args ...string) ([]byte
 func TestEnsureVolumeCreatesLabeledVolume(t *testing.T) {
 	runner := &fakeRunner{responses: []fakeResponse{
 		{stderr: "Error: No such volume", err: errors.New("exit 1")},
-		{stdout: "ddb-mcp-session\n"},
+		{stdout: "mysterium-session\n"},
 	}}
 	client := dockerClient{runner: runner, image: "image:v1", volume: defaultVolume, helperVersion: "1.0.0"}
 	if err := client.ensureVolume(); err != nil {
@@ -144,7 +144,7 @@ func TestImportStreamsStateWithoutCommandLineSecret(t *testing.T) {
 
 func TestRemoveVolumeRefusesMountedVolume(t *testing.T) {
 	runner := &fakeRunner{responses: []fakeResponse{
-		{stdout: `[{"Name":"volume","Labels":{"io.github.davidjbianco.ddb-mcp.purpose":"session","io.github.davidjbianco.ddb-mcp.managed-by":"ddb-mcp-auth"}}]`},
+		{stdout: `[{"Name":"volume","Labels":{"io.github.davidjbianco.mysterium.purpose":"session","io.github.davidjbianco.mysterium.managed-by":"mysterium-auth"}}]`},
 		{stdout: "container-id\n"},
 	}}
 	client := dockerClient{runner: runner, volume: "volume"}

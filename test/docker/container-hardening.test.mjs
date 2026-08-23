@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-const image = process.env.DDB_MCP_TEST_IMAGE ?? "ddb-mcp:test";
+const image = process.env.MYSTERIUM_TEST_IMAGE ?? "mysterium:test";
 
 function docker(args) {
   return execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -13,7 +13,7 @@ function docker(args) {
 
 let containerSequence = 0;
 function dockerRun(label, args) {
-  const name = `ddb-mcp-test-${label}-${process.pid}-${++containerSequence}`;
+  const name = `mysterium-test-${label}-${process.pid}-${++containerSequence}`;
   try {
     return docker(["run", "--rm", "--name", name, ...args]);
   } finally {
@@ -22,7 +22,7 @@ function dockerRun(label, args) {
 }
 
 function dockerRunInput(label, args, input) {
-  const name = `ddb-mcp-test-${label}-${process.pid}-${++containerSequence}`;
+  const name = `mysterium-test-${label}-${process.pid}-${++containerSequence}`;
   try {
     const result = spawnSync("docker", ["run", "--rm", "--interactive", "--name", name, ...args], {
       input,
@@ -48,7 +48,7 @@ test("production image declares the non-root MCP runtime contract", () => {
     "node",
     "dist/index.js",
   ]);
-  assert.ok(inspection.Config.Volumes["/home/mcp/.config/ddb-mcp"]);
+  assert.ok(inspection.Config.Volumes["/home/mcp/.config/mysterium"]);
   assert.match(inspection.Architecture, /^(amd64|arm64)$/);
 
   assert.equal(dockerRun("uid", ["--entrypoint", "id", image, "-u"]), "10001");
@@ -73,7 +73,7 @@ test("production image contains no test or session material", () => {
       "sh",
       image,
       "-c",
-      "for path in /app/src /app/.git /app/.github /app/AGENTS.md /app/TODO.md /app/Dockerfile /app/tsconfig.json /app/docker-mcp.yaml; do test ! -e \"$path\" || exit 1; done; echo clean",
+      "for path in /app/src /app/.git /app/.github /app/AGENTS.md /app/TODO.md /app/Dockerfile /app/tsconfig.json /app/mysterium.yaml; do test ! -e \"$path\" || exit 1; done; echo clean",
     ]),
     "clean"
   );
@@ -83,7 +83,7 @@ test("production image contains no test or session material", () => {
 });
 
 test("session administration is writable only through an explicit mount while the MCP mount remains read-only", async (t) => {
-  const volume = `ddb-mcp-test-${process.pid}-${Date.now()}`;
+  const volume = `mysterium-test-${process.pid}-${Date.now()}`;
   docker(["volume", "create", volume]);
   t.after(() => {
     spawnSync("docker", ["volume", "rm", "--force", volume], { stdio: "ignore" });
@@ -96,7 +96,7 @@ test("session administration is writable only through an explicit mount while th
   assert.match(
     dockerRunInput("session-volume", [
       "--mount",
-      `type=volume,src=${volume},dst=/home/mcp/.config/ddb-mcp`,
+      `type=volume,src=${volume},dst=/home/mcp/.config/mysterium`,
       "--entrypoint",
       "node",
       image,
@@ -109,19 +109,19 @@ test("session administration is writable only through an explicit mount while th
   assert.equal(
     dockerRun("readonly-session", [
       "--mount",
-      `type=volume,src=${volume},dst=/home/mcp/.config/ddb-mcp,readonly`,
+      `type=volume,src=${volume},dst=/home/mcp/.config/mysterium,readonly`,
       "--entrypoint",
       "sh",
       image,
       "-c",
-      "test -r /home/mcp/.config/ddb-mcp/session.json && ! test -w /home/mcp/.config/ddb-mcp/session.json && echo readonly",
+      "test -r /home/mcp/.config/mysterium/session.json && ! test -w /home/mcp/.config/mysterium/session.json && echo readonly",
     ]),
     "readonly"
   );
 });
 
 test("the non-root image can write a group-scoped external output mount", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "ddb-mcp-output-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "mysterium-output-test-"));
   t.after(async () => rm(directory, { recursive: true, force: true }));
   await chmod(directory, 0o730);
 
@@ -142,7 +142,7 @@ test("the non-root image can write a group-scoped external output mount", async 
 });
 
 test("missing session state is accepted by the production entrypoint", { timeout: 30_000 }, () => {
-  const name = `ddb-mcp-test-missing-session-${process.pid}`;
+  const name = `mysterium-test-missing-session-${process.pid}`;
   let result;
   try {
     result = spawnSync(
@@ -160,7 +160,7 @@ test("missing session state is accepted by the production entrypoint", { timeout
 });
 
 test("the production entrypoint forwards termination and exits promptly", { timeout: 15_000 }, async (t) => {
-  const name = `ddb-mcp-signal-${process.pid}-${Date.now()}`;
+  const name = `mysterium-signal-${process.pid}-${Date.now()}`;
   const child = spawn(
     "docker",
     ["run", "--rm", "--interactive", "--name", name, "--network", "none", image],

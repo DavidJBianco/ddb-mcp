@@ -13,8 +13,7 @@ import (
 	"time"
 )
 
-var version = "dev"
-var defaultImage = "ddb-mcp-local:latest"
+var defaultImage = "mysterium:local"
 
 type commonOptions struct {
 	volume      string
@@ -48,7 +47,7 @@ func flagsFor(name string, args []string) (*flag.FlagSet, commonOptions, error) 
 	set.SetOutput(os.Stderr)
 	options := commonOptions{}
 	set.StringVar(&options.volume, "volume", defaultVolume, "Docker volume containing D&D Beyond session state")
-	set.StringVar(&options.image, "image", defaultImage, "matching ddb-mcp image used for session administration")
+	set.StringVar(&options.image, "image", defaultImage, "matching mysterium image used for session administration")
 	set.StringVar(&options.browserPath, "browser-path", "", "absolute path to a Chromium-compatible browser executable")
 	set.DurationVar(&options.timeout, "timeout", 5*time.Minute, "interactive login timeout")
 	set.BoolVar(&options.jsonOutput, "json", false, "emit machine-readable JSON")
@@ -93,19 +92,19 @@ func inspect(options commonOptions) (report, error) {
 			result.OK = false
 			result.Status = "unmanaged-volume"
 			result.SessionStatus = "unchecked"
-			result.RecommendedAction = fmt.Sprintf("Volume %s is not managed by ddb-mcp-auth; move or remove it manually before login.", options.volume)
+			result.RecommendedAction = fmt.Sprintf("Volume %s is not managed by mysterium-auth; move or remove it manually before login.", options.volume)
 		} else if !result.ImagePresent {
 			result.SessionStatus = "unchecked"
-			result.RecommendedAction = "Run ddb-mcp-auth validate or login."
+			result.RecommendedAction = "Run mysterium-auth validate or login."
 		} else if _, err := client.validate(false); err == nil {
 			result.SessionStatus = "valid"
 		} else {
 			result.SessionStatus = "missing-or-invalid"
-			result.RecommendedAction = "Run ddb-mcp-auth login."
+			result.RecommendedAction = "Run mysterium-auth login."
 		}
 	} else {
 		result.SessionStatus = "missing"
-		result.RecommendedAction = "Run ddb-mcp-auth login."
+		result.RecommendedAction = "Run mysterium-auth login."
 	}
 	if browserErr != nil {
 		result.OK = false
@@ -217,7 +216,7 @@ func runInfo(options commonOptions) error {
 	if options.jsonOutput {
 		return printJSON(result)
 	}
-	fmt.Printf("ddb-mcp-auth %s\nDocker context: %s\nImage: %s (%s)\nVolume: %s (%s)\nSession: %s\nBrowser: %s\n", result.Version, result.DockerContext, result.Image, map[bool]string{true: "present", false: "missing"}[result.ImagePresent], result.Volume, map[bool]string{true: "present", false: "missing"}[result.VolumeExists], result.SessionStatus, result.BrowserStatus)
+	fmt.Printf("mysterium-auth %s\nDocker context: %s\nImage: %s (%s)\nVolume: %s (%s)\nSession: %s\nBrowser: %s\n", result.Version, result.DockerContext, result.Image, map[bool]string{true: "present", false: "missing"}[result.ImagePresent], result.Volume, map[bool]string{true: "present", false: "missing"}[result.VolumeExists], result.SessionStatus, result.BrowserStatus)
 	for _, browser := range result.Browsers {
 		fmt.Printf("Browser: %s (%s)\n", browser.Name, browser.Path)
 	}
@@ -228,7 +227,7 @@ func runInfo(options commonOptions) error {
 }
 
 func printHelp(writer io.Writer) {
-	fmt.Fprintln(writer, `Usage: ddb-mcp-auth <command> [options]
+	fmt.Fprintln(writer, `Usage: mysterium-auth <command> [options]
 
 Commands:
   login          Authenticate in a host Chromium browser and import the session
@@ -239,7 +238,7 @@ Commands:
   version        Print the helper version
   help           Show this help
 
-Run "ddb-mcp-auth <command> --help" for command options.`)
+Run "mysterium-auth <command> --help" for command options.`)
 }
 
 func usage() {
@@ -260,12 +259,12 @@ func run(args []string) error {
 		return nil
 	}
 	if command == "version" {
-		fmt.Printf("ddb-mcp-auth %s\n", version)
+		fmt.Printf("mysterium-auth %s\n", version)
 		return nil
 	}
 	if command == "volume" {
 		if len(args) < 2 || args[1] != "remove" {
-			return errors.New("usage: ddb-mcp-auth volume remove [options]")
+			return errors.New("usage: mysterium-auth volume remove [options]")
 		}
 		args = append([]string{"volume-remove"}, args[2:]...)
 		command = "volume-remove"
@@ -306,7 +305,7 @@ func run(args []string) error {
 		return nil
 	case "volume-remove":
 		reader := bufio.NewReader(os.Stdin)
-		if !confirm(reader, "Permanently remove the ddb-mcp session volume?", options.force) {
+		if !confirm(reader, "Permanently remove the mysterium session volume?", options.force) {
 			return errors.New("volume removal cancelled")
 		}
 		return clientFor(options).removeVolume()
@@ -324,7 +323,7 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		fmt.Fprintf(os.Stderr, "ddb-mcp-auth: %s\n", err)
+		fmt.Fprintf(os.Stderr, "mysterium-auth: %s\n", err)
 		os.Exit(1)
 	}
 }

@@ -21,15 +21,15 @@ export type BrowserContextProvider = () => Promise<BrowserContext>;
 
 export function createServer(getContextForTool: BrowserContextProvider = getSharedContext) {
   const server = new McpServer({
-    name: "dndbeyond",
+    name: "mysterium",
     version: PACKAGE_VERSION,
   }, {
-    instructions: "Authentication is managed on the Docker host with ddb-mcp-auth login; authenticated tool errors explain when the user must run it. Use ddb_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to ddb_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use ddb_list_library to list accessible sourcebooks. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
+    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
   });
 
-// ─── ddb_list_characters ──────────────────────────────────────────────────────
+// ─── mysterium_list_characters ──────────────────────────────────────────────────────
 server.tool(
-  "ddb_list_characters",
+  "mysterium_list_characters",
   "List all characters in your D&D Beyond account, including their ID, level, race, and class.",
   {},
   async () => {
@@ -44,9 +44,9 @@ server.tool(
   }
 );
 
-// ─── ddb_get_character ────────────────────────────────────────────────────────
+// ─── mysterium_get_character ────────────────────────────────────────────────────────
 server.tool(
-  "ddb_get_character",
+  "mysterium_get_character",
   "Fetch full character data JSON from the D&D Beyond character service API. Requires character ID (the number in the character URL).",
   {
     character_id: z.string().describe("The D&D Beyond character ID (e.g. '12345678')"),
@@ -77,9 +77,9 @@ server.tool(
   }
 );
 
-// ─── ddb_download_character ───────────────────────────────────────────────────
+// ─── mysterium_download_character ───────────────────────────────────────────────────
 server.tool(
-  "ddb_download_character",
+  "mysterium_download_character",
   "Download a character's full JSON data to a local file.",
   {
     character_id: z.string().describe("The D&D Beyond character ID"),
@@ -100,9 +100,9 @@ server.tool(
   }
 );
 
-// ─── ddb_get_campaign ─────────────────────────────────────────────────────────
+// ─── mysterium_get_campaign ─────────────────────────────────────────────────────────
 server.tool(
-  "ddb_get_campaign",
+  "mysterium_get_campaign",
   "Fetch campaign information including player characters, notes, and description from a D&D Beyond campaign page.",
   {
     campaign_id: z.string().describe("The D&D Beyond campaign ID (found in the campaign URL)"),
@@ -119,9 +119,9 @@ server.tool(
   }
 );
 
-// ─── ddb_list_campaigns ───────────────────────────────────────────────────────
+// ─── mysterium_list_campaigns ───────────────────────────────────────────────────────
 server.tool(
-  "ddb_list_campaigns",
+  "mysterium_list_campaigns",
   "List all D&D Beyond campaigns you are part of (as DM or player).",
   {},
   async () => {
@@ -136,9 +136,9 @@ server.tool(
   }
 );
 
-// ─── ddb_navigate ─────────────────────────────────────────────────────────────
+// ─── mysterium_navigate ─────────────────────────────────────────────────────────────
 server.tool(
-  "ddb_navigate",
+  "mysterium_navigate",
   "Navigate to any D&D Beyond URL and return the page's text content. Only dndbeyond.com URLs are allowed.",
   {
     url: z
@@ -157,9 +157,9 @@ server.tool(
   }
 );
 
-// ─── ddb_interact ─────────────────────────────────────────────────────────────
+// ─── mysterium_interact ─────────────────────────────────────────────────────────────
 server.tool(
-  "ddb_interact",
+  "mysterium_interact",
   "Interact with the currently loaded D&D Beyond page by clicking, filling a form field, or taking a screenshot.",
   {
     action: z
@@ -183,9 +183,9 @@ server.tool(
   }
 );
 
-// ─── ddb_current_page ─────────────────────────────────────────────────────────
+// ─── mysterium_current_page ─────────────────────────────────────────────────────────
 server.tool(
-  "ddb_current_page",
+  "mysterium_current_page",
   "Return the text content of the currently loaded page in the browser.",
   {},
   async () => {
@@ -200,9 +200,9 @@ server.tool(
   }
 );
 
-// ─── ddb_search ───────────────────────────────────────────────────────────────
+// ─── mysterium_search ───────────────────────────────────────────────────────────────
 server.tool(
-  "ddb_search",
+  "mysterium_search",
   "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, sourcebooks, or general results. Results include normalized source attribution when D&D Beyond exposes it. Sourcebook searches default to accessible books.",
   {
     query: z.string().describe("The search query (e.g. 'Fireball', 'Beholder', 'Vorpal Sword')"),
@@ -228,10 +228,10 @@ server.tool(
   }
 );
 
-// ─── ddb_list_library ─────────────────────────────────────────────────────────
+// ─── mysterium_list_library ─────────────────────────────────────────────────────────
 server.tool(
-  "ddb_list_library",
-  "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with ddb_read_book.",
+  "mysterium_list_library",
+  "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with mysterium_read_book.",
   {},
   async () => {
     try {
@@ -245,9 +245,9 @@ server.tool(
   }
 );
 
-// ─── ddb_read_book ────────────────────────────────────────────────────────────
+// ─── mysterium_read_book ────────────────────────────────────────────────────────────
 server.tool(
-  "ddb_read_book",
+  "mysterium_read_book",
   "Discover an accessible D&D Beyond sourcebook's table of contents or chapter headings, or read bounded chapter or section Markdown with cursor pagination. Returns a JSON envelope with nextCursor and done.",
   {
     book_slug: z
@@ -323,7 +323,7 @@ async function main() {
   process.once("SIGINT", terminate);
   process.once("SIGTERM", terminate);
   process.stdin.once("end", () => void cleanup());
-  process.stderr.write("D&D Beyond MCP server running on stdio\n");
+  process.stderr.write("Mysterium server running on stdio\n");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

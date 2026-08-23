@@ -28,7 +28,7 @@ release plan or pull request.
 
 ## Live test suite
 
-- [x] Create a separately invoked, explicit-opt-in `npm run test:live` suite.
+- [x] Create a separately invoked, explicit-opt-in `make live-test-host` suite.
   It must never run in GitHub Actions and must never print or upload session or
   account content.
 - [x] Define safe live coverage for every read-only tool: restored-session
@@ -36,7 +36,7 @@ release plan or pull request.
   path, campaign listing/retrieval, navigation/current-page retrieval, search,
   library listing, and sourcebook reading.
 - [x] Decide and document safe live coverage for the host authentication helper
-  and generic `ddb_interact`. Interactive login requires a manual release
+  and generic `mysterium_interact`. Interactive login requires a manual release
   check; interaction tests must use non-destructive controls or disposable data.
 - [x] Test both character API success and rendered-page fallback without
   recording private character content in assertions or logs.
@@ -46,7 +46,7 @@ release plan or pull request.
 
 ## Sourcebook discovery and pagination
 
-- [x] Remove the fixed 12,000-character `ddb_read_book` truncation dead end.
+- [x] Remove the fixed 12,000-character `mysterium_read_book` truncation dead end.
 - [x] Add table-of-contents discovery and structured heading discovery.
 - [x] Add deterministic cursor-based chunk retrieval with opaque
   `nextCursor` and `done` fields.
@@ -54,7 +54,7 @@ release plan or pull request.
   block-aware boundaries, oversized blocks, lists, tables, repeated headings,
   malformed cursors, and changed content.
 - [x] Add section-level sourcebook retrieval with pagination.
-- [x] Add sourcebook search and normalized source attribution to `ddb_search`
+- [x] Add sourcebook search and normalized source attribution to `mysterium_search`
   so callers can pivot from standalone results into a sourcebook when D&D
   Beyond exposes that relationship.
 - [x] Preserve document structure without mutating the rendered live DOM or
@@ -76,7 +76,7 @@ release plan or pull request.
 
 ## Character and campaign retrieval
 
-- [ ] **`ddb_list_characters` filtering and sorting:** Replace DOM-card parsing
+- [ ] **`mysterium_list_characters` filtering and sorting:** Replace DOM-card parsing
   with normalized summaries from the read-only character-list request while
   preserving authentication checks and explicit upstream-failure handling.
   Return a stable JSON envelope such as `{ count, total, filters, sort,
@@ -85,7 +85,7 @@ release plan or pull request.
   species/race name, campaign ID/name when present, status, and created/modified
   dates. Do not expose image URLs or other fields unless a use case requires
   them.
-- [ ] Add optional composable `ddb_list_characters` filters. At
+- [ ] Add optional composable `mysterium_list_characters` filters. At
   minimum, support name, class (including multiclass characters), species or
   race, minimum/maximum or exact level, and one or more campaign IDs. Apply
   filters to the normalized list inside the MCP server with documented
@@ -113,13 +113,13 @@ release plan or pull request.
   full-character requests. Preserve a rendered-page fallback for the list only
   if needed for resilience, and test pagination rather than assuming every
   account fits one response.
-- [ ] **`ddb_get_character` contract cleanup:** Remove the public
+- [ ] **`mysterium_get_character` contract cleanup:** Remove the public
   `fallback_scrape` argument, the rendered-sheet scraper, its tests, and its
   documentation. The fallback's partial schema is not compatible with the full
   character response and should not be returned silently. Continue using the
   authenticated read-only character-detail request and return an explicit MCP
   error on failure.
-- [ ] Normalize `ddb_get_character` into a documented JSON envelope rather than
+- [ ] Normalize `mysterium_get_character` into a documented JSON envelope rather than
   exposing the upstream wrapper as the tool contract. Preserve the full useful
   character payload initially to avoid accidental data loss, but identify
   provenance/schema version and keep upstream transport fields such as request
@@ -133,7 +133,7 @@ release plan or pull request.
   use case emerges.
 - [ ] **Focused PDF client-compatibility probe:** Before implementing D&D
   Beyond export, create a temporary standalone MCP test server—not a production
-  `ddb-mcp` tool—that returns a tiny synthetic, non-private PDF as an embedded
+  `mysterium` tool—that returns a tiny synthetic, non-private PDF as an embedded
   blob resource with `mimeType: application/pdf`, a stable synthetic URI, and
   small JSON/text metadata. Manually call it from Claude Desktop and confirm the
   PDF is visible or downloadable and opens intact. Repeat with ChatGPT desktop
@@ -149,7 +149,7 @@ release plan or pull request.
   values or PDF contents. Keep this explicit-opt-in and local; never run it in
   GitHub Actions. This verifies acquisition, while the synthetic MCP probe
   verifies client delivery.
-- [ ] After both probes pass, remove `ddb_download_character` and add a clearly
+- [ ] After both probes pass, remove `mysterium_download_character` and add a clearly
   named read-only character-sheet PDF export tool. Drive the documented visible
   export workflow, enforce timeout and size limits, return the PDF as an
   embedded `application/pdf` MCP resource plus small structured JSON metadata,
@@ -158,7 +158,7 @@ release plan or pull request.
   responses, cleanup, redaction, Claude delivery, and a bounded live success.
   If Claude cannot consume the probe, remove the old download tool and defer
   PDF export rather than retaining container-local files.
-- [ ] **`ddb_get_campaign` enrichment:** Use the observed read-only campaign
+- [ ] **`mysterium_get_campaign` enrichment:** Use the observed read-only campaign
   details and short-character data plus permission-aware rendered extraction.
   Return a stable JSON envelope containing campaign ID/name/status/creation
   date, DM and viewer role, content- and item-sharing status, active player and
@@ -167,7 +167,7 @@ release plan or pull request.
   notes field by visibility and provenance. Deliberately exclude invite codes,
   reset/remove/deactivate links, and other administrative secrets or mutation
   controls.
-- [ ] Define `ddb_get_campaign` options and permissions before implementation.
+- [ ] Define `mysterium_get_campaign` options and permissions before implementation.
   Private DM notes should default to excluded and require an explicit
   `include_private_notes` request; public notes and description may be included
   by default when visible. Represent missing, empty, hidden, and inaccessible
@@ -186,7 +186,7 @@ release plan or pull request.
   copyrighted-map, request-volume, and role-based access boundaries before any
   implementation.
 - [ ] Revisit Campaign Journals as a distinct permission-aware read tool, not a
-  field added incidentally to `ddb_get_campaign`. Determine the eventual DM and
+  field added incidentally to `mysterium_get_campaign`. Determine the eventual DM and
   player journal model, campaign binding, visibility labels, pagination, and
   rendered retrieval path. Default to excluding DM-private entries unless
   explicitly requested and authorized; do not add create/edit/delete support
@@ -194,7 +194,7 @@ release plan or pull request.
 
 ## Generic browser tools
 
-- [ ] Review `ddb_navigate`, `ddb_current_page`, and `ddb_interact` as a
+- [ ] Review `mysterium_navigate`, `mysterium_current_page`, and `mysterium_interact` as a
   separate project before extending them. Reassess their stateful shared-page
   contract, documentation, JSON response shapes, truncation, non-mutating DOM
   extraction, click/fill safeguards, sensitive-value redaction, redirect

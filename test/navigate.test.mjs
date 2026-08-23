@@ -101,5 +101,5 @@ test("interact fills a field and records a screenshot", async () => {
 
   assert.deepEqual(events[0], ["fill", "#name", "Synthetic Name"]);
   assert.deepEqual(events[1], ["screenshot", false]);
-  assert.match(screenshot, /^Screenshot saved to: \/tmp\/ddb-screenshot-/);
+  assert.match(screenshot, /^Screenshot saved to: \/tmp\/mysterium-screenshot-/);
 });

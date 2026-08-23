@@ -1,9 +1,10 @@
 node_modules/
+bin/
 *.js.map
 .env
 .env.*
 !.env.example
 session.json
-.config/ddb-mcp/
-.ddb-mcp/
+.config/mysterium/
+.mysterium/
 .DS_Store

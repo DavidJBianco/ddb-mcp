@@ -1,7 +1,7 @@
 {
-  "name": "ddb-mcp",
+  "name": "mysterium",
   "version": "1.0.2",
-  "description": "D&D Beyond MCP Server with Google Auth",
+  "description": "Docker-first MCP server for authenticated D&D Beyond content",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -12,16 +12,16 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run test:offline",
-    "test:unit": "node --test test/library.test.mjs test/live-guard.test.mjs test/navigate.test.mjs test/search.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
-    "test:mcp": "node --test test/live-harness.test.mjs test/mcp-integration.test.mjs test/mcp-contract.test.mjs test/failure-diagnostics.test.mjs",
+    "test:unit": "node --test test/ci-isolation.test.mjs test/docker-session-safeguards.test.mjs test/library.test.mjs test/navigate.test.mjs test/search.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
+    "test:mcp": "node --test test/synthetic-harness.test.mjs test/mcp-integration.test.mjs test/mcp-contract.test.mjs test/failure-diagnostics.test.mjs",
     "test:offline": "npm run test:unit && npm run test:mcp",
-    "test:docker": "docker build --tag ddb-mcp:test . && DDB_MCP_TEST_IMAGE=ddb-mcp:test npm run test:docker:run",
+    "test:docker": "docker build --tag mysterium:test . && MYSTERIUM_TEST_IMAGE=mysterium:test npm run test:docker:run",
     "test:docker:architecture": "node --test --test-concurrency=1 test/docker/architecture-smoke.test.mjs test/docker/container-hardening.test.mjs test/docker/toolkit-compat.test.mjs",
     "test:docker:run": "node --test --test-concurrency=1 test/docker/*.test.mjs",
     "test:live": "npm run build && node --test --test-concurrency=1 test/live/live-read.test.mjs",
     "test:live:docker": "node test/live/run-live-docker.mjs",
-    "test:go": "cd cmd/ddb-mcp-auth && go test ./...",
-    "build:auth": "cd cmd/ddb-mcp-auth && go build ./..."
+    "test:go": "cd cmd/mysterium-auth && go test ./...",
+    "build:auth": "make helper"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
