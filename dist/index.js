@@ -8,7 +8,7 @@ import { getCharacter, downloadCharacter, scrapeCharacterSheet, listCharacters }
 import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
 import { search } from "./tools/search.js";
-import { listLibrary, readBook } from "./tools/library.js";
+import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
 import { PACKAGE_VERSION } from "./version.js";
 // Lazy-initialized shared browser context
 async function getSharedContext() {
@@ -20,6 +20,8 @@ export function createServer(getContextForTool = getSharedContext) {
     const server = new McpServer({
         name: "dndbeyond",
         version: PACKAGE_VERSION,
+    }, {
+        instructions: "Use ddb_list_library to discover accessible sourcebooks and their slugs. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Use ddb_search for corpus results; search result URLs are not guaranteed to identify a parent sourcebook. Sourcebook responses include image metadata, not image bytes.",
     });
     // ─── ddb_login ────────────────────────────────────────────────────────────────
     server.tool("ddb_login", "Launch a browser and log into D&D Beyond via Google OAuth. Run this once to save your session to disk. Subsequent tool calls restore the session automatically.", {}, async () => {
@@ -168,7 +170,7 @@ export function createServer(getContextForTool = getSharedContext) {
         }
     });
     // ─── ddb_search ───────────────────────────────────────────────────────────────
-    server.tool("ddb_search", "Search D&D Beyond for spells, monsters, magic items, races, classes, or feats.", {
+    server.tool("ddb_search", "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, or general results. Returned URLs are standalone results and may not identify a parent sourcebook.", {
         query: z.string().describe("The search query (e.g. 'Fireball', 'Beholder', 'Vorpal Sword')"),
         category: z
             .enum(["spells", "monsters", "items", "races", "classes", "feats", "all"])
@@ -186,7 +188,7 @@ export function createServer(getContextForTool = getSharedContext) {
         }
     });
     // ─── ddb_list_library ─────────────────────────────────────────────────────────
-    server.tool("ddb_list_library", "List all books and sourcebooks you own in your D&D Beyond library.", {}, async () => {
+    server.tool("ddb_list_library", "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with ddb_read_book.", {}, async () => {
         try {
             const context = await getContextForTool();
             const books = await listLibrary(context);
@@ -198,18 +200,50 @@ export function createServer(getContextForTool = getSharedContext) {
         }
     });
     // ─── ddb_read_book ────────────────────────────────────────────────────────────
-    server.tool("ddb_read_book", "Read content from an owned D&D Beyond sourcebook. Provide the book slug (e.g. 'players-handbook') and optionally a chapter slug.", {
+    server.tool("ddb_read_book", "Discover an accessible D&D Beyond sourcebook's table of contents or chapter headings, or read bounded chapter or section Markdown with cursor pagination. Returns a JSON envelope with nextCursor and done.", {
         book_slug: z
             .string()
-            .describe("The book slug from the D&D Beyond URL (e.g. 'players-handbook', 'dungeon-masters-guide')"),
+            .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
+            .describe("Required sourcebook path after /sources/ (for example, 'dnd/phb-2024')."),
         chapter_slug: z
             .string()
+            .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
             .optional()
-            .describe("Optional chapter or section slug (e.g. 'classes/ranger'). If omitted, returns the book's table of contents."),
-    }, async ({ book_slug, chapter_slug }) => {
+            .describe("Optional chapter path returned by a book outline. With no mode it selects content; omit it to retrieve the book outline."),
+        mode: z
+            .enum(["outline", "content"])
+            .optional()
+            .describe("Optional operation. Defaults to 'outline' without chapter_slug and 'content' with chapter_slug."),
+        section: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Optional stable section ID from a chapter outline, or an exact unique heading. Valid only for chapter content."),
+        cursor: z
+            .string()
+            .min(1)
+            .optional()
+            .describe("Opaque nextCursor from the preceding content response. Reuse the same book_slug, chapter_slug, section, and character limit."),
+        max_chars: z
+            .number()
+            .int()
+            .positive()
+            .max(SERVER_MAX_CHARS)
+            .optional()
+            .describe(`Maximum Markdown characters in a content chunk. Defaults to 10000 and cannot exceed ${SERVER_MAX_CHARS}.`),
+    }, async ({ book_slug, chapter_slug, mode, section, cursor, max_chars }) => {
         try {
+            const request = {
+                bookSlug: book_slug,
+                chapterSlug: chapter_slug,
+                mode,
+                section,
+                cursor,
+                maxChars: max_chars,
+            };
+            validateReadBookRequest(request);
             const context = await getContextForTool();
-            const content = await readBook(context, book_slug, chapter_slug);
+            const content = await readBook(context, request);
             return { content: [{ type: "text", text: content }] };
         }
         catch (err) {

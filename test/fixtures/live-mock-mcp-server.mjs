@@ -72,8 +72,21 @@ server.tool("ddb_list_library", "mock", {}, async () =>
 server.tool(
   "ddb_read_book",
   "mock",
-  { book_slug: z.string(), chapter_slug: z.string().optional() },
-  async () => text(`# synthetic-book\n\n${sensitive}`)
+  {
+    book_slug: z.string(),
+    chapter_slug: z.string().optional(),
+    mode: z.enum(["outline", "content"]).optional(),
+    section: z.string().optional(),
+    cursor: z.string().optional(),
+    max_chars: z.number().optional(),
+  },
+  async ({ book_slug }) => text(JSON.stringify({
+    kind: "outline",
+    book: { slug: book_slug, title: sensitive },
+    entries: [{ id: "toc-synthetic-1", title: sensitive, level: 1, parentId: null, chapterSlug: "synthetic" }],
+    nextCursor: null,
+    done: true,
+  }))
 );
 
 await server.connect(new StdioServerTransport());

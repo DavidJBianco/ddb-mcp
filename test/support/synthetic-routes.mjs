@@ -55,10 +55,36 @@ const libraryPage = `<!doctype html><html><body><main>
 </main></body></html>`;
 
 const bookPage = `<!doctype html><html><body><article>
-  <h1>Synthetic Handbook</h1><h2>Safe Examples</h2>
-  <p>This short original fixture tests sourcebook structure without reproducing published text.</p>
-  <ul><li>First synthetic rule</li><li>Second synthetic rule</li></ul>
+  <h1>Synthetic Handbook</h1>
+  <section class="toc" aria-label="Contents"><ol>
+    <li><a href="/sources/synthetic-handbook/safe-examples">Safe Examples</a>
+      <ol><li><a href="/sources/synthetic-handbook/safe-examples#details">Details</a></li></ol>
+    </li>
+    <li><a href="/sources/synthetic-handbook/second-chapter">Second Chapter</a></li>
+  </ol></section>
 </article></body></html>`;
+
+const chapterPage = `<!doctype html><html><body><article class="content-container">
+  <aside>Preserved navigation marker</aside>
+  <h1>Safe Examples</h1>
+  <p>This original fixture tests deterministic sourcebook extraction and pagination.</p>
+  <h2>Details</h2>
+  <p>First detail paragraph with enough synthetic words to cross a deliberately small response boundary.</p>
+  <ul><li>First synthetic rule<ul><li>Nested synthetic rule</li></ul></li><li>Second synthetic rule</li></ul>
+  <ol><li>First ordered step</li><li>Second ordered step</li></ol>
+  <table><tr><th>Kind</th><th>Value</th></tr><tr><td>Safe</td><td>Example</td></tr></table>
+  <figure><img src="/synthetic-image.svg" alt="Synthetic diagram"><figcaption>Entirely synthetic figure</figcaption></figure>
+  <h2>Repeated</h2><p>First repeated section.</p>
+  <h2>Repeated</h2><p>Second repeated section.</p>
+</article></body></html>`;
+
+const alternateChapterPage = `<!doctype html><html><body><main>
+  <section class="p-content"><h1>Alternate Layout</h1><p>Alternate supported sourcebook structure.</p></section>
+</main></body></html>`;
+
+const changedChapterPage = `<!doctype html><html><body><main>
+  <section data-testid="unexpected-source-layout"><h1>Changed Layout</h1><p>This must not be silently scraped from body.</p></section>
+</main></body></html>`;
 
 const genericPage = `<!doctype html><html><body><main>
   <h1>Synthetic Page</h1><p>Deterministic navigation content.</p>
@@ -143,6 +169,39 @@ export async function installSyntheticRoutes(context, options = {}) {
       url.pathname === "/sources/synthetic-handbook"
     ) {
       await route.fulfill(html(bookPage));
+      return;
+    }
+
+    if (
+      url.origin === "https://www.dndbeyond.com" &&
+      url.pathname === "/sources/synthetic-handbook/safe-examples"
+    ) {
+      await route.fulfill(html(chapterPage));
+      return;
+    }
+
+    if (
+      url.origin === "https://www.dndbeyond.com" &&
+      url.pathname === "/sources/synthetic-handbook/alternate-layout"
+    ) {
+      await route.fulfill(html(alternateChapterPage));
+      return;
+    }
+
+    if (
+      url.origin === "https://www.dndbeyond.com" &&
+      url.pathname === "/sources/synthetic-handbook/changed-layout"
+    ) {
+      await route.fulfill(html(changedChapterPage));
+      return;
+    }
+
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/synthetic-image.svg") {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>',
+      });
       return;
     }
 

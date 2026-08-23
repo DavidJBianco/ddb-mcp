@@ -46,16 +46,18 @@ release plan or pull request.
 
 ## Sourcebook discovery and pagination
 
-- [ ] Remove the fixed 12,000-character `ddb_read_book` truncation dead end.
-- [ ] Add table-of-contents discovery and structured heading discovery.
-- [ ] Add deterministic cursor-based chunk retrieval with opaque
+- [x] Remove the fixed 12,000-character `ddb_read_book` truncation dead end.
+- [x] Add table-of-contents discovery and structured heading discovery.
+- [x] Add deterministic cursor-based chunk retrieval with opaque
   `nextCursor` and `done` fields.
-- [ ] Test cursor encoding, validation, book/chapter binding, stable retries,
+- [x] Test cursor encoding, validation, book/chapter binding, stable retries,
   block-aware boundaries, oversized blocks, lists, tables, repeated headings,
   malformed cursors, and changed content.
-- [ ] Add section-level sourcebook retrieval and search after the pagination
-  contract is stable.
-- [ ] Preserve document structure without mutating the rendered live DOM or
+- [x] Add section-level sourcebook retrieval with pagination.
+- [ ] Add sourcebook search and normalized source attribution to `ddb_search`
+  so callers can pivot from standalone results into a sourcebook when D&D
+  Beyond exposes that relationship.
+- [x] Preserve document structure without mutating the rendered live DOM or
   persisting copyrighted sourcebook text.
 
 ## Character creation and modification

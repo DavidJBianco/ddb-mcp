@@ -240,8 +240,13 @@ test(
       async () => {
         const slug = books[0]?.slug;
         requireStructure(typeof slug === "string" && slug.length > 0, "library listing omitted a book slug");
-        const content = await callText(client, diagnostics, "ddb_read_book", { book_slug: slug });
-        requireStructure(content.startsWith("# ") && content.length > 10, "sourcebook response shape changed");
+        const outline = parseJson(
+          await callText(client, diagnostics, "ddb_read_book", { book_slug: slug }),
+          "ddb_read_book"
+        );
+        requireStructure(outline?.kind === "outline", "sourcebook response kind changed");
+        requireStructure(Array.isArray(outline.entries), "sourcebook outline entries shape changed");
+        requireStructure(outline.done === true && outline.nextCursor === null, "sourcebook outline completion shape changed");
       }
     );
 

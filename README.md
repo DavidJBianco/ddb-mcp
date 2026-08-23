@@ -12,9 +12,9 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that gi
 | `ddb_download_character` | Save a character's full JSON data to a local file. |
 | `ddb_list_campaigns` | List all campaigns you're part of (as DM or player). |
 | `ddb_get_campaign` | Fetch campaign details — DM, description, and active characters. |
-| `ddb_list_library` | List all sourcebooks you own, purchased, or have shared with you. |
-| `ddb_read_book` | Read content from an owned sourcebook, optionally by chapter slug. |
-| `ddb_search` | Search for spells, monsters, magic items, races, classes, or feats. |
+| `ddb_list_library` | List sourcebooks you own or can access through sharing, including their slugs. |
+| `ddb_read_book` | Discover book/chapter outlines and read bounded chapter or section content with cursor pagination. |
+| `ddb_search` | Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, or general results. |
 | `ddb_navigate` | Navigate to any D&D Beyond URL and return its text content. |
 | `ddb_interact` | Click, fill, or screenshot the currently loaded browser page. |
 | `ddb_current_page` | Return the text content of whatever page is currently loaded. |
@@ -125,7 +125,7 @@ Search D&D Beyond for spells named "Fireball"
 Find the Beholder stat block on D&D Beyond
 ```
 
-**Read a sourcebook:**
+**Discover and read a sourcebook:**
 ```
 Show me the table of contents for the Player's Handbook
 ```
@@ -146,7 +146,7 @@ Download the character data for Roland Stonehelm to my Downloads folder
 
 You can also use `ddb_list_characters` and `ddb_list_campaigns` to get IDs without leaving Claude.
 
-### Book slugs for `ddb_read_book`
+### Sourcebook discovery and pagination
 
 Use `ddb_list_library` to get the slug for any book you own. Examples:
 
@@ -157,11 +157,40 @@ Use `ddb_list_library` to get the slug for any book you own. Examples:
 | Monster Manual (2024) | `dnd/mm-2024` |
 | Player's Handbook (2014) | `dnd/phb-2014` |
 
-To read a specific chapter, pass the chapter path after the book slug:
+`ddb_read_book` returns JSON. With only `book_slug`, it returns the complete
+book outline. Add a chapter path with `mode: "outline"` to discover that
+chapter's stable section IDs:
 
+```json
+{
+  "book_slug": "dnd/phb-2024",
+  "chapter_slug": "character-classes/barbarian",
+  "mode": "outline"
+}
 ```
-ddb_read_book("dnd/phb-2024", "character-classes/barbarian")
+
+To read a chapter, omit `mode` or set it to `"content"`. Content responses
+contain Markdown in `text`, image descriptions and HTTPS URLs in `images`, an
+opaque `nextCursor`, and a `done` flag. Pass `nextCursor` back as `cursor` with
+the same book, chapter, section, and character limit until `done` is `true`.
+
+```json
+{
+  "book_slug": "dnd/phb-2024",
+  "chapter_slug": "character-classes/barbarian",
+  "max_chars": 10000
+}
 ```
+
+The default content limit is 10,000 Markdown characters and the server maximum
+is 25,000. A chunk prefers complete headings, paragraphs, lists, and tables,
+but an individually oversized block is split. To read only one section, pass a
+stable `section` ID returned by the chapter outline, or an exact heading name
+when that name is unique.
+
+Search results are standalone D&D Beyond URLs and do not necessarily identify
+a parent sourcebook. Use `ddb_list_library` and book outlines to navigate
+within a sourcebook. Image bytes are not downloaded or embedded.
 
 ## Upgrading
 

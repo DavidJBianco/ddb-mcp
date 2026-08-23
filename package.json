@@ -12,7 +12,7 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run test:offline",
-    "test:unit": "node --test test/live-guard.test.mjs test/navigate.test.mjs test/search.test.mjs test/session-path.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
+    "test:unit": "node --test test/library.test.mjs test/live-guard.test.mjs test/navigate.test.mjs test/search.test.mjs test/session-path.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
     "test:mcp": "node --test test/live-harness.test.mjs test/mcp-integration.test.mjs test/mcp-contract.test.mjs test/failure-diagnostics.test.mjs",
     "test:offline": "npm run test:unit && npm run test:mcp",
     "test:docker": "docker build --tag ddb-mcp:test . && DDB_MCP_TEST_IMAGE=ddb-mcp:test npm run test:docker:run",
