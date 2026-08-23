@@ -1,4 +1,6 @@
 import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -9,9 +11,19 @@ const text = (value) => ({ content: [{ type: "text", text: value }] });
 const sensitive = "SYNTHETIC_PRIVATE_MARKER";
 
 server.tool("ddb_login", "mock", {}, async () => text("Already logged in"));
-server.tool("ddb_list_characters", "mock", {}, async () =>
-  text(JSON.stringify([{ id: "4242", name: sensitive }]))
-);
+server.tool("ddb_list_characters", "mock", {}, async () => {
+  if (process.env.DDB_MCP_LIVE_MOCK_FAIL_TOOL === "ddb_list_characters") {
+    process.stderr.write(`HTTP 403 while reading ${process.env.DDB_MCP_SESSION_PATH} for ${sensitive}\n`);
+    return {
+      isError: true,
+      content: [{
+        type: "text",
+        text: `Unauthorized HTTP 403 at https://www.dndbeyond.com/characters/4242 for ${sensitive}`,
+      }],
+    };
+  }
+  return text(JSON.stringify([{ id: "4242", name: sensitive }]));
+});
 server.tool(
   "ddb_get_character",
   "mock",
@@ -40,7 +52,7 @@ server.tool(
   "mock",
   { action: z.enum(["click", "fill", "screenshot"]), selector: z.string(), value: z.string().optional() },
   async () => {
-    const path = "/tmp/ddb-screenshot-live-mock.png";
+    const path = join(tmpdir(), "ddb-screenshot-live-mock.png");
     writeFileSync(path, "synthetic screenshot");
     return text(`Screenshot saved to: ${path}`);
   }

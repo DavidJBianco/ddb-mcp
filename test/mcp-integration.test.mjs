@@ -7,6 +7,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { createServer } from "../dist/index.js";
+import { captureStderr, withFailureDiagnostics } from "./support/failure-diagnostics.mjs";
 
 async function connectClient(t, contextProvider) {
   const server = createServer(contextProvider);
@@ -116,22 +117,25 @@ test("a separate process serves MCP tools over stdio", async (t) => {
     cwd: fileURLToPath(new URL("..", import.meta.url)),
     stderr: "pipe",
   });
+  const diagnostics = captureStderr(transport);
   const client = new Client({ name: "ddb-mcp-stdio-test", version: "1.0.0" });
 
   t.after(async () => {
     await client.close();
   });
-  await client.connect(transport);
+  await withFailureDiagnostics("synthetic MCP subprocess", diagnostics, async () => {
+    await client.connect(transport);
 
-  const listed = await client.listTools();
-  assert.ok(listed.tools.some(({ name }) => name === "ddb_current_page"));
+    const listed = await client.listTools();
+    assert.ok(listed.tools.some(({ name }) => name === "ddb_current_page"));
 
-  const result = await client.callTool({ name: "ddb_current_page", arguments: {} });
-  assert.equal(result.isError, undefined);
-  assert.equal(
-    result.content[0].text,
-    "Current URL: https://www.dndbeyond.com/synthetic-stdio-page\n\nSynthetic stdio page content"
-  );
+    const result = await client.callTool({ name: "ddb_current_page", arguments: {} });
+    assert.equal(result.isError, undefined);
+    assert.equal(
+      result.content[0].text,
+      "Current URL: https://www.dndbeyond.com/synthetic-stdio-page\n\nSynthetic stdio page content"
+    );
+  });
 });
 
 test("the production entrypoint negotiates MCP without initializing a browser", async (t) => {
@@ -141,14 +145,17 @@ test("the production entrypoint negotiates MCP without initializing a browser", 
     cwd: fileURLToPath(new URL("..", import.meta.url)),
     stderr: "pipe",
   });
+  const diagnostics = captureStderr(transport);
   const client = new Client({ name: "ddb-mcp-entrypoint-test", version: "1.0.0" });
 
   t.after(async () => {
     await client.close();
   });
-  await client.connect(transport);
+  await withFailureDiagnostics("production MCP subprocess", diagnostics, async () => {
+    await client.connect(transport);
 
-  const listed = await client.listTools();
-  assert.ok(listed.tools.some(({ name }) => name === "ddb_login"));
-  assert.ok(listed.tools.some(({ name }) => name === "ddb_read_book"));
+    const listed = await client.listTools();
+    assert.ok(listed.tools.some(({ name }) => name === "ddb_login"));
+    assert.ok(listed.tools.some(({ name }) => name === "ddb_read_book"));
+  });
 });

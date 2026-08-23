@@ -29,6 +29,7 @@ if (!validSession) {
 }
 
 const image = process.env.DDB_MCP_LIVE_IMAGE ?? "ddb-mcp:live";
+const containerName = `ddb-mcp-live-test-${process.pid}`;
 const build = spawnSync("docker", ["build", "--tag", image, "."], { stdio: "inherit" });
 if (build.status !== 0) {
   process.stderr.write("Live Docker candidate image build failed.\n");
@@ -36,6 +37,25 @@ if (build.status !== 0) {
 }
 
 const stagingDirectory = mkdtempSync(join(tmpdir(), "ddb-mcp-live-session-"));
+let cleanedUp = false;
+
+function cleanup() {
+  if (cleanedUp) return;
+  cleanedUp = true;
+  spawnSync("docker", ["rm", "--force", containerName], { stdio: "ignore" });
+  rmSync(stagingDirectory, { recursive: true, force: true });
+}
+
+process.once("exit", cleanup);
+process.once("SIGINT", () => {
+  cleanup();
+  process.exit(130);
+});
+process.once("SIGTERM", () => {
+  cleanup();
+  process.exit(143);
+});
+
 try {
   const stagedSession = join(stagingDirectory, "session.json");
   copyFileSync(sessionPath, stagedSession);
@@ -49,6 +69,7 @@ try {
         ...process.env,
         DDB_MCP_LIVE_TRANSPORT: "docker",
         DDB_MCP_LIVE_IMAGE: image,
+        DDB_MCP_LIVE_CONTAINER_NAME: containerName,
         DDB_MCP_SESSION_PATH: stagedSession,
       },
       stdio: "inherit",
@@ -56,5 +77,7 @@ try {
   );
   process.exitCode = suite.status ?? 1;
 } finally {
-  rmSync(stagingDirectory, { recursive: true, force: true });
+  // --rm handles the normal path; this handles failed tests and interrupted
+  // MCP shutdown after the child process has returned control to this runner.
+  cleanup();
 }

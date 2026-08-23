@@ -41,6 +41,10 @@ The Docker command builds `ddb-mcp:live` before testing. Set
 To accommodate host session files with mode `0600`, the runner creates a
 permission-normalized temporary copy outside the repository, mounts that copy
 read-only, and removes it unconditionally when the test process finishes.
+The test container has a recognizable `ddb-mcp-live-test-<runner-pid>` name and
+an `org.ddb-mcp.test-suite=live` label. Normal MCP shutdown removes it through
+Docker's `--rm`; the runner also force-removes that exact name in a `finally`
+block after failures or incomplete child shutdown.
 
 ## Coverage and privacy
 
@@ -52,10 +56,13 @@ screenshot-only generic interaction.
 
 Assertions inspect shapes only. Test output must not contain names, IDs,
 private URLs, character JSON, campaign or sourcebook text, cookies, or the
-session path. Temporary downloads are removed, and the Docker session mount is
-read-only. Account-dependent cases are explicitly skipped when the account has
-no character, campaign, or sourcebook; a release remains blocked unless those
-required skips are accepted and recorded as an exception.
+session path. On failure, the suite prints only allowlisted diagnostics such as
+the failing tool, error category, HTTP status, redacted D&D Beyond endpoint,
+and safe error code; successful tests remain quiet. Temporary downloads are
+removed, and the Docker session mount is read-only. Account-dependent cases
+are explicitly skipped when the account has no character, campaign, or
+sourcebook; a release remains blocked unless those required skips are accepted
+and recorded as an exception.
 
 Fresh interactive login remains a manual release check. Do not automate live
 click or fill operations until a disposable, verifiably safe account state is
