@@ -11,6 +11,16 @@ function docker(args) {
   return execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
+let containerSequence = 0;
+function dockerRun(label, args) {
+  const name = `ddb-mcp-test-${label}-${process.pid}-${++containerSequence}`;
+  try {
+    return docker(["run", "--rm", "--name", name, ...args]);
+  } finally {
+    spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
+  }
+}
+
 test("production image declares the non-root MCP runtime contract", () => {
   const [inspection] = JSON.parse(docker(["image", "inspect", image]));
 
@@ -27,13 +37,11 @@ test("production image declares the non-root MCP runtime contract", () => {
   assert.ok(inspection.Config.Volumes["/home/mcp/.config/ddb-mcp"]);
   assert.match(inspection.Architecture, /^(amd64|arm64)$/);
 
-  assert.equal(docker(["run", "--rm", "--entrypoint", "id", image, "-u"]), "10001");
+  assert.equal(dockerRun("uid", ["--entrypoint", "id", image, "-u"]), "10001");
 });
 
 test("production image contains no test or session material", () => {
-  const forbidden = docker([
-    "run",
-    "--rm",
+  const forbidden = dockerRun("forbidden-files", [
     "--entrypoint",
     "sh",
     image,
@@ -42,13 +50,11 @@ test("production image contains no test or session material", () => {
   ]);
   assert.equal(forbidden, "");
   assert.equal(
-    docker(["run", "--rm", "--entrypoint", "sh", image, "-c", "test ! -e /app/test && echo clean"]),
+    dockerRun("test-files", ["--entrypoint", "sh", image, "-c", "test ! -e /app/test && echo clean"]),
     "clean"
   );
   assert.equal(
-    docker([
-      "run",
-      "--rm",
+    dockerRun("repository-files", [
       "--entrypoint",
       "sh",
       image,
@@ -70,9 +76,7 @@ test("session directory is writable while a read-only session bind remains immut
   });
 
   assert.equal(
-    docker([
-      "run",
-      "--rm",
+    dockerRun("session-volume", [
       "--mount",
       `type=volume,src=${volume},dst=/home/mcp/.config/ddb-mcp`,
       "--entrypoint",
@@ -90,9 +94,7 @@ test("session directory is writable while a read-only session bind remains immut
   await writeFile(sessionPath, "{}", { mode: 0o644 });
 
   assert.equal(
-    docker([
-      "run",
-      "--rm",
+    dockerRun("readonly-session", [
       "--mount",
       `type=bind,src=${sessionPath},dst=/home/mcp/.config/ddb-mcp/session.json,readonly`,
       "--entrypoint",
@@ -111,9 +113,7 @@ test("the non-root image can write a group-scoped external output mount", async 
   await chmod(directory, 0o730);
 
   assert.equal(
-    docker([
-      "run",
-      "--rm",
+    dockerRun("external-output", [
       "--group-add",
       String(process.getgid?.() ?? 0),
       "--mount",
@@ -129,11 +129,17 @@ test("the non-root image can write a group-scoped external output mount", async 
 });
 
 test("missing session state is accepted by the production entrypoint", { timeout: 30_000 }, () => {
-  const result = spawnSync(
-    "docker",
-    ["run", "--rm", "--interactive", "--network", "none", image],
-    { input: "", encoding: "utf8", timeout: 20_000 }
-  );
+  const name = `ddb-mcp-test-missing-session-${process.pid}`;
+  let result;
+  try {
+    result = spawnSync(
+      "docker",
+      ["run", "--rm", "--name", name, "--interactive", "--network", "none", image],
+      { input: "", encoding: "utf8", timeout: 20_000 }
+    );
+  } finally {
+    spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
+  }
 
   assert.equal(result.signal, null);
   assert.equal(result.status, 0);
