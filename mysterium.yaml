@@ -1,9 +1,9 @@
-name: ddb-mcp-local
-title: D&D Beyond MCP (Local)
+name: mysterium
+title: Mysterium
 type: server
-image: ddb-mcp-local:latest
+image: mysterium:local
 description: >-
   A locally built MCP server for authenticated D&D Beyond characters,
   campaigns, sourcebooks, and rules content.
 volumes:
-  - ddb-mcp-session:/home/mcp/.config/ddb-mcp:ro
+  - mysterium-session:/home/mcp/.config/mysterium:ro

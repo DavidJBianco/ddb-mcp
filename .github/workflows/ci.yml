@@ -40,20 +40,13 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Build
-        run: npm run build
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: cmd/mysterium-auth/go.mod
+          cache-dependency-path: cmd/mysterium-auth/go.sum
 
       - name: Offline tests
-        run: npm run test:offline
+        run: make test
 
       - name: Verify generated output is current
         run: git diff --exit-code -- dist/
@@ -70,11 +63,8 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
-
       - name: Audit dependencies (production only)
-        run: npm audit --audit-level=high --omit=dev
+        run: make audit
 
   auth-helper:
     name: Host Auth Helper (${{ matrix.os }})
@@ -84,32 +74,34 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
-    defaults:
-      run:
-        working-directory: cmd/ddb-mcp-auth
-
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: cmd/ddb-mcp-auth/go.mod
-          cache-dependency-path: cmd/ddb-mcp-auth/go.sum
+          go-version-file: cmd/mysterium-auth/go.mod
+          cache-dependency-path: cmd/mysterium-auth/go.sum
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
 
       - name: Verify formatting
         shell: bash
         run: |
-          gofmt -w .
-          git diff --exit-code -- .
+          gofmt -w cmd/mysterium-auth
+          git diff --exit-code -- cmd/mysterium-auth
 
-      - name: Test
-        run: go test ./...
+      - name: Install Make on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install make --no-progress --yes
 
-      - name: Vet
-        run: go vet ./...
+      - name: Test and vet
+        run: make test-helper
 
       - name: Build
-        run: go build ./...
+        run: make helper
 
   auth-helper-cross-build:
     name: Host Auth Helper Cross Build
@@ -119,14 +111,14 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: cmd/ddb-mcp-auth/go.mod
-          cache-dependency-path: cmd/ddb-mcp-auth/go.sum
+          go-version-file: cmd/mysterium-auth/go.mod
+          cache-dependency-path: cmd/mysterium-auth/go.sum
 
       - name: Cross-compile release targets
-        working-directory: cmd/ddb-mcp-auth
+        working-directory: cmd/mysterium-auth
         run: |
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; do
-            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -o /tmp/ddb-mcp-auth-${target//\//-} ./
+            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 go build -o /tmp/mysterium-auth-${target//\//-} ./
           done
 
   docker:
@@ -137,11 +129,11 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            tag: ddb-mcp:ci-amd64
+            tag: mysterium:ci-amd64
             cache: amd64
             test-script: test:docker:run
           - platform: linux/arm64
-            tag: ddb-mcp:ci-arm64
+            tag: mysterium:ci-arm64
             cache: arm64
             test-script: test:docker:architecture
 
@@ -152,9 +144,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-
-      - name: Install MCP test client dependencies
-        run: npm ci
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -174,6 +163,8 @@ jobs:
           cache-to: type=gha,scope=docker-${{ matrix.cache }},mode=max
 
       - name: Exercise candidate image
-        env:
-          DDB_MCP_TEST_IMAGE: ${{ matrix.tag }}
-        run: npm run ${{ matrix.test-script }}
+        run: >-
+          make test-docker
+          BUILD_DOCKER_IMAGE=0
+          TEST_IMAGE=${{ matrix.tag }}
+          DOCKER_TEST_SCRIPT=${{ matrix.test-script }}

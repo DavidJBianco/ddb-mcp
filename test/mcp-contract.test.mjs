@@ -9,7 +9,7 @@ import { EXPECTED_TOOLS } from "./support/tool-manifest.mjs";
 
 async function connect(t, contextProvider) {
   const server = createServer(contextProvider);
-  const client = new Client({ name: "ddb-mcp-contract-test", version: "1.0.0" });
+  const client = new Client({ name: "mysterium-contract-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);
@@ -33,17 +33,17 @@ test("every tool converts a browser dependency failure into an MCP tool error", 
     throw new Error("synthetic browser dependency failure");
   });
   const cases = [
-    ["ddb_list_characters", {}],
-    ["ddb_get_character", { character_id: "4242" }],
-    ["ddb_download_character", { character_id: "4242", output_path: "/tmp/unused.json" }],
-    ["ddb_get_campaign", { campaign_id: "7" }],
-    ["ddb_list_campaigns", {}],
-    ["ddb_navigate", { url: "https://www.dndbeyond.com/synthetic-page" }],
-    ["ddb_interact", { action: "click", selector: "#synthetic" }],
-    ["ddb_current_page", {}],
-    ["ddb_search", { query: "shield", category: "spells" }],
-    ["ddb_list_library", {}],
-    ["ddb_read_book", { book_slug: "synthetic-handbook" }],
+    ["mysterium_list_characters", {}],
+    ["mysterium_get_character", { character_id: "4242" }],
+    ["mysterium_download_character", { character_id: "4242", output_path: "/tmp/unused.json" }],
+    ["mysterium_get_campaign", { campaign_id: "7" }],
+    ["mysterium_list_campaigns", {}],
+    ["mysterium_navigate", { url: "https://www.dndbeyond.com/synthetic-page" }],
+    ["mysterium_interact", { action: "click", selector: "#synthetic" }],
+    ["mysterium_current_page", {}],
+    ["mysterium_search", { query: "shield", category: "spells" }],
+    ["mysterium_list_library", {}],
+    ["mysterium_read_book", { book_slug: "synthetic-handbook" }],
   ];
 
   for (const [name, args] of cases) {
@@ -61,15 +61,15 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
     throw new Error("browser must not be requested for invalid input");
   });
   const cases = [
-    ["ddb_get_character", {}],
-    ["ddb_download_character", {}],
-    ["ddb_get_campaign", {}],
-    ["ddb_navigate", {}],
-    ["ddb_interact", { action: "destroy", selector: "body" }],
-    ["ddb_search", { query: "shield", category: "invalid" }],
-    ["ddb_read_book", {}],
-    ["ddb_read_book", { book_slug: "../private" }],
-    ["ddb_read_book", { book_slug: "synthetic-handbook", max_chars: 25001 }],
+    ["mysterium_get_character", {}],
+    ["mysterium_download_character", {}],
+    ["mysterium_get_campaign", {}],
+    ["mysterium_navigate", {}],
+    ["mysterium_interact", { action: "destroy", selector: "body" }],
+    ["mysterium_search", { query: "shield", category: "invalid" }],
+    ["mysterium_read_book", {}],
+    ["mysterium_read_book", { book_slug: "../private" }],
+    ["mysterium_read_book", { book_slug: "synthetic-handbook", max_chars: 25001 }],
   ];
 
   for (const [name, args] of cases) {
@@ -80,7 +80,7 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
   assert.equal(contextRequested, false);
 });
 
-test("ddb_read_book rejects invalid field combinations and malformed cursors before browser access", async (t) => {
+test("mysterium_read_book rejects invalid field combinations and malformed cursors before browser access", async (t) => {
   let contextRequested = false;
   const client = await connect(t, async () => {
     contextRequested = true;
@@ -93,7 +93,7 @@ test("ddb_read_book rejects invalid field combinations and malformed cursors bef
   ];
 
   for (const args of cases) {
-    const result = await client.callTool({ name: "ddb_read_book", arguments: args });
+    const result = await client.callTool({ name: "mysterium_read_book", arguments: args });
     assert.equal(result.isError, true);
     assert.match(result.content[0].text, /Failed to read book/);
   }

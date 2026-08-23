@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { summarizeLiveFailure, withFailureDiagnostics } from "./support/failure-diagnostics.mjs";
 
-test("live diagnostic summaries expose classifications but redact arbitrary content", () => {
+test("offline safeguard: authenticated-test diagnostics redact arbitrary content", () => {
   const summary = summarizeLiveFailure(
     new Error(
       "Unauthorized HTTP 403 for Private Hero at https://character-service.dndbeyond.com/character/v5/character/4242"

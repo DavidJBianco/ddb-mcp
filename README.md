@@ -1,192 +1,110 @@
-# D&D Beyond MCP Server
+# Mysterium
 
-A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that gives Claude direct access to your D&D Beyond account — characters, campaigns, sourcebooks, spells, monsters, and more.
+Mysterium is a Docker-first [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for authenticated D&D Beyond content. It gives MCP clients access to a user's characters, campaigns, sourcebooks, and rendered rules indexes through a persistent browser session.
 
-## Features
+Mysterium is an independent fork of the MIT-licensed [ddb-mcp](https://github.com/ddb-mcp/ddb-mcp) project. The original project established the core D&D Beyond browser integration; this fork has a distinct name and direction so users can tell the two projects apart.
+
+Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizards of the Coast, or Hasbro. D&D Beyond does not provide a supported public developer API for this use case, so site changes may occasionally require updates.
+
+## How Mysterium differs
+
+- Docker is the supported runtime and distribution model. Users do not install Node.js, npm, Playwright, or Chromium dependencies for the server.
+- A separate `mysterium-auth` host helper performs visible browser login, validates the resulting session with the matching container image, and stores it in a Docker volume.
+- The normal server mounts authentication state read-only and runs as an unprivileged container user.
+- Sourcebook support includes library discovery, outlines, stable section identifiers, bounded Markdown chunks, and cursor-based continuation.
+- Search results use consistent JSON envelopes and expose normalized source attribution when D&D Beyond renders it.
+- Offline MCP contract tests, synthetic browser tests, container hardening checks, and Docker MCP Toolkit compatibility checks are part of the project workflow.
+
+## Tools
 
 | Tool | Description |
-|------|-------------|
-| `ddb_list_characters` | List all characters in your account with ID, level, race, and class. |
-| `ddb_get_character` | Fetch full character JSON from the D&D Beyond character API. |
-| `ddb_download_character` | Save a character's full JSON data to a local file. |
-| `ddb_list_campaigns` | List all campaigns you're part of (as DM or player). |
-| `ddb_get_campaign` | Fetch campaign details — DM, description, and active characters. |
-| `ddb_list_library` | List sourcebooks you own or can access through sharing, including their slugs. |
-| `ddb_read_book` | Discover book/chapter outlines and read bounded chapter or section content with cursor pagination. |
-| `ddb_search` | Search D&D Beyond indexes and accessible or catalog sourcebooks, with normalized source attribution when exposed. |
-| `ddb_navigate` | Navigate to any D&D Beyond URL and return its text content. |
-| `ddb_interact` | Click, fill, or screenshot the currently loaded browser page. |
-| `ddb_current_page` | Return the text content of whatever page is currently loaded. |
+| --- | --- |
+| `mysterium_list_characters` | List the characters available to the authenticated account. |
+| `mysterium_get_character` | Retrieve full character data. |
+| `mysterium_download_character` | Write character JSON to a requested local path. |
+| `mysterium_list_campaigns` | List campaigns in which the account participates. |
+| `mysterium_get_campaign` | Retrieve campaign details and active characters. |
+| `mysterium_list_library` | List accessible sourcebooks and their slugs. |
+| `mysterium_read_book` | Discover outlines or read bounded chapter and section content with cursor pagination. |
+| `mysterium_search` | Search rendered D&D Beyond indexes and sourcebook listings. |
+| `mysterium_navigate` | Navigate to a D&D Beyond URL and return its rendered text. |
+| `mysterium_interact` | Click, fill, or capture a screenshot on the current page. |
+| `mysterium_current_page` | Return text from the current browser page. |
 
-## Prerequisites
+## Quickstart
+
+### Requirements
 
 - Docker Desktop or Docker Engine with the Docker CLI
-- An installed desktop Chromium-compatible browser such as Google Chrome,
-  Microsoft Edge, Brave, Vivaldi, or Chromium
-- The `ddb-mcp-auth` executable matching the container release and host
-  platform, downloaded from the repository's GitHub Release
+- A desktop Chromium-compatible browser: Chrome, Edge, Brave, Vivaldi, or Chromium
+- The `mysterium-auth` archive for your host platform from the same [Mysterium release](https://github.com/DavidJBianco/mysterium/releases) as the image
 
-Safari and Firefox are not direct authentication targets in v2. Their users
-must also install a Chromium-compatible browser; the helper never downloads a
-browser automatically.
+Safari and Firefox are not authentication targets. The helper uses an installed Chromium-compatible browser and never downloads one onto the host.
 
-## Installation
+### 1. Install a matched image and helper
 
-Pull an immutable release image and download the matching `ddb-mcp-auth`
-archive from the same GitHub Release:
+Set the released Semantic Version you want to install:
 
 ```bash
-docker pull ghcr.io/davidjbianco/ddb-mcp:v2.0.0
+export MYSTERIUM_VERSION=1.2.3
+docker pull "ghcr.io/davidjbianco/mysterium:v${MYSTERIUM_VERSION}"
 ```
 
-Extract the helper, place it on the host `PATH`, and add the image to Docker MCP
-Toolkit as described in [`DOCKER.md`](DOCKER.md). The helper is a standalone
-binary; users do not need Go, Node.js, npm, or a host Playwright installation.
-Verify the archive against `checksums.txt` from the release before installing
-it. macOS archives are provided for amd64 and arm64, Linux archives for amd64
-and arm64, and Windows for amd64.
+Download the matching `mysterium-auth` archive and `checksums.txt` from that release, verify the checksum, extract the executable, and place it on your `PATH`. Released helpers default to their matching immutable image.
+`mysterium-auth version` reports the same Semantic Version as the server package
+from which it was built.
 
-## Usage
-
-### First-time login
-
-Run authentication on the Docker host before, or after, starting the MCP server:
+### 2. Authenticate
 
 ```bash
-ddb-mcp-auth login
+mysterium-auth login
 ```
 
-The helper discovers an installed Chromium browser. It offers to reuse a
-compatible running browser only when that browser already exposes a usable
-standard CDP endpoint, and only after explaining and requesting temporary
-debugging access. Chrome 144 and later require remote debugging to be enabled
-first at `chrome://inspect/#remote-debugging`. Some hardened Chrome versions
-expose only a permission proxy rather than a standard endpoint; the helper
-detects that condition and immediately falls back. If reuse is declined or
-unsupported, it opens the same browser with an isolated temporary profile and
-requires no browser setting. In either mode, complete the real D&D Beyond login
-in an uncontrolled browser window: no CDP client is attached and no automation
-flag is present during password or OAuth authentication. After login, the
-helper briefly attaches to the existing browser, or relaunches the closed
-temporary profile headlessly, to export D&D Beyond state only. For the temporary
-path, the user presses Enter after sign-in and the helper closes only that
-temporary browser instance; the user's ordinary browser is unaffected. It then
-validates the state in the matching container image and saves it to the labeled
-`ddb-mcp-session` Docker volume.
+The helper opens a visible browser for the real D&D Beyond sign-in, exports only D&D Beyond browser state after login, validates it inside the matching image, and saves it in the labeled `mysterium-session` Docker volume. Passwords are never accepted through MCP tools.
 
-If authentication is missing or expires, account-backed MCP tools return a
-clear error telling the AI to ask the user to run `ddb-mcp-auth login` again.
-Useful host diagnostics are:
+Useful diagnostics:
 
 ```bash
-ddb-mcp-auth info
-ddb-mcp-auth validate
-ddb-mcp-auth validate --live
-ddb-mcp-auth reset
-ddb-mcp-auth volume remove
-ddb-mcp-auth help
+mysterium-auth info
+mysterium-auth validate
+mysterium-auth validate --live
 ```
 
-`info` lists browser candidates, the active Docker context, helper/image
-versions, volume ownership, and the recommended next action without displaying
-session data. `validate` performs structural checks and a local browser CDP
-probe without contacting D&D Beyond; add `--live` for one bounded read-only
-authentication check. `reset` preserves the labeled volume, while
-`volume remove` removes it and refuses while a running container has it
-mounted. The destructive commands prompt unless `--force` is supplied.
+`validate` is local; `validate --live` performs one bounded, read-only request to D&D Beyond. If the session expires, run `mysterium-auth login` again.
 
-All operational commands accept `--volume`, `--image`, `--browser-path`, and
-`--timeout` overrides. `login`, `validate`, and `info` accept `--json` for
-machine-readable output. A released helper defaults to the matching immutable
-GHCR image, so an image override is normally needed only for local development.
-Before opening a login browser, the helper verifies that the selected image
-contains the matching session-administration entry point. For a source build,
-rebuild `ddb-mcp-local:latest` after changing or rebuilding the helper.
+### 3. Connect an MCP client
 
-### Example prompts
+Docker MCP Toolkit users should download `mysterium.yaml` from the same GitHub
+Release as the helper. That catalog is already pinned to the release's immutable
+image, so it can be installed without editing:
 
-**List your characters:**
-```
-List all my D&D Beyond characters
+```bash
+mkdir -p "$HOME/.docker/mcp/catalogs"
+cp /path/to/downloaded/mysterium.yaml "$HOME/.docker/mcp/catalogs/mysterium.yaml"
+
+docker mcp profile create --name mysterium
+docker mcp profile server add mysterium --server file://mysterium.yaml
 ```
 
-**Get full character data:**
-```
-Get the full character sheet for character ID 140476673
+The checked-in [`mysterium.yaml`](mysterium.yaml) is the source-build variant. It
+uses the same `mysterium` server identity and points to `mysterium:local`, the
+image produced by `make build`.
+
+An MCP client that launches containers directly can use the equivalent stdio command:
+
+```bash
+docker run --rm --interactive \
+  --volume mysterium-session:/home/mcp/.config/mysterium:ro \
+  "ghcr.io/davidjbianco/mysterium:v${MYSTERIUM_VERSION}"
 ```
 
-**List your campaigns:**
-```
-What campaigns am I part of on D&D Beyond?
-```
+The server needs outbound HTTPS access to D&D Beyond. The session volume is mounted read-only during normal operation.
 
-**Get campaign details:**
-```
-Show me the details for campaign 6709239, including all the player characters
-```
+See [DOCKER.md](DOCKER.md) for local image builds, Docker MCP Toolkit details, and container verification.
 
-**Search for spells:**
-```
-Search D&D Beyond for spells named "Fireball"
-```
+## Reading sourcebooks
 
-**Search for monsters:**
-```
-Find the Beholder stat block on D&D Beyond
-```
-
-**Discover and read a sourcebook:**
-```
-Show me the table of contents for the Player's Handbook
-```
-
-```
-Read the Barbarian class section from the Player's Handbook
-```
-
-**Search accessible sourcebooks by title:**
-```json
-{
-  "query": "Player's Handbook",
-  "category": "sourcebooks"
-}
-```
-
-**Include unavailable catalog sourcebooks:**
-```json
-{
-  "query": "handbook",
-  "category": "sourcebooks",
-  "source_scope": "all"
-}
-```
-
-**Download a character:**
-```
-Download the character data for Roland Stonehelm to my Downloads folder
-```
-
-### Finding character and campaign IDs
-
-- **Character ID**: The number in the character URL — `dndbeyond.com/characters/140476673`
-- **Campaign ID**: The number in the campaign URL — `dndbeyond.com/campaigns/6709239`
-
-You can also use `ddb_list_characters` and `ddb_list_campaigns` to get IDs without leaving Claude.
-
-### Sourcebook discovery and pagination
-
-Use `ddb_list_library` to get the slug for any book you own. Examples:
-
-| Book | Slug |
-|------|------|
-| Player's Handbook (2024) | `dnd/phb-2024` |
-| Dungeon Master's Guide (2024) | `dnd/dmg-2024` |
-| Monster Manual (2024) | `dnd/mm-2024` |
-| Player's Handbook (2014) | `dnd/phb-2014` |
-
-`ddb_read_book` returns JSON. With only `book_slug`, it returns the complete
-book outline. Add a chapter path with `mode: "outline"` to discover that
-chapter's stable section IDs:
+Call `mysterium_list_library` to discover accessible book slugs. Calling `mysterium_read_book` with only `book_slug` returns the book outline. Use a chapter path with `mode: "outline"` to discover stable section IDs:
 
 ```json
 {
@@ -196,94 +114,47 @@ chapter's stable section IDs:
 }
 ```
 
-To read a chapter, omit `mode` or set it to `"content"`. Content responses
-contain Markdown in `text`, image descriptions and HTTPS URLs in `images`, an
-opaque `nextCursor`, and a `done` flag. Pass `nextCursor` back as `cursor` with
-the same book, chapter, section, and character limit until `done` is `true`.
+For content, omit `mode` or set it to `"content"`. Responses contain bounded Markdown in `text`, an opaque `nextCursor`, and a `done` flag. Return `nextCursor` as `cursor` with the same book, chapter, section, and character limit until `done` is `true`.
 
-```json
-{
-  "book_slug": "dnd/phb-2024",
-  "chapter_slug": "character-classes/barbarian",
-  "max_chars": 10000
-}
-```
+The default limit is 10,000 Markdown characters and the maximum is 25,000. You can restrict a read to a section ID from the outline or to an exact, unique heading.
 
-The default content limit is 10,000 Markdown characters and the server maximum
-is 25,000. A chunk prefers complete headings, paragraphs, lists, and tables,
-but an individually oversized block is split. To read only one section, pass a
-stable `section` ID returned by the chapter outline, or an exact heading name
-when that name is unique.
+## Session safety and reset
 
-`ddb_search` always returns a JSON envelope, including `count: 0` and an empty
-`results` array when nothing matches. Ordinary spell, monster, item, race,
-class, feat, and general results include a `sources` array. Each normalized
-source has nullable `title`, `url`, `bookSlug`, and `chapterSlug` fields. The
-array is empty when the rendered D&D Beyond listing does not expose source
-attribution; the server does not open every result page to fill it in.
+The `mysterium-session` volume contains cookies and browser storage that grant access to the associated account. Do not copy, inspect, log, publish, or bake it into an image.
 
-With `category: "sourcebooks"`, `source_scope` defaults to `"accessible"` and
-searches owned/shared books by title. Set it to `"all"` to include catalog
-books. Sourcebook results have an `access` value of `"accessible"`,
-`"unavailable"`, or `"unknown"`. Only pass a result to `ddb_read_book` when
-`access` is `"accessible"` and `bookSlug` is non-null. Unavailable results may
-instead contain the D&D Beyond store URL. `source_scope` is invalid for every
-other category.
-
-Image bytes are not downloaded or embedded.
-
-## Upgrading
-
-Pull the new immutable image and replace `ddb-mcp-auth` with the executable from
-the same release. Restart the MCP client or Docker Toolkit profile afterward.
-
-## Session storage
-
-Authentication is stored only in the labeled `ddb-mcp-session` Docker volume,
-which contains D&D Beyond cookies and local storage. The normal MCP container
-mounts it read-only. Do not copy, inspect, log, or publish its contents.
-
-Use the helper to clear local state:
+To remove saved session files while preserving the labeled volume:
 
 ```bash
-ddb-mcp-auth reset
+mysterium-auth reset
 ```
 
-This does not revoke the server-side D&D Beyond session. Use D&D Beyond account
-controls when server-side revocation is required.
-
-## Development
+To remove the entire helper-owned volume:
 
 ```bash
-# Run in development mode (no build step needed)
-npm run dev
-
-# Build
-npm run build
-
-# Watch mode
-npm run build:watch
-
-# Complete offline unit and MCP contract suite
-npm test
-
-# Production-image browser and container integration suite
-npm run test:docker
-
-# Standalone host-helper tests
-npm run test:go
+mysterium-auth volume remove
 ```
 
-Authenticated read-only release testing is deliberately separate and requires
-an explicit local opt-in. See [`LIVE_TESTING.md`](LIVE_TESTING.md); never place
-a D&D Beyond session in this repository or GitHub Actions.
+Neither operation revokes the server-side D&D Beyond session; use D&D Beyond account controls when revocation is required.
 
-## Docker MCP Toolkit
+## Development and verification
 
-The fork includes a reproducible Docker build, a local Docker MCP server
-definition, release images on GitHub Container Registry, and instructions for
-persisting authenticated browser state. See [`DOCKER.md`](DOCKER.md).
+Development still uses the locked Node and Go toolchains to build and test the project, but the supported end-user runtime is Docker:
+
+```bash
+make build
+make test
+make test-docker
+```
+
+`make build` regenerates `dist/`, builds `mysterium:local`, and writes a
+matching host helper to `bin/mysterium-auth`. Use `make test-all` for both the
+normal and container suites. `IMAGE`, `TEST_IMAGE`, and `BIN_DIR` can be
+overridden on the command line; run `make help` for the complete target list.
+These same targets are the CI entry points, so local and automated verification
+use the same commands.
+
+Authenticated tests are deliberately separate, read-only, and explicitly opted into. See [LIVE_TESTING.md](LIVE_TESTING.md). Never place a D&D Beyond session in the repository or GitHub Actions.
 
 ## License
 
-MIT
+MIT.

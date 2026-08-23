@@ -23,7 +23,7 @@ WORKDIR /app
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 
-# DDB MCP launches a headed Chromium instance. Playwright installs the matching
+# Mysterium launches a headed Chromium instance. Playwright installs the matching
 # browser and its Linux dependencies; Xvfb supplies the virtual display.
 RUN npx playwright install --with-deps chromium \
     && apt-get update \
@@ -34,7 +34,7 @@ RUN npx playwright install --with-deps chromium \
     && chmod -R a+rX /ms-playwright \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin mcp \
-    && mkdir -p /home/mcp/.config/ddb-mcp \
+    && mkdir -p /home/mcp/.config/mysterium \
     && chown -R mcp:mcp /home/mcp
 
 # Application output changes much more often than the browser runtime. Keep it
@@ -44,6 +44,6 @@ COPY --from=build /app/dist ./dist
 USER mcp
 
 # Keep authenticated browser state outside the container's writable layer.
-VOLUME ["/home/mcp/.config/ddb-mcp"]
+VOLUME ["/home/mcp/.config/mysterium"]
 
 ENTRYPOINT ["tini", "--", "xvfb-run", "-a", "--server-args=-screen 0 1280x1024x24", "node", "dist/index.js"]

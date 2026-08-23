@@ -6,13 +6,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const server = new McpServer({ name: "ddb-mcp-live-mock", version: "1.0.0" });
+const server = new McpServer({ name: "mysterium-live-mock", version: "1.0.0" });
 const text = (value) => ({ content: [{ type: "text", text: value }] });
 const sensitive = "SYNTHETIC_PRIVATE_MARKER";
 
-server.tool("ddb_list_characters", "mock", {}, async () => {
-  if (process.env.DDB_MCP_LIVE_MOCK_FAIL_TOOL === "ddb_list_characters") {
-    process.stderr.write(`HTTP 403 while reading ${process.env.DDB_MCP_SESSION_PATH} for ${sensitive}\n`);
+server.tool("mysterium_list_characters", "mock", {}, async () => {
+  if (process.env.MYSTERIUM_LIVE_MOCK_FAIL_TOOL === "mysterium_list_characters") {
+    process.stderr.write(`HTTP 403 while reading ${process.env.MYSTERIUM_SESSION_PATH} for ${sensitive}\n`);
     return {
       isError: true,
       content: [{
@@ -24,14 +24,14 @@ server.tool("ddb_list_characters", "mock", {}, async () => {
   return text(JSON.stringify([{ id: "4242", name: sensitive }]));
 });
 server.tool(
-  "ddb_get_character",
+  "mysterium_get_character",
   "mock",
   { character_id: z.string(), fallback_scrape: z.boolean().optional() },
   async ({ character_id, fallback_scrape }) =>
     text(JSON.stringify(fallback_scrape ? { Name: sensitive } : { data: { id: character_id, name: sensitive } }))
 );
 server.tool(
-  "ddb_download_character",
+  "mysterium_download_character",
   "mock",
   { character_id: z.string(), output_path: z.string().optional() },
   async ({ character_id, output_path }) => {
@@ -39,28 +39,28 @@ server.tool(
     return text("download complete");
   }
 );
-server.tool("ddb_list_campaigns", "mock", {}, async () =>
+server.tool("mysterium_list_campaigns", "mock", {}, async () =>
   text(JSON.stringify([{ id: "7", name: sensitive }]))
 );
-server.tool("ddb_get_campaign", "mock", { campaign_id: z.string() }, async () =>
+server.tool("mysterium_get_campaign", "mock", { campaign_id: z.string() }, async () =>
   text(JSON.stringify({ name: sensitive }))
 );
-server.tool("ddb_navigate", "mock", { url: z.string() }, async ({ url }) => text(`URL: ${url}\n\n${sensitive}`));
+server.tool("mysterium_navigate", "mock", { url: z.string() }, async ({ url }) => text(`URL: ${url}\n\n${sensitive}`));
 server.tool(
-  "ddb_interact",
+  "mysterium_interact",
   "mock",
   { action: z.enum(["click", "fill", "screenshot"]), selector: z.string(), value: z.string().optional() },
   async () => {
-    const path = join(tmpdir(), "ddb-screenshot-live-mock.png");
+    const path = join(tmpdir(), "mysterium-screenshot-live-mock.png");
     writeFileSync(path, "synthetic screenshot");
     return text(`Screenshot saved to: ${path}`);
   }
 );
-server.tool("ddb_current_page", "mock", {}, async () =>
+server.tool("mysterium_current_page", "mock", {}, async () =>
   text(`Current URL: https://www.dndbeyond.com/characters\n\n${sensitive}`)
 );
 server.tool(
-  "ddb_search",
+  "mysterium_search",
   "mock",
   { query: z.string(), category: z.string().optional(), source_scope: z.enum(["accessible", "all"]).optional() },
   async ({ query, category, source_scope }) => {
@@ -78,11 +78,11 @@ server.tool(
     return text(JSON.stringify({ query, category: category ?? "all", count: results.length, results }));
   }
 );
-server.tool("ddb_list_library", "mock", {}, async () =>
+server.tool("mysterium_list_library", "mock", {}, async () =>
   text(JSON.stringify({ books: [{ slug: "synthetic-book", title: sensitive }] }))
 );
 server.tool(
-  "ddb_read_book",
+  "mysterium_read_book",
   "mock",
   {
     book_slug: z.string(),

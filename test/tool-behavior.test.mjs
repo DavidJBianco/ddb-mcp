@@ -32,7 +32,7 @@ test("character tools handle synthetic API data, empty listings, and temporary d
   }));
   assert.equal(JSON.parse(await getCharacter(characterContext, "4242")).data.id, 4242);
 
-  const directory = await mkdtemp(join(tmpdir(), "ddb-mcp-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "mysterium-test-"));
   t.after(async () => rm(directory, { recursive: true, force: true }));
   const outputPath = join(directory, "character.json");
   await downloadCharacter(characterContext, "4242", outputPath);
@@ -73,17 +73,17 @@ test("authenticated tools reject a logged-out synthetic page", async () => {
   };
   const context = { pages: () => [page] };
 
-  await assert.rejects(listCharacters(context), /ddb-mcp-auth login/);
-  await assert.rejects(listMyCampaigns(context), /ddb-mcp-auth login/);
-  await assert.rejects(listLibrary(context), /ddb-mcp-auth login/);
-  await assert.rejects(readBook(context, { bookSlug: "synthetic-handbook" }), /ddb-mcp-auth login/);
-  await assert.rejects(interact(context, "click", "button"), /ddb-mcp-auth login/);
-  await assert.rejects(getCurrentPageContent(context), /ddb-mcp-auth login/);
+  await assert.rejects(listCharacters(context), /mysterium-auth login/);
+  await assert.rejects(listMyCampaigns(context), /mysterium-auth login/);
+  await assert.rejects(listLibrary(context), /mysterium-auth login/);
+  await assert.rejects(readBook(context, { bookSlug: "synthetic-handbook" }), /mysterium-auth login/);
+  await assert.rejects(interact(context, "click", "button"), /mysterium-auth login/);
+  await assert.rejects(getCurrentPageContent(context), /mysterium-auth login/);
 });
 
 test("character-service authorization failures use the shared authentication error", async () => {
   const context = contextFor(() => {
     throw new Error("API returned 403: Forbidden");
   });
-  await assert.rejects(getCharacter(context, "4242"), /ddb-mcp-auth login/);
+  await assert.rejects(getCharacter(context, "4242"), /mysterium-auth login/);
 });

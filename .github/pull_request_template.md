@@ -4,10 +4,8 @@
 
 ## Verification
 
-- [ ] `npm run lint`
-- [ ] `npm run typecheck`
-- [ ] `npm test`
-- [ ] Relevant Docker checks, if container behavior changed
+- [ ] `make test`
+- [ ] `make test-docker`, if container behavior changed
 
 ## Release checklist (`dev` → `main` only)
 

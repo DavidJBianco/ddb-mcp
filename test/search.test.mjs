@@ -234,7 +234,7 @@ test("sourcebook search fails clearly when the title filter is missing", async (
 
 test("sourcebook search rejects a logged-out session without opening the library", async () => {
   const harness = sourcebookHarness([], { authenticated: false });
-  await assert.rejects(search(harness.context, "handbook", "sourcebooks"), /ddb-mcp-auth login/);
+  await assert.rejects(search(harness.context, "handbook", "sourcebooks"), /mysterium-auth login/);
   assert.equal(harness.visits.length, 1);
 });
 

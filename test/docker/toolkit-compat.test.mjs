@@ -10,15 +10,15 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { EXPECTED_TOOLS } from "../support/tool-manifest.mjs";
 import { captureStderr, withFailureDiagnostics } from "../support/failure-diagnostics.mjs";
 
-const image = process.env.DDB_MCP_TEST_IMAGE ?? "ddb-mcp:test";
+const image = process.env.MYSTERIUM_TEST_IMAGE ?? "mysterium:test";
 
 test("Docker MCP Toolkit catalog entry describes the production image contract", async () => {
-  const catalog = await readFile(new URL("../../docker-mcp.yaml", import.meta.url), "utf8");
+  const catalog = await readFile(new URL("../../mysterium.yaml", import.meta.url), "utf8");
 
-  assert.match(catalog, /^name: ddb-mcp-local$/m);
+  assert.match(catalog, /^name: mysterium$/m);
   assert.match(catalog, /^type: server$/m);
-  assert.match(catalog, /^image: ddb-mcp-local:latest$/m);
-  assert.match(catalog, /^\s+- ddb-mcp-session:\/home\/mcp\/\.config\/ddb-mcp:ro$/m);
+  assert.match(catalog, /^image: mysterium:local$/m);
+  assert.match(catalog, /^\s+- mysterium-session:\/home\/mcp\/\.config\/mysterium:ro$/m);
 });
 
 test("Docker MCP Toolkit routes MCP through the candidate profile", { timeout: 90_000 }, async (t) => {
@@ -28,7 +28,7 @@ test("Docker MCP Toolkit routes MCP through the candidate profile", { timeout: 9
     return;
   }
 
-  const toolkitHome = await mkdtemp(join(tmpdir(), "ddb-mcp-toolkit-"));
+  const toolkitHome = await mkdtemp(join(tmpdir(), "mysterium-toolkit-"));
   t.after(async () => rm(toolkitHome, { recursive: true, force: true }));
   let plugin;
   try {
@@ -43,14 +43,14 @@ test("Docker MCP Toolkit routes MCP through the candidate profile", { timeout: 9
   const catalogDirectory = join(toolkitHome, ".docker", "mcp", "catalogs");
   await mkdir(catalogDirectory, { recursive: true });
 
-  const catalog = await readFile(new URL("../../docker-mcp.yaml", import.meta.url), "utf8");
+  const catalog = await readFile(new URL("../../mysterium.yaml", import.meta.url), "utf8");
   await writeFile(
-    join(catalogDirectory, "ddb-mcp-local.yaml"),
-    catalog.replace("image: ddb-mcp-local:latest", `image: ${image}`)
+    join(catalogDirectory, "mysterium.yaml"),
+    catalog.replace("image: mysterium:local", `image: ${image}`)
   );
 
   const environment = { ...process.env, HOME: toolkitHome };
-  const profileId = `ddb-mcp-test-${process.pid}`;
+  const profileId = `mysterium-test-${process.pid}`;
   const created = spawnSync(
     "docker",
     [
@@ -58,11 +58,11 @@ test("Docker MCP Toolkit routes MCP through the candidate profile", { timeout: 9
       "profile",
       "create",
       "--name",
-      "DDB MCP test",
+      "Mysterium test",
       "--id",
       profileId,
       "--server",
-      "file://ddb-mcp-local.yaml",
+      "file://mysterium.yaml",
     ],
     { encoding: "utf8", env: environment, timeout: 30_000 }
   );
@@ -106,21 +106,21 @@ test("Docker MCP Toolkit routes MCP through the candidate profile", { timeout: 9
     stderr: "pipe",
   });
   const diagnostics = captureStderr(transport);
-  const client = new Client({ name: "ddb-mcp-toolkit-test", version: "1.0.0" });
+  const client = new Client({ name: "mysterium-toolkit-test", version: "1.0.0" });
   try {
     await withFailureDiagnostics("Toolkit profile MCP connection", diagnostics, async () => {
       await client.connect(transport);
 
       const listed = await client.listTools();
-      const expectedNames = EXPECTED_TOOLS.map((name) => `ddb-mcp-local.${name}`).sort();
+      const expectedNames = EXPECTED_TOOLS.map((name) => `mysterium.${name}`).sort();
       const profileNames = listed.tools
         .map(({ name }) => name)
-        .filter((name) => name.startsWith("ddb-mcp-local."))
+        .filter((name) => name.startsWith("mysterium."))
         .sort();
       assert.deepEqual(profileNames, expectedNames);
 
       const result = await client.callTool({
-        name: "ddb-mcp-local.ddb_read_book",
+        name: "mysterium.mysterium_read_book",
         arguments: { book_slug: "synthetic-handbook", mode: "content" },
       });
       assert.equal(result.isError, true);

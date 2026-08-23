@@ -1,4 +1,4 @@
-module github.com/davidjbianco/ddb-mcp/cmd/ddb-mcp-auth
+module github.com/davidjbianco/mysterium/cmd/mysterium-auth
 
 go 1.26.0
 

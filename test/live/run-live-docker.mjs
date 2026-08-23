@@ -1,49 +1,50 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, sep } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
+import {
+  DEFAULT_LIVE_SESSION_VOLUME,
+  parseManagedLiveSessionVolume,
+  validateLiveSessionVolumeName,
+} from "../support/live-docker.mjs";
 
-if (process.env.DDB_MCP_LIVE_TESTS !== "1") {
-  process.stdout.write("Live Docker tests skipped; set DDB_MCP_LIVE_TESTS=1 to opt in.\n");
-  process.exit(0);
-}
-
-let sessionPath = process.env.DDB_MCP_SESSION_PATH;
-let validSession = typeof sessionPath === "string" && isAbsolute(sessionPath);
+let sessionVolume;
 try {
-  validSession &&= statSync(sessionPath).isFile();
-  sessionPath = realpathSync(sessionPath);
+  sessionVolume = validateLiveSessionVolumeName(
+    process.env.MYSTERIUM_SESSION_VOLUME ?? DEFAULT_LIVE_SESSION_VOLUME
+  );
 } catch {
-  validSession = false;
+  process.stderr.write("Live Docker tests received an invalid session volume name.\n");
+  process.exit(1);
 }
-if (validSession) {
-  const repositoryRelativePath = relative(repositoryRoot, sessionPath);
-  validSession = repositoryRelativePath === ".." || repositoryRelativePath.startsWith(`..${sep}`);
+const inspection = spawnSync("docker", ["volume", "inspect", sessionVolume], { encoding: "utf8" });
+if (inspection.status !== 0) {
+  process.stderr.write(
+    `Live Docker tests require the helper-managed ${sessionVolume} volume; run make login first.\n`
+  );
+  process.exit(1);
 }
-if (!validSession) {
-  process.stderr.write("Live Docker tests require an existing absolute session file outside the repository; path suppressed.\n");
+try {
+  parseManagedLiveSessionVolume(inspection.stdout, sessionVolume);
+} catch {
+  process.stderr.write(
+    `Live Docker tests require the helper-managed ${sessionVolume} volume; run make login first.\n`
+  );
   process.exit(1);
 }
 
-const image = process.env.DDB_MCP_LIVE_IMAGE ?? "ddb-mcp:live";
-const containerName = `ddb-mcp-live-test-${process.pid}`;
+const image = process.env.MYSTERIUM_LIVE_IMAGE ?? "mysterium:live";
+const containerName = `mysterium-live-test-${process.pid}`;
 const build = spawnSync("docker", ["build", "--tag", image, "."], { stdio: "inherit" });
 if (build.status !== 0) {
   process.stderr.write("Live Docker candidate image build failed.\n");
   process.exit(build.status ?? 1);
 }
 
-const stagingDirectory = mkdtempSync(join(tmpdir(), "ddb-mcp-live-session-"));
 let cleanedUp = false;
 
 function cleanup() {
   if (cleanedUp) return;
   cleanedUp = true;
   spawnSync("docker", ["rm", "--force", containerName], { stdio: "ignore" });
-  rmSync(stagingDirectory, { recursive: true, force: true });
 }
 
 process.once("exit", cleanup);
@@ -57,20 +58,17 @@ process.once("SIGTERM", () => {
 });
 
 try {
-  const stagedSession = join(stagingDirectory, "session.json");
-  copyFileSync(sessionPath, stagedSession);
-  chmodSync(stagedSession, 0o444);
-
+  const { MYSTERIUM_SESSION_PATH: _ignoredSessionPath, ...baseEnvironment } = process.env;
   const suite = spawnSync(
     process.execPath,
     ["--test", "--test-concurrency=1", "test/live/live-read.test.mjs"],
     {
       env: {
-        ...process.env,
-        DDB_MCP_LIVE_TRANSPORT: "docker",
-        DDB_MCP_LIVE_IMAGE: image,
-        DDB_MCP_LIVE_CONTAINER_NAME: containerName,
-        DDB_MCP_SESSION_PATH: stagedSession,
+        ...baseEnvironment,
+        MYSTERIUM_LIVE_TRANSPORT: "docker",
+        MYSTERIUM_LIVE_IMAGE: image,
+        MYSTERIUM_LIVE_CONTAINER_NAME: containerName,
+        MYSTERIUM_SESSION_VOLUME: sessionVolume,
       },
       stdio: "inherit",
     }

@@ -2,7 +2,7 @@
 
 ## Project purpose
 
-`ddb-mcp` is an MIT-licensed TypeScript MCP server that exposes a user's
+`mysterium` is an MIT-licensed TypeScript MCP server that exposes a user's
 authenticated D&D Beyond content through Playwright. D&D Beyond does not offer
 a supported public developer API, so integrations are inherently sensitive to
 site and DOM changes.
@@ -52,9 +52,9 @@ release requires all of the following before merge:
    mocks, synthetic fixtures, local browser pages, and Docker smoke tests, but
    it must never receive a D&D Beyond session or contact D&D Beyond.
 4. Run the complete live test suite locally, outside GitHub Actions, using the
-   external session file and the explicit live-test opt-in. Record the command,
-   commit SHA, result, and any skipped tests in the release PR. If the live
-   suite does not yet exist, cannot run, or does not pass, the release is
+   helper-managed session volume and the dedicated live-test target. Record the
+   command, commit SHA, result, and any skipped tests in the release PR. If the
+   live suite does not yet exist, cannot run, or does not pass, the release is
    blocked unless the user explicitly accepts that exception.
 5. Obtain the user's release approval after the automated and live results are
    available. Merge or squash the release PR; do not rebase-merge it because
@@ -62,7 +62,7 @@ release requires all of the following before merge:
 
 After the release PR merges, automation may tag that exact `main` commit as
 `vX.Y.Z`, create the GitHub Release, attach the npm package archive, and publish
-`ghcr.io/davidjbianco/ddb-mcp:vX.Y.Z` plus `latest`. Release automation must not
+`ghcr.io/davidjbianco/mysterium:vX.Y.Z` plus `latest`. Release automation must not
 create a version-bump commit or otherwise modify `main`.
 
 ## Repository map
@@ -76,7 +76,7 @@ create a version-bump commit or otherwise modify `main`.
 - `src/tools/search.ts`: rendered search/listing scraping.
 - `src/tools/navigate.ts`: generic D&D Beyond navigation and interaction.
 - `dist/`: committed TypeScript build output; update it when source changes.
-- `Dockerfile`, `docker-mcp.yaml`, `DOCKER.md`: container and Docker MCP Toolkit
+- `Dockerfile`, `mysterium.yaml`, `DOCKER.md`: container and Docker MCP Toolkit
   integration.
 
 ## Development commands
@@ -84,29 +84,30 @@ create a version-bump commit or otherwise modify `main`.
 Use the locked dependency graph. Do not casually regenerate `package-lock.json`.
 
 ```bash
-npm ci
-npm run dev
-npm run lint
-npm run typecheck
-npm run build
-npm test
-npm run test:docker
-# Explicit local release gates only; see LIVE_TESTING.md:
-npm run test:live
-npm run test:live:docker
+make build
+make test
+make test-docker
+make test-all
+# Explicit local release gate only; see LIVE_TESTING.md:
+make live-test-host
+make live-test
 ```
+
+The Makefile is the canonical build and test interface for local development
+and CI. Its targets may delegate to locked npm and Go commands; invoke those
+underlying commands directly only when diagnosing a failing target.
 
 The default test suite is offline and includes unit tests plus MCP protocol
 integration tests over both in-memory and subprocess stdio transports with an
 injected mock Playwright context. For every source change, run at least
-`npm run lint`, `npm run typecheck`, `npm run build`, and `npm test`. Review
+`make test`. Review
 changes under `dist/` after building and commit the generated files that
 correspond to the edited source.
 
 For container-related changes, also run:
 
 ```bash
-npm run test:docker
+make test-docker
 ```
 
 Do not claim authenticated or live-site behavior was verified unless it was
@@ -166,15 +167,15 @@ These tests are safe to run routinely and should form the bulk of the suite:
 - Keep offline tests deterministic and independent of execution order, home
   directory contents, saved sessions, and external services.
 
-Expose these through a normal `npm test` script. They must never navigate to
-D&D Beyond or read `~/.config/ddb-mcp/session.json`.
+Expose these through the normal `make test` target. They must never navigate to
+D&D Beyond or read `~/.config/mysterium/session.json`.
 
 ### Browser integration tests (local, still mocked)
 
 Where DOM behavior requires a browser, serve synthetic fixture pages locally
 and exercise them with Playwright. These tests may launch Chromium but must not
 contact D&D Beyond or require authentication. Keep them separately selectable,
-for example with an `npm run test:browser` script, if their runtime or browser
+for example with a `make test-browser` target, if their runtime or browser
 dependency makes them unsuitable for the default unit-test loop.
 
 ### Live D&D Beyond tests (explicit opt-in)
@@ -184,18 +185,20 @@ selectors, authentication restoration, rendering behavior, and end-to-end
 confidence that cannot be established with offline fixtures.
 
 - Name and document them clearly as live tests; expose a separate command such
-  as `npm run test:live`. Never include them in `npm test`, build, or ordinary
+  as `make live-test-host`. Never include them in `make test`, build, or ordinary
   CI by default.
 - Never execute live tests in GitHub Actions or upload session state to GitHub.
   Live release verification runs locally and its summary is recorded in the
   release pull request.
 - Do not run a live test unless the task explicitly calls for it or the user
   approves it after being told what pages and account data it will access.
-- Require an explicit opt-in environment flag in addition to the command so an
-  accidental invocation skips safely.
-- Reuse the normal external session path; never copy session state into the
-  repository or test artifacts. Detect a missing/expired session and skip or
-  fail with a clear instruction rather than initiating an unexpected login.
+- Treat invocation of the dedicated live-test target as explicit opt-in; do not
+  require a redundant authorization environment flag.
+- Reuse the normal helper-managed Docker volume for Docker live tests and mount
+  it read-only. Host-only diagnostics may use an explicitly selected external
+  session path. Never copy session state into the repository or test artifacts.
+  Detect a missing or expired session and fail with a clear instruction rather
+  than initiating an unexpected login.
 - Keep live tests read-only unless the user explicitly authorizes a particular
   write test. Any live write test must also follow the dry-run, validation, and
   before/after safeguards below and use disposable test data where possible.
@@ -220,15 +223,16 @@ explicitly authorizes the particular operation being tested. When introduced,
 they must:
 
 - Live in separately selectable host and Docker suites, exposed through
-  commands such as `npm run test:live:write` and
-  `npm run test:live:write:docker`. They must never run through `npm test`,
-  `npm run test:live`, `npm run test:live:docker`, ordinary CI, or the default
+  targets such as `make live-test-write-host` and `make live-test-write`.
+  They must never run through `make test`, `make live-test-host`,
+  `make live-test`, ordinary CI, or the default
   release verification.
 - Require a separate explicit write-test environment opt-in in addition to
   invoking the command and satisfying the normal live-session opt-ins.
-- Use the same external-session safeguards in both environments. Docker must
-  mount session state externally, must not bake it into the image, and must
-  keep the write-test command distinct from the read-only live runner.
+- Use the same session-safety principles in both environments. Docker must
+  mount the helper-managed volume read-only, must not bake state into the
+  image, and must keep the write-test command distinct from the read-only live
+  runner.
 - Use disposable test data where possible and follow the validation, dry-run,
   before/after verification, partial-failure reporting, and cleanup safeguards
   defined for write operations.
@@ -280,7 +284,7 @@ continue. Sourcebook reads should evolve around a small, deterministic contract:
 - Do not cache or persist copyrighted sourcebook text by default. Return only
   content requested from the user's authenticated browser session.
 
-Start with the smallest compatible extension of `ddb_read_book`; avoid adding
+Start with the smallest compatible extension of `mysterium_read_book`; avoid adding
 stateful server-side pagination or a large abstraction layer until required.
 Section-level search and retrieval are later work unless explicitly requested.
 
@@ -289,13 +293,13 @@ Section-level search and retrieval are later work unless explicitly requested.
 The default host session is stored at:
 
 ```text
-~/.config/ddb-mcp/session.json
+~/.config/mysterium/session.json
 ```
 
 The container session is stored at:
 
 ```text
-/home/mcp/.config/ddb-mcp/session.json
+/home/mcp/.config/mysterium/session.json
 ```
 
 These files contain cookies and browser storage that grant account access.

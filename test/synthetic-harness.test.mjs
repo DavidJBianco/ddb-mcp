@@ -13,8 +13,8 @@ function isolatedChildEnvironment(overrides) {
   return environment;
 }
 
-test("the complete live harness runs against synthetic MCP data without disclosing it", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "ddb-mcp-live-harness-"));
+test("offline synthetic harness exercises the authenticated-test protocol safely", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "mysterium-synthetic-harness-"));
   t.after(async () => rm(directory, { recursive: true, force: true }));
   const sessionPath = join(directory, "session.json");
   await writeFile(sessionPath, "{}");
@@ -25,9 +25,8 @@ test("the complete live harness runs against synthetic MCP data without disclosi
     {
       encoding: "utf8",
       env: isolatedChildEnvironment({
-        DDB_MCP_LIVE_TESTS: "1",
-        DDB_MCP_LIVE_TRANSPORT: "mock",
-        DDB_MCP_SESSION_PATH: sessionPath,
+        MYSTERIUM_LIVE_TRANSPORT: "mock",
+        MYSTERIUM_SESSION_PATH: sessionPath,
       }),
       timeout: 30_000,
     }
@@ -40,8 +39,8 @@ test("the complete live harness runs against synthetic MCP data without disclosi
   assert.doesNotMatch(output, new RegExp(sessionPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
-test("live failures show sanitized diagnostics only when a test fails", async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), "ddb-mcp-live-harness-failure-"));
+test("offline synthetic failures expose only sanitized diagnostics", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "mysterium-synthetic-harness-failure-"));
   t.after(async () => rm(directory, { recursive: true, force: true }));
   const sessionPath = join(directory, "session.json");
   await writeFile(sessionPath, "{}");
@@ -52,10 +51,9 @@ test("live failures show sanitized diagnostics only when a test fails", async (t
     {
       encoding: "utf8",
       env: isolatedChildEnvironment({
-        DDB_MCP_LIVE_TESTS: "1",
-        DDB_MCP_LIVE_TRANSPORT: "mock",
-        DDB_MCP_LIVE_MOCK_FAIL_TOOL: "ddb_list_characters",
-        DDB_MCP_SESSION_PATH: sessionPath,
+        MYSTERIUM_LIVE_TRANSPORT: "mock",
+        MYSTERIUM_LIVE_MOCK_FAIL_TOOL: "mysterium_list_characters",
+        MYSTERIUM_SESSION_PATH: sessionPath,
       }),
       timeout: 30_000,
     }
@@ -64,7 +62,7 @@ test("live failures show sanitized diagnostics only when a test fails", async (t
 
   assert.equal(result.signal, null);
   assert.notEqual(result.status, 0, output);
-  assert.match(output, /ddb_list_characters returned a tool error/);
+  assert.match(output, /mysterium_list_characters returned a tool error/);
   assert.match(output, /HTTP status: 403/);
   assert.match(output, /category: authentication or authorization/);
   assert.match(output, /endpoint: www\.dndbeyond\.com\/characters\/\[redacted\]/);

@@ -30,7 +30,7 @@ export async function navigate(context: BrowserContext, url: string): Promise<st
     return (main as HTMLElement).innerText;
   });
 
-  const truncated = content.length > 8000 ? content.slice(0, 8000) + "\n\n[Content truncated — use ddb_read_book or a more specific URL to get full content]" : content;
+  const truncated = content.length > 8000 ? content.slice(0, 8000) + "\n\n[Content truncated — use mysterium_read_book or a more specific URL to get full content]" : content;
 
   return `URL: ${url}\n\n${truncated}`;
 }
@@ -74,7 +74,7 @@ export async function interact(
     }
 
     case "screenshot": {
-      const screenshotPath = `/tmp/ddb-screenshot-${Date.now()}.png`;
+      const screenshotPath = `/tmp/mysterium-screenshot-${Date.now()}.png`;
       await page.screenshot({ path: screenshotPath, fullPage: false });
       return `Screenshot saved to: ${screenshotPath}`;
     }
