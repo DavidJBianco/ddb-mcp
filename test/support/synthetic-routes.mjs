@@ -6,6 +6,15 @@ const searchPage = `<!doctype html><html><body><main class="listing-body">
     <a class="link" href="/spells/synthetic-shield">Synthetic Shield</a>
     <div class="row spell-level"><span>1st Level</span></div>
     <div class="row spell-school"><span class="school abjuration"></span></div>
+    <div class="source">
+      <a href="/sources/synthetic-handbook">Synthetic Handbook</a>
+      <a href="/sources/synthetic-expansion/chapter-one" data-book-slug="synthetic-expansion" data-chapter-slug="chapter-one">Synthetic Expansion</a>
+    </div>
+    <div class="source">Source: Printed Reference</div>
+  </div>
+  <div class="info" data-slug="synthetic-ward">
+    <a class="link" href="/spells/synthetic-ward">Synthetic Ward</a>
+    <div class="row spell-level"><span>2nd Level</span></div>
   </div>
 </main></body></html>`;
 
@@ -47,10 +56,23 @@ const campaignPage = `<!doctype html><html><body><main>
   </li>
 </main></body></html>`;
 
-const libraryPage = `<!doctype html><html><body><main>
+const accessibleLibraryPage = `<!doctype html><html><body><main>
+  <input placeholder="Filter by title" />
   <div data-testid="sourceCard">
     <a class="SourceCard_sourceTitle_synthetic" href="/sources/synthetic-handbook">Synthetic Handbook</a>
     <p class="SourceCard_sourceSubtitle_synthetic">Owned</p>
+  </div>
+</main></body></html>`;
+
+const catalogLibraryPage = `<!doctype html><html><body><main>
+  <input placeholder="Filter by title" />
+  <div data-testid="sourceCard">
+    <a class="SourceCard_sourceTitle_synthetic" href="/sources/synthetic-handbook">Synthetic Handbook</a>
+    <p class="SourceCard_sourceSubtitle_synthetic">Owned</p>
+  </div>
+  <div data-testid="sourceCard">
+    <a class="SourceCard_sourceTitle_synthetic" href="https://marketplace.dndbeyond.com/synthetic-store-book">Synthetic Store Book</a>
+    <a href="https://marketplace.dndbeyond.com/synthetic-store-book">View in Store</a>
   </div>
 </main></body></html>`;
 
@@ -160,7 +182,7 @@ export async function installSyntheticRoutes(context, options = {}) {
     }
 
     if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/en/library") {
-      await route.fulfill(html(libraryPage));
+      await route.fulfill(html(url.searchParams.get("ownership") === "owned-shared" ? accessibleLibraryPage : catalogLibraryPage));
       return;
     }
 

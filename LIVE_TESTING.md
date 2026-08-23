@@ -70,6 +70,23 @@ Fresh interactive login remains a manual release check. Do not automate live
 click or fill operations until a disposable, verifiably safe account state is
 available.
 
+## Mutating live-test isolation
+
+The repository currently has no mutating live tests. If an explicitly
+authorized write workflow gains live coverage, keep it out of both read-only
+commands above. Expose separate host and Docker commands named
+`npm run test:live:write` and `npm run test:live:write:docker`, and require a
+dedicated write-test opt-in in addition to `DDB_MCP_LIVE_TESTS=1` and the
+external session path.
+
+The Docker write-test runner must build or select the same release-candidate
+image without embedding session state, mount the external session separately,
+and remain independently runnable from `npm run test:live:docker`. Before
+either write command is run, its documentation must identify the exact account
+changes, disposable-data requirements, dry run, before/after checks, cleanup,
+and expected partial-failure behavior. A write suite is never part of the
+default release gate unless the user explicitly authorizes that exact run.
+
 ## Release record
 
 Add a record like this to the `dev` to `main` release PR:

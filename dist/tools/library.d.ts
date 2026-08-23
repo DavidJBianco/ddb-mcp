@@ -1,4 +1,4 @@
-import type { BrowserContext } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 export declare const DEFAULT_MAX_CHARS = 10000;
 export declare const SERVER_MAX_CHARS = 25000;
 export type ReadBookMode = "outline" | "content";
@@ -36,6 +36,14 @@ export interface ExtractedBookPage {
     blocks: ContentBlock[];
     images: ImageMetadata[];
 }
+export type SourcebookAccess = "accessible" | "unavailable" | "unknown";
+export interface LibraryBookCard {
+    title: string;
+    ownership: string;
+    url: string;
+    bookSlug: string | null;
+    access: SourcebookAccess;
+}
 interface CursorPayload {
     version: 1;
     bookSlug: string;
@@ -60,6 +68,7 @@ export declare function decodeCursor(cursor: string): CursorPayload;
 export declare function validateReadBookRequest(request: ReadBookRequest): Required<Pick<ReadBookRequest, "bookSlug" | "mode" | "maxChars">> & ReadBookRequest;
 export declare function paginateBlocks(blocks: ContentBlock[], maxChars: number, start?: CursorPosition): PageChunk;
 export declare function listLibrary(context: BrowserContext): Promise<string>;
+export declare function extractLibraryBookCards(page: Page): Promise<LibraryBookCard[]>;
 export declare function readBook(context: BrowserContext, input: ReadBookRequest): Promise<string>;
 export {};
 //# sourceMappingURL=library.d.ts.map

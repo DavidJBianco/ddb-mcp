@@ -33,6 +33,7 @@ test("an MCP client can discover and call tools through the real server", async 
       name: "Synthetic Shield",
       type: "1st Level | Abjuration",
       url: "https://www.dndbeyond.com/spells/synthetic-shield",
+      sources: [],
     },
   ];
   const page = {
@@ -51,7 +52,7 @@ test("an MCP client can discover and call tools through the real server", async 
   const listed = await client.listTools();
   assert.equal(
     client.getInstructions(),
-    "Use ddb_list_library to discover accessible sourcebooks and their slugs. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Use ddb_search for corpus results; search result URLs are not guaranteed to identify a parent sourcebook. Sourcebook responses include image metadata, not image bytes."
+    "Use ddb_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to ddb_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use ddb_list_library to list accessible sourcebooks. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes."
   );
   const toolNames = listed.tools.map(({ name }) => name);
   assert.ok(toolNames.includes("ddb_current_page"));
@@ -60,7 +61,7 @@ test("an MCP client can discover and call tools through the real server", async 
   const searchTool = listed.tools.find(({ name }) => name === "ddb_search");
   assert.equal(
     searchTool.description,
-    "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, or general results. Returned URLs are standalone results and may not identify a parent sourcebook."
+    "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, sourcebooks, or general results. Results include normalized source attribution when D&D Beyond exposes it. Sourcebook searches default to accessible books."
   );
   assert.deepEqual(searchTool.inputSchema.required, ["query"]);
   assert.deepEqual(searchTool.inputSchema.properties.category.enum, [
@@ -70,8 +71,11 @@ test("an MCP client can discover and call tools through the real server", async 
     "races",
     "classes",
     "feats",
+    "sourcebooks",
     "all",
   ]);
+  assert.deepEqual(searchTool.inputSchema.properties.source_scope.enum, ["accessible", "all"]);
+  assert.match(searchTool.inputSchema.properties.source_scope.description, /unavailable catalog\/store/);
   const libraryTool = listed.tools.find(({ name }) => name === "ddb_list_library");
   assert.equal(
     libraryTool.description,
@@ -122,6 +126,23 @@ test("MCP input validation rejects invalid arguments before browser access", asy
 
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /Invalid arguments/);
+  assert.equal(contextRequested, false);
+});
+
+test("ddb_search rejects source_scope for other categories before browser access", async (t) => {
+  let contextRequested = false;
+  const client = await connectClient(t, async () => {
+    contextRequested = true;
+    throw new Error("browser context should not be requested");
+  });
+
+  const result = await client.callTool({
+    name: "ddb_search",
+    arguments: { query: "shield", category: "spells", source_scope: "all" },
+  });
+
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /source_scope is only valid/);
   assert.equal(contextRequested, false);
 });
 

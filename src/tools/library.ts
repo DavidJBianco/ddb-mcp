@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { BrowserContext } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 
 import { getPage, isLoggedIn } from "../browser.js";
 
@@ -45,6 +45,16 @@ export interface ExtractedBookPage {
   outline: OutlineEntry[];
   blocks: ContentBlock[];
   images: ImageMetadata[];
+}
+
+export type SourcebookAccess = "accessible" | "unavailable" | "unknown";
+
+export interface LibraryBookCard {
+  title: string;
+  ownership: string;
+  url: string;
+  bookSlug: string | null;
+  access: SourcebookAccess;
 }
 
 interface CursorPayload {
@@ -266,21 +276,69 @@ export async function listLibrary(context: BrowserContext): Promise<string> {
   });
   await page.waitForTimeout(2000);
 
-  const books = await page.evaluate(() => {
-    const items: Array<{ title: string; slug: string; ownership: string; url: string }> = [];
-    document.querySelectorAll("div[data-testid='sourceCard']").forEach((card) => {
-      const titleEl = card.querySelector("a[class*='SourceCard_sourceTitle']") as HTMLAnchorElement | null;
-      const title = titleEl?.textContent?.trim() ?? "";
-      const href = titleEl?.href ?? "";
-      const slugMatch = href.match(/\/sources\/(.+)/);
-      const slug = slugMatch?.[1] ?? "";
-      const ownership = card.querySelector("p[class*='SourceCard_sourceSubtitle']")?.textContent?.trim() ?? "";
-      if (title) items.push({ title, slug, ownership, url: href });
-    });
-    return items;
-  });
+  const cards = await extractLibraryBookCards(page);
+  const books = cards.map(({ title, bookSlug, ownership, url }) => ({
+    title,
+    slug: bookSlug ?? "",
+    ownership,
+    url,
+  }));
 
   return JSON.stringify({ count: books.length, books }, null, 2);
+}
+
+export async function extractLibraryBookCards(page: Page): Promise<LibraryBookCard[]> {
+  return page.evaluate(() => {
+    type BrowserCard = {
+      title: string;
+      ownership: string;
+      url: string;
+      bookSlug: string | null;
+      access: "accessible" | "unavailable" | "unknown";
+    };
+
+    const normalize = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim();
+    const cards: BrowserCard[] = [];
+
+    document.querySelectorAll("div[data-testid='sourceCard']").forEach((card) => {
+      const links = Array.from(card.querySelectorAll("a[href]")) as HTMLAnchorElement[];
+      const titleLink = card.querySelector("a[class*='SourceCard_sourceTitle']") as HTMLAnchorElement | null;
+      const readableLink = links.find((link) => {
+        try {
+          return new URL(link.href, document.baseURI).pathname.startsWith("/sources/");
+        } catch {
+          return false;
+        }
+      });
+      const storeLink = links.find((link) => {
+        try {
+          const target = new URL(link.href, document.baseURI);
+          return target.hostname === "marketplace.dndbeyond.com" || /view in store|buy/i.test(normalize(link.textContent));
+        } catch {
+          return false;
+        }
+      });
+      const primaryLink = readableLink ?? storeLink ?? titleLink ?? links[0];
+      const title = normalize(titleLink?.textContent) || normalize(card.querySelector("h2, h3, [class*='sourceTitle']")?.textContent);
+      const ownership = normalize(card.querySelector("p[class*='SourceCard_sourceSubtitle'], [class*='sourceSubtitle']")?.textContent);
+      const url = primaryLink?.href ?? "";
+      let bookSlug: string | null = null;
+
+      if (readableLink) {
+        try {
+          const match = new URL(readableLink.href, document.baseURI).pathname.match(/^\/sources\/(.+?)\/?$/);
+          bookSlug = match?.[1] ?? null;
+        } catch {
+          bookSlug = null;
+        }
+      }
+
+      const access = readableLink ? "accessible" : storeLink ? "unavailable" : "unknown";
+      if (title) cards.push({ title, ownership, url, bookSlug, access });
+    });
+
+    return cards;
+  });
 }
 
 async function extractBookPage(context: BrowserContext, request: ReturnType<typeof validateReadBookRequest>): Promise<{
