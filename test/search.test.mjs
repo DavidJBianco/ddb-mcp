@@ -117,13 +117,45 @@ test("source attribution normalization preserves multiple sources and removes ex
   assert.deepEqual(sources[1], { title: "Second", url: null, bookSlug: null, chapterSlug: null });
 });
 
-function sourcebookHarness(cards) {
+test("ordinary search results cover absent, multiple, and incomplete attribution", async () => {
+  const harness = searchHarness([
+    {
+      name: "No Attribution",
+      type: "1st Level",
+      url: "https://www.dndbeyond.com/spells/no-attribution",
+    },
+    {
+      name: "Several Sources",
+      type: "2nd Level",
+      url: "https://www.dndbeyond.com/spells/several-sources",
+      sources: [
+        { title: "First", url: "/sources/first" },
+        { title: "First", url: "/sources/first" },
+        { title: "Printed Reference", url: null },
+      ],
+    },
+  ]);
+
+  const parsed = JSON.parse(await search(harness.context, "sources", "spells"));
+  assert.deepEqual(parsed.results[0].sources, []);
+  assert.deepEqual(parsed.results[1].sources, [
+    {
+      title: "First",
+      url: "https://www.dndbeyond.com/sources/first",
+      bookSlug: "first",
+      chapterSlug: null,
+    },
+    { title: "Printed Reference", url: null, bookSlug: null, chapterSlug: null },
+  ]);
+});
+
+function sourcebookHarness(cards, options = {}) {
   const visits = [];
   const fills = [];
   let currentUrl = "about:blank";
   const filter = {
     first: () => filter,
-    count: async () => 1,
+    count: async () => options.filterCount ?? 1,
     fill: async (query) => fills.push(query),
   };
   const page = {
@@ -134,7 +166,7 @@ function sourcebookHarness(cards) {
     url: () => currentUrl,
     waitForTimeout: async () => {},
     locator: () => filter,
-    evaluate: async () => currentUrl === "https://www.dndbeyond.com" ? true : cards,
+    evaluate: async () => currentUrl === "https://www.dndbeyond.com" ? (options.authenticated ?? true) : cards,
   };
   return { context: { pages: () => [page] }, visits, fills };
 }
@@ -182,6 +214,23 @@ test("all-sourcebook scope preserves unavailable and unknown catalog entries", a
   assert.equal(harness.visits[1].url, "https://www.dndbeyond.com/en/library?type=sourcebooks");
   assert.deepEqual(parsed.results.map(({ access }) => access), ["unavailable", "unknown"]);
   assert.ok(parsed.results.every(({ bookSlug }) => bookSlug === null));
+});
+
+test("sourcebook search returns a JSON envelope for no matches", async () => {
+  const parsed = JSON.parse(await search(sourcebookHarness([]).context, "missing", "sourcebooks"));
+  assert.equal(parsed.count, 0);
+  assert.deepEqual(parsed.results, []);
+});
+
+test("sourcebook search fails clearly when the title filter is missing", async () => {
+  const harness = sourcebookHarness([], { filterCount: 0 });
+  await assert.rejects(search(harness.context, "handbook", "sourcebooks"), /title filter was not found/);
+});
+
+test("sourcebook search rejects a logged-out session without opening the library", async () => {
+  const harness = sourcebookHarness([], { authenticated: false });
+  await assert.rejects(search(harness.context, "handbook", "sourcebooks"), /Not logged in/);
+  assert.equal(harness.visits.length, 1);
 });
 
 test("source_scope validation rejects non-sourcebook searches", () => {

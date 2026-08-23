@@ -119,6 +119,33 @@ Automated testing is expected for new behavior and bug fixes. Design code so
 that most behavior can be tested without a network connection, a D&D Beyond
 account, or a real browser session.
 
+### Coverage expectations for changed tools
+
+Every new MCP tool, and every behavior change to an existing tool, must include
+automated non-live coverage proportional to the change. Use the smallest
+representative set of tests that covers the tool's materially distinct
+behaviors and risks; exhaustive input combinations are not required.
+
+At minimum, cover where applicable:
+
+- The ordinary successful workflow for each distinct operation or mode.
+- Important edge and boundary cases, such as empty results, optional/default
+  inputs, limits, pagination boundaries, and incomplete rendered data.
+- Invalid input and incompatible argument combinations, including rejection
+  before browser or account access when possible.
+- Expected failure modes, such as authentication failure, navigation failure,
+  missing or changed DOM structure, and downstream dependency errors.
+- MCP-level schema, handler, result-shape, and `isError` behavior when the
+  public tool contract changes.
+- A regression case for every bug fix.
+
+Prefer pure unit tests for normalization, validation, and state-independent
+logic; synthetic DOM/browser tests for scraping and interaction behavior; and
+MCP integration tests for public contracts. Do not multiply tests merely to
+exercise equivalent input combinations. A pure internal refactor does not
+require new tests when existing tests demonstrably exercise all affected
+behavior.
+
 ### Default automated tests (mocked/offline)
 
 These tests are safe to run routinely and should form the bulk of the suite:
@@ -177,6 +204,37 @@ confidence that cannot be established with offline fixtures.
   failure output.
 - Report offline/mock results and live-test results as separate categories so
   reviewers can tell exactly what was and was not exercised.
+
+Add or update read-only live tests for changed browser-backed behavior that
+cannot be meaningfully verified with synthetic fixtures, especially selectors,
+authentication restoration, client-side rendering, and end-to-end result
+shape. Live coverage should be representative rather than exhaustive and must
+not depend on particular private content being present. Do not deliberately
+trigger unsafe live failure modes merely to duplicate deterministic offline
+coverage.
+
+The normal host and Docker live suites must remain strictly read-only. They
+must not create, modify, submit, purchase, delete, favorite, or otherwise
+change account state. Mutating live tests are permitted only when the user
+explicitly authorizes the particular operation being tested. When introduced,
+they must:
+
+- Live in separately selectable host and Docker suites, exposed through
+  commands such as `npm run test:live:write` and
+  `npm run test:live:write:docker`. They must never run through `npm test`,
+  `npm run test:live`, `npm run test:live:docker`, ordinary CI, or the default
+  release verification.
+- Require a separate explicit write-test environment opt-in in addition to
+  invoking the command and satisfying the normal live-session opt-ins.
+- Use the same external-session safeguards in both environments. Docker must
+  mount session state externally, must not bake it into the image, and must
+  keep the write-test command distinct from the read-only live runner.
+- Use disposable test data where possible and follow the validation, dry-run,
+  before/after verification, partial-failure reporting, and cleanup safeguards
+  defined for write operations.
+- State exactly which account data may change before authorization is sought.
+- Skip or fail safely when authorization, prerequisites, or disposable test
+  data are unavailable.
 
 Do not compensate for an unavailable live session by weakening offline tests.
 When live verification would materially reduce uncertainty, call it out as an

@@ -97,12 +97,27 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     });
     const searchResult = JSON.parse(searchText).results[0];
     assert.equal(searchResult.name, "Synthetic Shield");
-    assert.deepEqual(searchResult.sources, [{
-      title: "Synthetic Handbook",
-      url: "https://www.dndbeyond.com/sources/synthetic-handbook",
-      bookSlug: "synthetic-handbook",
-      chapterSlug: null,
-    }]);
+    assert.deepEqual(searchResult.sources, [
+      {
+        title: "Synthetic Handbook",
+        url: "https://www.dndbeyond.com/sources/synthetic-handbook",
+        bookSlug: "synthetic-handbook",
+        chapterSlug: null,
+      },
+      {
+        title: "Synthetic Expansion",
+        url: "https://www.dndbeyond.com/sources/synthetic-expansion/chapter-one",
+        bookSlug: "synthetic-expansion",
+        chapterSlug: "chapter-one",
+      },
+      {
+        title: "Printed Reference",
+        url: null,
+        bookSlug: null,
+        chapterSlug: null,
+      },
+    ]);
+    assert.deepEqual(JSON.parse(searchText).results[1].sources, []);
 
     const accessibleSources = JSON.parse(await callSuccessfully("ddb_search", {
       query: "handbook",

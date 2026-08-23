@@ -262,6 +262,15 @@ test(
       const parsed = parseJson(results, "ddb_search");
       requireStructure(Array.isArray(parsed.results), "search results shape changed");
       requireStructure(parsed.results.every((result) => Array.isArray(result.sources)), "search source attribution shape changed");
+      for (const result of parsed.results) {
+        for (const source of result.sources) {
+          requireStructure(source && typeof source === "object", "search source attribution item changed");
+          requireStructure(source.title === null || typeof source.title === "string", "search source title shape changed");
+          requireStructure(source.url === null || typeof source.url === "string", "search source URL shape changed");
+          requireStructure(source.bookSlug === null || typeof source.bookSlug === "string", "search source book slug shape changed");
+          requireStructure(source.chapterSlug === null || typeof source.chapterSlug === "string", "search source chapter slug shape changed");
+        }
+      }
     });
 
     await t.test("searches accessible and catalog sourcebooks without reading them", async () => {
@@ -276,10 +285,20 @@ test(
         );
         requireStructure(Array.isArray(parsed.results), "sourcebook search results shape changed");
         requireStructure(typeof parsed.count === "number", "sourcebook search count shape changed");
+        requireStructure(parsed.count === parsed.results.length, "sourcebook search count no longer matches results");
         for (const result of parsed.results) {
           requireStructure(["accessible", "unavailable", "unknown"].includes(result.access), "sourcebook access shape changed");
           requireStructure(Array.isArray(result.sources), "sourcebook sources shape changed");
+          requireStructure(result.sources.length === 0, "sourcebook result unexpectedly attributed itself");
           requireStructure(result.bookSlug === null || typeof result.bookSlug === "string", "sourcebook slug shape changed");
+          requireStructure(typeof result.url === "string", "sourcebook URL shape changed");
+          if (!sourceScope) {
+            requireStructure(result.access === "accessible", "default sourcebook search returned an inaccessible result");
+            requireStructure(typeof result.bookSlug === "string" && result.bookSlug.length > 0, "accessible sourcebook omitted its slug");
+            requireStructure(result.url.startsWith("https://www.dndbeyond.com/sources/"), "accessible sourcebook URL is not readable");
+          } else if (result.access !== "accessible") {
+            requireStructure(result.bookSlug === null, "non-accessible sourcebook exposed a readable slug");
+          }
         }
       }
     });
