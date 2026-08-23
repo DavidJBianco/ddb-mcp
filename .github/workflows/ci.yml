@@ -98,7 +98,9 @@ jobs:
 
       - name: Verify formatting
         shell: bash
-        run: test -z "$(gofmt -l .)"
+        run: |
+          gofmt -w .
+          git diff --exit-code -- .
 
       - name: Test
         run: go test ./...
