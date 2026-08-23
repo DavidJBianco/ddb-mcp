@@ -80,13 +80,44 @@ server.tool(
     cursor: z.string().optional(),
     max_chars: z.number().optional(),
   },
-  async ({ book_slug }) => text(JSON.stringify({
-    kind: "outline",
-    book: { slug: book_slug, title: sensitive },
-    entries: [{ id: "toc-synthetic-1", title: sensitive, level: 1, parentId: null, chapterSlug: "synthetic" }],
-    nextCursor: null,
-    done: true,
-  }))
+  async ({ book_slug, chapter_slug, mode, section, cursor, max_chars }) => {
+    if (!chapter_slug) {
+      return text(JSON.stringify({
+        kind: "outline",
+        book: { slug: book_slug, title: sensitive },
+        entries: [{ id: "toc-synthetic-1", title: sensitive, level: 1, parentId: null, chapterSlug: "synthetic" }],
+        nextCursor: null,
+        done: true,
+      }));
+    }
+    if (mode === "outline") {
+      return text(JSON.stringify({
+        kind: "outline",
+        book: { slug: book_slug },
+        scope: { chapterSlug: chapter_slug, title: sensitive },
+        entries: [{ id: "section-synthetic-1", title: sensitive, level: 1, parentId: null }],
+        nextCursor: null,
+        done: true,
+      }));
+    }
+
+    const limit = max_chars ?? 10_000;
+    const offset = cursor ? 1 : 0;
+    const content = sensitive.slice(offset, offset + limit);
+    const hasMore = offset + limit < sensitive.length;
+    return text(JSON.stringify({
+      kind: "content",
+      book: { slug: book_slug },
+      chapter: { slug: chapter_slug, title: sensitive, url: `https://www.dndbeyond.com/sources/${book_slug}/${chapter_slug}` },
+      ...(section ? { section: { id: "section-synthetic-1", title: sensitive, level: 1, parentId: null } } : {}),
+      text: content,
+      images: [{ id: "image-1", alt: sensitive, caption: sensitive, url: "https://www.dndbeyond.com/synthetic.png" }],
+      nextCursor: hasMore ? "mock-cursor-1" : null,
+      done: !hasMore,
+      maxChars: limit,
+      serverMaxChars: 25_000,
+    }));
+  }
 );
 
 await server.connect(new StdioServerTransport());

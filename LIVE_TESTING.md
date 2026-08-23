@@ -51,8 +51,10 @@ block after failures or incomplete child shutdown.
 The suite reuses one MCP server/browser context and runs sequentially. It
 checks session restoration, character list/API retrieval/rendered fallback,
 temporary character download, campaign list/detail, safe navigation and
-current-page retrieval, search, library listing, sourcebook reading, and a
-screenshot-only generic interaction.
+current-page retrieval, search, library listing, sourcebook book/chapter
+outlines, bounded chapter content, deterministic chapter and section cursor
+continuation, section retrieval by ID and unique heading, image metadata shape,
+and a screenshot-only generic interaction.
 
 Assertions inspect shapes only. Test output must not contain names, IDs,
 private URLs, character JSON, campaign or sourcebook text, cookies, or the
