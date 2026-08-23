@@ -33,9 +33,11 @@ same runtime-hardening checks and an exact MCP initialization/tool-list smoke
 test under QEMU; Chromium itself is not treated as reliable under emulation.
 
 When Docker MCP Toolkit is installed and its Docker Desktop runtime is
-available, the suite also asks the Toolkit gateway to accept the candidate
-image in dry-run mode. Runners without Toolkit report that check as skipped;
-the ordinary production-entrypoint tests still run everywhere.
+available, the suite asks the Toolkit gateway to accept the candidate image,
+connects an MCP client through an isolated profile, verifies the tool manifest,
+and sends a validation-only tool call through the gateway. Runners without
+Toolkit report that check as skipped; the ordinary production-entrypoint tests
+still run everywhere.
 
 ## Released images
 
