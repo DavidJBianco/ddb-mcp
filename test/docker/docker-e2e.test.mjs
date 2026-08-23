@@ -56,9 +56,13 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     const calledTools = [];
     async function callSuccessfully(name, args = {}) {
       const result = await client.callTool({ name, arguments: args });
-      assert.equal(result.isError, undefined, `${name} should succeed`);
+      assert.equal(
+        result.isError,
+        undefined,
+        `${name} should succeed: ${result.content?.[0]?.type === "text" ? result.content[0].text : "no text error"}`
+      );
       assert.equal(result.content[0].type, "text");
-      calledTools.push(name);
+      if (!calledTools.includes(name)) calledTools.push(name);
       return result.content[0].text;
     }
 
@@ -94,10 +98,51 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.equal(JSON.parse(searchText).results[0].name, "Synthetic Shield");
 
     assert.equal(JSON.parse(await callSuccessfully("ddb_list_library")).count, 1);
-    assert.match(
-      await callSuccessfully("ddb_read_book", { book_slug: "synthetic-handbook" }),
-      /Safe Examples/
-    );
+    const bookOutline = JSON.parse(await callSuccessfully("ddb_read_book", {
+      book_slug: "synthetic-handbook",
+    }));
+    assert.equal(bookOutline.kind, "outline");
+    assert.equal(bookOutline.entries[0].chapterSlug, "safe-examples");
+
+    const chapterOutline = JSON.parse(await callSuccessfully("ddb_read_book", {
+      book_slug: "synthetic-handbook",
+      chapter_slug: "safe-examples",
+      mode: "outline",
+    }));
+    assert.equal(chapterOutline.entries.filter(({ title }) => title === "Repeated").length, 2);
+
+    const contentPages = [];
+    let cursor;
+    do {
+      const page = JSON.parse(await callSuccessfully("ddb_read_book", {
+        book_slug: "synthetic-handbook",
+        chapter_slug: "safe-examples",
+        section: "section-details-1",
+        max_chars: cursor ? undefined : 80,
+        cursor,
+      }));
+      contentPages.push(page);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    const combinedContent = contentPages.map(({ text }) => text).join("");
+    assert.match(combinedContent, /Nested synthetic rule/);
+    assert.match(combinedContent, /1\. First ordered step/);
+    assert.match(combinedContent, /\| Kind \| Value \|/);
+    assert.deepEqual(contentPages.flatMap(({ images }) => images).map(({ alt }) => alt), ["Synthetic diagram"]);
+    assert.match(await callSuccessfully("ddb_current_page"), /Preserved navigation marker/);
+
+    const alternate = JSON.parse(await callSuccessfully("ddb_read_book", {
+      book_slug: "synthetic-handbook",
+      chapter_slug: "alternate-layout",
+    }));
+    assert.match(alternate.text, /Alternate supported sourcebook structure/);
+
+    const changedLayout = await client.callTool({
+      name: "ddb_read_book",
+      arguments: { book_slug: "synthetic-handbook", chapter_slug: "changed-layout" },
+    });
+    assert.equal(changedLayout.isError, true);
+    assert.match(changedLayout.content[0].text, /layout was not recognized/);
 
     const fallbackResult = await client.callTool({
       name: "ddb_get_character",

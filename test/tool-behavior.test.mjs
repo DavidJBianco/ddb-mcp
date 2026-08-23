@@ -50,12 +50,17 @@ test("campaign tools return deterministic empty and detail shapes", async () => 
 
 test("library tools handle empty listings and structured short content", async () => {
   assert.deepEqual(JSON.parse(await listLibrary(contextFor([]))), { count: 0, books: [] });
-  const output = await readBook(
-    contextFor("\n\n## Synthetic Heading\n\nOriginal fixture paragraph.\n"),
-    "synthetic-handbook"
-  );
-  assert.match(output, /## Synthetic Heading/);
-  assert.match(output, /Original fixture paragraph/);
+  const output = JSON.parse(await readBook(contextFor({
+    title: "Synthetic Heading",
+    outline: [{ id: "section-synthetic-heading-1", title: "Synthetic Heading", level: 2, parentId: null }],
+    blocks: [
+      { text: "## Synthetic Heading", headingId: "section-synthetic-heading-1", headingLevel: 2, imageIds: [] },
+      { text: "Original fixture paragraph.", imageIds: [] },
+    ],
+    images: [],
+  }), { bookSlug: "synthetic-handbook", chapterSlug: "safe-examples" }));
+  assert.match(output.text, /## Synthetic Heading/);
+  assert.match(output.text, /Original fixture paragraph/);
 });
 
 test("authenticated tools reject a logged-out synthetic page", async () => {
@@ -70,5 +75,5 @@ test("authenticated tools reject a logged-out synthetic page", async () => {
   await assert.rejects(listCharacters(context), /Not logged in/);
   await assert.rejects(listMyCampaigns(context), /Not logged in/);
   await assert.rejects(listLibrary(context), /Not logged in/);
-  await assert.rejects(readBook(context, "synthetic-handbook"), /Not logged in/);
+  await assert.rejects(readBook(context, { bookSlug: "synthetic-handbook" }), /Not logged in/);
 });

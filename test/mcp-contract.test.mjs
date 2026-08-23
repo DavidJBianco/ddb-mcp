@@ -69,12 +69,34 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
     ["ddb_interact", { action: "destroy", selector: "body" }],
     ["ddb_search", { query: "shield", category: "invalid" }],
     ["ddb_read_book", {}],
+    ["ddb_read_book", { book_slug: "../private" }],
+    ["ddb_read_book", { book_slug: "synthetic-handbook", max_chars: 25001 }],
   ];
 
   for (const [name, args] of cases) {
     const result = await client.callTool({ name, arguments: args });
     assert.equal(result.isError, true, `${name} must reject invalid input`);
     assert.match(result.content[0].text, /Invalid arguments/);
+  }
+  assert.equal(contextRequested, false);
+});
+
+test("ddb_read_book rejects invalid field combinations and malformed cursors before browser access", async (t) => {
+  let contextRequested = false;
+  const client = await connect(t, async () => {
+    contextRequested = true;
+    throw new Error("browser must not be requested for invalid sourcebook input");
+  });
+  const cases = [
+    { book_slug: "synthetic-handbook", mode: "content" },
+    { book_slug: "synthetic-handbook", mode: "outline", max_chars: 100 },
+    { book_slug: "synthetic-handbook", chapter_slug: "safe-examples", cursor: "not-a-cursor" },
+  ];
+
+  for (const args of cases) {
+    const result = await client.callTool({ name: "ddb_read_book", arguments: args });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /Failed to read book/);
   }
   assert.equal(contextRequested, false);
 });

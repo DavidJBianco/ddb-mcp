@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { createHash } from "node:crypto";
 import { chmod, mkdtemp, open, readFile, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
@@ -22,6 +23,43 @@ function parseJson(text, label) {
     return JSON.parse(text);
   } catch {
     throw new Error(`${label} returned malformed JSON; ${summarizeLiveFailure("malformed JSON response")}`);
+  }
+}
+
+function responseDigest(text) {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+function validateSourcebookContent(response, expectedMaxChars) {
+  requireStructure(response?.kind === "content", "sourcebook content response kind changed");
+  requireStructure(typeof response?.text === "string" && response.text.length > 0, "sourcebook content text shape changed");
+  requireStructure(Array.from(response.text).length <= expectedMaxChars, "sourcebook content exceeded max_chars");
+  requireStructure(Array.isArray(response.images), "sourcebook image metadata shape changed");
+  requireStructure(typeof response.done === "boolean", "sourcebook done shape changed");
+  requireStructure(
+    response.nextCursor === null || (typeof response.nextCursor === "string" && response.nextCursor.length > 0),
+    "sourcebook cursor shape changed"
+  );
+  requireStructure(response.maxChars === expectedMaxChars, "sourcebook max_chars binding changed");
+  requireStructure(
+    Number.isInteger(response.serverMaxChars) && response.serverMaxChars >= expectedMaxChars,
+    "sourcebook server limit shape changed"
+  );
+  for (const image of response.images) {
+    requireStructure(
+      typeof image?.id === "string" && typeof image?.alt === "string" && typeof image?.caption === "string",
+      "sourcebook image fields changed"
+    );
+    let imageUrl;
+    try {
+      imageUrl = new URL(image.url);
+    } catch {
+      throw new Error("sourcebook image URL shape changed");
+    }
+    requireStructure(
+      imageUrl.protocol === "https:" && imageUrl.username === "" && imageUrl.password === "",
+      "sourcebook image URL is not safe HTTPS"
+    );
   }
 }
 
@@ -234,14 +272,153 @@ test(
       books = library.books;
     });
 
+    let selectedBookSlug;
+    let selectedChapterSlug;
+    let chapterEntries = [];
     await t.test(
-      "reads one sourcebook when available",
+      "discovers one sourcebook outline when available",
       { skip: books.length === 0 ? "account has no sourcebook available" : false },
       async () => {
         const slug = books[0]?.slug;
         requireStructure(typeof slug === "string" && slug.length > 0, "library listing omitted a book slug");
-        const content = await callText(client, diagnostics, "ddb_read_book", { book_slug: slug });
-        requireStructure(content.startsWith("# ") && content.length > 10, "sourcebook response shape changed");
+        const outline = parseJson(
+          await callText(client, diagnostics, "ddb_read_book", { book_slug: slug }),
+          "ddb_read_book"
+        );
+        requireStructure(outline?.kind === "outline", "sourcebook response kind changed");
+        requireStructure(Array.isArray(outline.entries), "sourcebook outline entries shape changed");
+        requireStructure(outline.done === true && outline.nextCursor === null, "sourcebook outline completion shape changed");
+        const chapter = outline.entries.find(
+          (entry) => typeof entry?.chapterSlug === "string" && entry.chapterSlug.length > 0
+        );
+        requireStructure(chapter, "sourcebook outline contained no readable chapter path");
+        selectedBookSlug = slug;
+        selectedChapterSlug = chapter.chapterSlug;
+      }
+    );
+
+    await t.test(
+      "discovers the selected live chapter heading outline",
+      { skip: !selectedChapterSlug ? "sourcebook outline contained no chapter" : false },
+      async () => {
+        const outline = parseJson(
+          await callText(client, diagnostics, "ddb_read_book", {
+            book_slug: selectedBookSlug,
+            chapter_slug: selectedChapterSlug,
+            mode: "outline",
+          }),
+          "ddb_read_book chapter outline"
+        );
+        requireStructure(outline?.kind === "outline", "chapter outline response kind changed");
+        requireStructure(Array.isArray(outline.entries) && outline.entries.length > 0, "chapter heading outline was empty");
+        requireStructure(outline.done === true && outline.nextCursor === null, "chapter outline completion shape changed");
+        for (const entry of outline.entries) {
+          requireStructure(
+            typeof entry?.id === "string" && entry.id.length > 0 &&
+              typeof entry?.title === "string" && entry.title.length > 0 &&
+              Number.isInteger(entry?.level) && entry.level >= 1 && entry.level <= 6 &&
+              (entry.parentId === null || typeof entry.parentId === "string"),
+            "chapter heading entry shape changed"
+          );
+        }
+        chapterEntries = outline.entries;
+      }
+    );
+
+    await t.test(
+      "reads bounded live chapter content and follows a stable cursor",
+      { skip: !selectedChapterSlug ? "sourcebook outline contained no chapter" : false },
+      async () => {
+        const bounded = parseJson(
+          await callText(client, diagnostics, "ddb_read_book", {
+            book_slug: selectedBookSlug,
+            chapter_slug: selectedChapterSlug,
+            max_chars: 512,
+          }),
+          "ddb_read_book bounded content"
+        );
+        validateSourcebookContent(bounded, 512);
+
+        const firstPage = parseJson(
+          await callText(client, diagnostics, "ddb_read_book", {
+            book_slug: selectedBookSlug,
+            chapter_slug: selectedChapterSlug,
+            max_chars: 1,
+          }),
+          "ddb_read_book first cursor page"
+        );
+        validateSourcebookContent(firstPage, 1);
+        requireStructure(typeof firstPage.nextCursor === "string", "live chapter did not produce a continuation cursor");
+        requireStructure(firstPage.done === false, "live chapter unexpectedly completed in one character");
+
+        const continuationArguments = {
+          book_slug: selectedBookSlug,
+          chapter_slug: selectedChapterSlug,
+          max_chars: 1,
+          cursor: firstPage.nextCursor,
+        };
+        const continuationTextA = await callText(client, diagnostics, "ddb_read_book", continuationArguments);
+        const continuationTextB = await callText(client, diagnostics, "ddb_read_book", continuationArguments);
+        const continuation = parseJson(continuationTextA, "ddb_read_book cursor continuation");
+        validateSourcebookContent(continuation, 1);
+        requireStructure(
+          responseDigest(continuationTextA) === responseDigest(continuationTextB),
+          "retrying an unchanged sourcebook cursor was not deterministic"
+        );
+      }
+    );
+
+    await t.test(
+      "reads a live section by stable heading ID",
+      { skip: chapterEntries.length === 0 ? "chapter heading outline was empty" : false },
+      async () => {
+        const selectedSection = chapterEntries[0];
+        const firstSectionPage = parseJson(
+          await callText(client, diagnostics, "ddb_read_book", {
+            book_slug: selectedBookSlug,
+            chapter_slug: selectedChapterSlug,
+            section: selectedSection.id,
+            max_chars: 1,
+          }),
+          "ddb_read_book section content"
+        );
+        validateSourcebookContent(firstSectionPage, 1);
+        requireStructure(firstSectionPage.section?.id === selectedSection.id, "sourcebook section binding changed");
+        requireStructure(typeof firstSectionPage.nextCursor === "string", "live section did not produce a continuation cursor");
+
+        const continuation = parseJson(
+          await callText(client, diagnostics, "ddb_read_book", {
+            book_slug: selectedBookSlug,
+            chapter_slug: selectedChapterSlug,
+            section: selectedSection.id,
+            max_chars: 1,
+            cursor: firstSectionPage.nextCursor,
+          }),
+          "ddb_read_book section cursor continuation"
+        );
+        validateSourcebookContent(continuation, 1);
+        requireStructure(continuation.section?.id === selectedSection.id, "section cursor lost its section binding");
+      }
+    );
+
+    const uniqueHeading = chapterEntries.find(
+      (candidate) => chapterEntries.filter(({ title }) => title === candidate.title).length === 1
+    );
+    await t.test(
+      "reads a live section by exact unique heading",
+      { skip: !uniqueHeading ? "chapter has no unique heading" : false },
+      async () => {
+        const section = parseJson(
+          await callText(client, diagnostics, "ddb_read_book", {
+            book_slug: selectedBookSlug,
+            chapter_slug: selectedChapterSlug,
+            section: uniqueHeading.title,
+            max_chars: 512,
+          }),
+          "ddb_read_book named section content"
+        );
+        validateSourcebookContent(section, 512);
+        requireStructure(section.section?.id === uniqueHeading.id, "named sourcebook section resolved incorrectly");
       }
     );
 

@@ -49,11 +49,19 @@ test("an MCP client can discover and call tools through the real server", async 
   });
 
   const listed = await client.listTools();
+  assert.equal(
+    client.getInstructions(),
+    "Use ddb_list_library to discover accessible sourcebooks and their slugs. Use ddb_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Use ddb_search for corpus results; search result URLs are not guaranteed to identify a parent sourcebook. Sourcebook responses include image metadata, not image bytes."
+  );
   const toolNames = listed.tools.map(({ name }) => name);
   assert.ok(toolNames.includes("ddb_current_page"));
   assert.ok(toolNames.includes("ddb_search"));
   assert.ok(toolNames.includes("ddb_read_book"));
   const searchTool = listed.tools.find(({ name }) => name === "ddb_search");
+  assert.equal(
+    searchTool.description,
+    "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, or general results. Returned URLs are standalone results and may not identify a parent sourcebook."
+  );
   assert.deepEqual(searchTool.inputSchema.required, ["query"]);
   assert.deepEqual(searchTool.inputSchema.properties.category.enum, [
     "spells",
@@ -64,6 +72,24 @@ test("an MCP client can discover and call tools through the real server", async 
     "feats",
     "all",
   ]);
+  const libraryTool = listed.tools.find(({ name }) => name === "ddb_list_library");
+  assert.equal(
+    libraryTool.description,
+    "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with ddb_read_book."
+  );
+  const readTool = listed.tools.find(({ name }) => name === "ddb_read_book");
+  assert.equal(
+    readTool.description,
+    "Discover an accessible D&D Beyond sourcebook's table of contents or chapter headings, or read bounded chapter or section Markdown with cursor pagination. Returns a JSON envelope with nextCursor and done."
+  );
+  assert.deepEqual(readTool.inputSchema.required, ["book_slug"]);
+  assert.deepEqual(readTool.inputSchema.properties.mode.enum, ["outline", "content"]);
+  assert.equal(readTool.inputSchema.properties.max_chars.maximum, 25_000);
+  assert.match(readTool.inputSchema.properties.book_slug.description, /dnd\/phb-2024/);
+  assert.match(readTool.inputSchema.properties.chapter_slug.description, /book outline/);
+  assert.match(readTool.inputSchema.properties.section.description, /stable section ID/);
+  assert.match(readTool.inputSchema.properties.cursor.description, /same book_slug/);
+  assert.match(readTool.inputSchema.properties.max_chars.description, /25000/);
 
   const pageResult = await client.callTool({ name: "ddb_current_page", arguments: {} });
   assert.equal(pageResult.isError, undefined);
