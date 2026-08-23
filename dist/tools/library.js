@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { getPage, isLoggedIn } from "../browser.js";
+import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
 export const DEFAULT_MAX_CHARS = 10_000;
 export const SERVER_MAX_CHARS = 25_000;
 const SLUG_PATTERN = /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/;
@@ -168,12 +169,13 @@ function selectSection(extracted, selector) {
 export async function listLibrary(context) {
     const page = await getPage(context);
     if (!(await isLoggedIn(page))) {
-        throw new Error("Not logged in. Please run ddb_login first.");
+        throw new AuthenticationRequiredError();
     }
     await page.goto("https://www.dndbeyond.com/en/library?type=sourcebooks&ownership=owned-shared", {
         waitUntil: "networkidle",
         timeout: 30000,
     });
+    throwIfAuthenticationRedirect(page);
     await page.waitForTimeout(2000);
     const cards = await extractLibraryBookCards(page);
     const books = cards.map(({ title, bookSlug, ownership, url }) => ({
@@ -232,9 +234,10 @@ export async function extractLibraryBookCards(page) {
 async function extractBookPage(context, request) {
     const page = await getPage(context);
     if (!(await isLoggedIn(page)))
-        throw new Error("Not logged in. Please run ddb_login first.");
+        throw new AuthenticationRequiredError();
     const url = `https://www.dndbeyond.com/sources/${request.bookSlug}${request.chapterSlug ? `/${request.chapterSlug}` : ""}`;
     await page.goto(url, { waitUntil: "networkidle", timeout: 45_000 });
+    throwIfAuthenticationRedirect(page);
     await page.waitForSelector("article, .content-container, .p-content, [class*='TableOfContents']", { timeout: 15_000 }).catch(() => { });
     const extracted = await page.evaluate(({ bookSlug, isBookOutline }) => {
         const liveRoot = document.querySelector("article") ??

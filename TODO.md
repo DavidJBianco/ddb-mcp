@@ -19,8 +19,8 @@ release plan or pull request.
 - [x] Add real-Playwright browser integration tests against small synthetic
   local HTML fixtures. Fixtures must contain no session data, account data, or
   copyrighted sourcebook text.
-- [x] Add Docker tests for the unprivileged runtime user, writable session
-  volume, read-only externally mounted session, missing session, file
+- [x] Add Docker tests for the unprivileged runtime user, explicit writable
+  session administration, read-only MCP session mounts, missing session, file
   permissions, process shutdown, and absence of credentials in image layers.
 - [x] Add Docker MCP Toolkit integration coverage beyond a plain `docker run`,
   including catalog loading and an MCP call through a Toolkit profile where
@@ -35,9 +35,9 @@ release plan or pull request.
   detection, character listing/retrieval, character download to a temporary
   path, campaign listing/retrieval, navigation/current-page retrieval, search,
   library listing, and sourcebook reading.
-- [x] Decide and document safe live coverage for `ddb_login` and generic
-  `ddb_interact`. Interactive login may require a manual release check;
-  interaction tests must use non-destructive controls or disposable data.
+- [x] Decide and document safe live coverage for the host authentication helper
+  and generic `ddb_interact`. Interactive login requires a manual release
+  check; interaction tests must use non-destructive controls or disposable data.
 - [x] Test both character API success and rendered-page fallback without
   recording private character content in assertions or logs.
 - [x] Make live tests fail clearly on missing or expired sessions, while never
@@ -59,6 +59,147 @@ release plan or pull request.
   Beyond exposes that relationship.
 - [x] Preserve document structure without mutating the rendered live DOM or
   persisting copyrighted sourcebook text.
+
+## Tool response contracts
+
+- [ ] **Approved:** As each tool is reworked, give every ordinary and empty
+  successful response a documented, stable JSON shape with consistent field
+  names and types. Publish an MCP output schema and return the object through
+  `structuredContent`, with the same JSON serialized in a text content block
+  for client compatibility. Prefer a versioned JSON envelope where upstream
+  payloads, provenance, pagination, or partial results need context. Keep MCP
+  failures as `isError: true`; use another representation only when the caller
+  explicitly requests a non-JSON artifact such as a PDF.
+- [ ] Add contract tests for each reworked tool's JSON schema, empty result,
+  partial result, upstream-shape change, and MCP error shape. Do not silently
+  switch schemas when a fallback path is used.
+
+## Character and campaign retrieval
+
+- [ ] **`ddb_list_characters` filtering and sorting:** Replace DOM-card parsing
+  with normalized summaries from the read-only character-list request while
+  preserving authentication checks and explicit upstream-failure handling.
+  Return a stable JSON envelope such as `{ count, total, filters, sort,
+  characters }`; do not return the upstream service wrapper unchanged. Each
+  character should expose stable ID, name, numeric level, class description,
+  species/race name, campaign ID/name when present, status, and created/modified
+  dates. Do not expose image URLs or other fields unless a use case requires
+  them.
+- [ ] Add optional composable `ddb_list_characters` filters. At
+  minimum, support name, class (including multiclass characters), species or
+  race, minimum/maximum or exact level, and one or more campaign IDs. Apply
+  filters to the normalized list inside the MCP server with documented
+  case-folding, partial versus exact matching, AND/OR semantics, and validation
+  so requests such as “Bards of level 3 or higher who are elves” are
+  deterministic. Support the upstream sort modes where useful: created, name,
+  level, and modified date in ascending or descending order.
+- [ ] Define and test the character-list filter contract before implementation:
+  case-insensitive matching; exact campaign IDs; documented exact-versus-
+  substring behavior for name/class/species; all supplied filter categories
+  combined with AND; multiple values within one category combined with OR;
+  inclusive numeric level bounds; deterministic tie-breaking; sensible limits;
+  and rejection of contradictory bounds or malformed IDs before browser access.
+  Cover no filters, no matches, multiclass matching, campaign-less characters,
+  multiple campaigns, upstream pagination, changed response shape, and MCP
+  `structuredContent` plus JSON-text parity.
+- [x] Investigate the authenticated character-list implementation with a
+  structural probe that retains no session, cookie, note, or character payload
+  values. The page performs a read-only
+  `character/v5/characters/list` request with only the user ID, receives a
+  complete paginated list, and filters client-side. Each summary already has
+  stable `id`, `name`, numeric `level`, `classDescription`, `raceName`,
+  `campaignId`, `campaignName`, status, and created/modified dates. Therefore
+  campaign filtering does not require fetching campaign pages or issuing N+1
+  full-character requests. Preserve a rendered-page fallback for the list only
+  if needed for resilience, and test pagination rather than assuming every
+  account fits one response.
+- [ ] **`ddb_get_character` contract cleanup:** Remove the public
+  `fallback_scrape` argument, the rendered-sheet scraper, its tests, and its
+  documentation. The fallback's partial schema is not compatible with the full
+  character response and should not be returned silently. Continue using the
+  authenticated read-only character-detail request and return an explicit MCP
+  error on failure.
+- [ ] Normalize `ddb_get_character` into a documented JSON envelope rather than
+  exposing the upstream wrapper as the tool contract. Preserve the full useful
+  character payload initially to avoid accidental data loss, but identify
+  provenance/schema version and keep upstream transport fields such as request
+  IDs, messages, and pagination out of the public response. Add tests for a
+  complete character, missing/inaccessible ID, authentication failure,
+  upstream schema change, large payload handling, and structured/text parity.
+- [x] The live feasibility check confirmed that the read-only character-detail
+  service returns the complete payload for an owned character, while the
+  scraper provides only name, level, race, class, HP, abilities, and skills. A
+  separately named partial-summary tool can be reconsidered only if a concrete
+  use case emerges.
+- [ ] **Focused PDF client-compatibility probe:** Before implementing D&D
+  Beyond export, create a temporary standalone MCP test server—not a production
+  `ddb-mcp` tool—that returns a tiny synthetic, non-private PDF as an embedded
+  blob resource with `mimeType: application/pdf`, a stable synthetic URI, and
+  small JSON/text metadata. Manually call it from Claude Desktop and confirm the
+  PDF is visible or downloadable and opens intact. Repeat with ChatGPT desktop
+  and representative clients where local MCP support is available, recording
+  client/version/result; Claude success is the minimum gate. Also test a
+  resource link only if embedded blobs are unsupported. Remove the probe from
+  client configuration and the repository after recording the decision.
+- [ ] **Focused live PDF acquisition probe:** Separately, use the external
+  authenticated session and D&D Beyond's visible “Export to PDF” workflow for
+  one owned character. Capture the download only in a secure temporary
+  directory, verify status/content type, `%PDF` signature, bounded size,
+  nonempty page structure, and unconditional cleanup, and report no character
+  values or PDF contents. Keep this explicit-opt-in and local; never run it in
+  GitHub Actions. This verifies acquisition, while the synthetic MCP probe
+  verifies client delivery.
+- [ ] After both probes pass, remove `ddb_download_character` and add a clearly
+  named read-only character-sheet PDF export tool. Drive the documented visible
+  export workflow, enforce timeout and size limits, return the PDF as an
+  embedded `application/pdf` MCP resource plus small structured JSON metadata,
+  and never persist it in the normal container. Cover missing characters,
+  unavailable export controls, popup/download failures, invalid or oversized
+  responses, cleanup, redaction, Claude delivery, and a bounded live success.
+  If Claude cannot consume the probe, remove the old download tool and defer
+  PDF export rather than retaining container-local files.
+- [ ] **`ddb_get_campaign` enrichment:** Use the observed read-only campaign
+  details and short-character data plus permission-aware rendered extraction.
+  Return a stable JSON envelope containing campaign ID/name/status/creation
+  date, DM and viewer role, content- and item-sharing status, active player and
+  character summaries with stable IDs, description, public notes, and
+  DM-private notes only when visible and explicitly requested. Label every
+  notes field by visibility and provenance. Deliberately exclude invite codes,
+  reset/remove/deactivate links, and other administrative secrets or mutation
+  controls.
+- [ ] Define `ddb_get_campaign` options and permissions before implementation.
+  Private DM notes should default to excluded and require an explicit
+  `include_private_notes` request; public notes and description may be included
+  by default when visible. Represent missing, empty, hidden, and inaccessible
+  fields distinctly without revealing that hidden content exists to an
+  unauthorized viewer. Test DM and player views, campaigns with no characters
+  or notes, private characters, content sharing on/off, changed selectors,
+  upstream-detail failure with safe rendered fallback, and JSON contract
+  parity. Keep game-log retrieval and all mutations out of scope.
+
+## Future Maps and Journals exploration
+
+- [ ] Revisit D&D Beyond Maps as a separate read-only integration after its
+  product and rendered UI stabilize. Inventory campaign/map discovery,
+  encounters or scenes, tokens, and other viewer-visible state without adding
+  creation, editing, movement, sharing, or other mutations. Define privacy,
+  copyrighted-map, request-volume, and role-based access boundaries before any
+  implementation.
+- [ ] Revisit Campaign Journals as a distinct permission-aware read tool, not a
+  field added incidentally to `ddb_get_campaign`. Determine the eventual DM and
+  player journal model, campaign binding, visibility labels, pagination, and
+  rendered retrieval path. Default to excluding DM-private entries unless
+  explicitly requested and authorized; do not add create/edit/delete support
+  without the repository's full write-operation safeguards.
+
+## Generic browser tools
+
+- [ ] Review `ddb_navigate`, `ddb_current_page`, and `ddb_interact` as a
+  separate project before extending them. Reassess their stateful shared-page
+  contract, documentation, JSON response shapes, truncation, non-mutating DOM
+  extraction, click/fill safeguards, sensitive-value redaction, redirect
+  checks, and whether screenshots should be returned directly as MCP image
+  content instead of an inaccessible container-local `/tmp` path.
 
 ## Character creation and modification
 

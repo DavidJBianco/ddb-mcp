@@ -6,7 +6,6 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that gi
 
 | Tool | Description |
 |------|-------------|
-| `ddb_login` | Authenticate with D&D Beyond (Wizards ID). Run once to save your session to disk. |
 | `ddb_list_characters` | List all characters in your account with ID, level, race, and class. |
 | `ddb_get_character` | Fetch full character JSON from the D&D Beyond character API. |
 | `ddb_download_character` | Save a character's full JSON data to a local file. |
@@ -21,77 +20,88 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that gi
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org) 18 or later
-- [Claude Code](https://claude.ai/claude-code) CLI
+- Docker Desktop or Docker Engine with the Docker CLI
+- An installed desktop Chromium-compatible browser such as Google Chrome,
+  Microsoft Edge, Brave, Vivaldi, or Chromium
+- The `ddb-mcp-auth` executable matching the container release and host
+  platform, downloaded from the repository's GitHub Release
+
+Safari and Firefox are not direct authentication targets in v2. Their users
+must also install a Chromium-compatible browser; the helper never downloads a
+browser automatically.
 
 ## Installation
 
-### Option A — Install directly from GitHub (recommended)
+Pull an immutable release image and download the matching `ddb-mcp-auth`
+archive from the same GitHub Release:
 
 ```bash
-npm install -g "https://github.com/ddb-mcp/ddb-mcp/archive/refs/heads/main.tar.gz"
+docker pull ghcr.io/davidjbianco/ddb-mcp:v2.0.0
 ```
 
-Then install the browser:
-
-```bash
-npx playwright install chromium
-```
-
-Find the install path and register with Claude Code:
-
-```bash
-npm root -g
-# outputs something like /usr/local/lib/node_modules
-```
-
-```bash
-claude mcp add dndbeyond node /usr/local/lib/node_modules/ddb-mcp/dist/index.js
-```
-
----
-
-### Option B — Clone and build manually
-
-```bash
-git clone https://github.com/ddb-mcp/ddb-mcp.git
-cd ddb-mcp
-npm install
-npx playwright install chromium
-```
-
-Register with Claude Code:
-
-```bash
-claude mcp add dndbeyond node /absolute/path/to/ddb-mcp/dist/index.js
-```
-
-Or edit `~/.claude/settings.json` manually:
-
-```json
-{
-  "mcpServers": {
-    "dndbeyond": {
-      "command": "node",
-      "args": ["/absolute/path/to/ddb-mcp/dist/index.js"]
-    }
-  }
-}
-```
+Extract the helper, place it on the host `PATH`, and add the image to Docker MCP
+Toolkit as described in [`DOCKER.md`](DOCKER.md). The helper is a standalone
+binary; users do not need Go, Node.js, npm, or a host Playwright installation.
+Verify the archive against `checksums.txt` from the release before installing
+it. macOS archives are provided for amd64 and arm64, Linux archives for amd64
+and arm64, and Windows for amd64.
 
 ## Usage
 
 ### First-time login
 
-The first time you use the server, you need to authenticate:
+Run authentication on the Docker host before, or after, starting the MCP server:
 
+```bash
+ddb-mcp-auth login
 ```
-ddb_login
+
+The helper discovers an installed Chromium browser. It offers to reuse a
+compatible running browser only when that browser already exposes a usable
+standard CDP endpoint, and only after explaining and requesting temporary
+debugging access. Chrome 144 and later require remote debugging to be enabled
+first at `chrome://inspect/#remote-debugging`. Some hardened Chrome versions
+expose only a permission proxy rather than a standard endpoint; the helper
+detects that condition and immediately falls back. If reuse is declined or
+unsupported, it opens the same browser with an isolated temporary profile and
+requires no browser setting. In either mode, complete the real D&D Beyond login
+in an uncontrolled browser window: no CDP client is attached and no automation
+flag is present during password or OAuth authentication. After login, the
+helper briefly attaches to the existing browser, or relaunches the closed
+temporary profile headlessly, to export D&D Beyond state only. For the temporary
+path, the user presses Enter after sign-in and the helper closes only that
+temporary browser instance; the user's ordinary browser is unaffected. It then
+validates the state in the matching container image and saves it to the labeled
+`ddb-mcp-session` Docker volume.
+
+If authentication is missing or expires, account-backed MCP tools return a
+clear error telling the AI to ask the user to run `ddb-mcp-auth login` again.
+Useful host diagnostics are:
+
+```bash
+ddb-mcp-auth info
+ddb-mcp-auth validate
+ddb-mcp-auth validate --live
+ddb-mcp-auth reset
+ddb-mcp-auth volume remove
+ddb-mcp-auth help
 ```
 
-A browser window (Chrome for Testing) will open and navigate to the D&D Beyond login page. Complete the login using your Wizards ID account. Once you're redirected back to D&D Beyond, your session is automatically saved to `~/.config/ddb-mcp/session.json` and reused on all future calls.
+`info` lists browser candidates, the active Docker context, helper/image
+versions, volume ownership, and the recommended next action without displaying
+session data. `validate` performs structural checks and a local browser CDP
+probe without contacting D&D Beyond; add `--live` for one bounded read-only
+authentication check. `reset` preserves the labeled volume, while
+`volume remove` removes it and refuses while a running container has it
+mounted. The destructive commands prompt unless `--force` is supplied.
 
-You only need to log in once. If your session expires, just run `ddb_login` again.
+All operational commands accept `--volume`, `--image`, `--browser-path`, and
+`--timeout` overrides. `login`, `validate`, and `info` accept `--json` for
+machine-readable output. A released helper defaults to the matching immutable
+GHCR image, so an image override is normally needed only for local development.
+Before opening a login browser, the helper verifies that the selected image
+contains the matching session-administration entry point. For a source build,
+rebuild `ddb-mcp-local:latest` after changing or rebuilding the helper.
 
 ### Example prompts
 
@@ -224,29 +234,23 @@ Image bytes are not downloaded or embedded.
 
 ## Upgrading
 
-To upgrade to the latest release, run the install command again — npm will overwrite the existing installation:
-
-```bash
-npm install -g "https://github.com/ddb-mcp/ddb-mcp/archive/refs/heads/main.tar.gz"
-```
-
-To install a specific tagged version:
-
-```bash
-npm install -g "https://github.com/ddb-mcp/ddb-mcp/archive/refs/tags/v1.0.2.tar.gz"
-```
-
-Then restart Claude Code and run `/mcp` to reconnect the server.
+Pull the new immutable image and replace `ddb-mcp-auth` with the executable from
+the same release. Restart the MCP client or Docker Toolkit profile afterward.
 
 ## Session storage
 
-Your session is saved to `~/.config/ddb-mcp/session.json`. This file contains browser cookies and local storage from your D&D Beyond login. Keep this file private — it grants access to your account.
+Authentication is stored only in the labeled `ddb-mcp-session` Docker volume,
+which contains D&D Beyond cookies and local storage. The normal MCP container
+mounts it read-only. Do not copy, inspect, log, or publish its contents.
 
-To log out or reset your session, delete the file:
+Use the helper to clear local state:
 
 ```bash
-rm ~/.config/ddb-mcp/session.json
+ddb-mcp-auth reset
 ```
+
+This does not revoke the server-side D&D Beyond session. Use D&D Beyond account
+controls when server-side revocation is required.
 
 ## Development
 
@@ -265,6 +269,9 @@ npm test
 
 # Production-image browser and container integration suite
 npm run test:docker
+
+# Standalone host-helper tests
+npm run test:go
 ```
 
 Authenticated read-only release testing is deliberately separate and requires

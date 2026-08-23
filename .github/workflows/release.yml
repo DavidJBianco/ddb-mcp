@@ -81,6 +81,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: cmd/ddb-mcp-auth/go.mod
+          cache-dependency-path: cmd/ddb-mcp-auth/go.sum
+
       - name: Install dependencies
         run: npm ci
 
@@ -92,6 +97,8 @@ jobs:
           npm run test:offline
           npm audit --audit-level=high --omit=dev
           git diff --exit-code -- dist/
+          test -z "$(gofmt -l cmd/ddb-mcp-auth)"
+          (cd cmd/ddb-mcp-auth && go test ./... && go vet ./...)
 
       - name: Pack npm artifact
         id: package
@@ -99,6 +106,29 @@ jobs:
           mkdir -p release
           PACKAGE_NAME=$(npm pack --pack-destination release | tail -n 1)
           echo "path=release/${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Build host authentication helpers
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:${TAG}"
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.defaultImage=${IMAGE}"
+          build_helper() {
+            (cd cmd/ddb-mcp-auth && GOOS="$1" GOARCH="$2" CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "../../release/ddb-mcp-auth$3" .)
+            if [ "$1" = windows ]; then
+              (cd release && zip "ddb-mcp-auth_${1}_${2}.zip" "ddb-mcp-auth$3")
+            else
+              tar -C release -czf "release/ddb-mcp-auth_${1}_${2}.tar.gz" "ddb-mcp-auth$3"
+            fi
+            rm "release/ddb-mcp-auth$3"
+          }
+          build_helper darwin amd64 ""
+          build_helper darwin arm64 ""
+          build_helper linux amd64 ""
+          build_helper linux arm64 ""
+          build_helper windows amd64 ".exe"
+          (cd release && sha256sum ddb-mcp-auth_*.tar.gz ddb-mcp-auth_*.zip > checksums.txt)
 
       - name: Resolve lowercase GHCR image name
         id: image
@@ -164,12 +194,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
-          PACKAGE_PATH: ${{ steps.package.outputs.path }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$PACKAGE_PATH" --clobber
+            gh release upload "$TAG" release/* --clobber
           else
-            gh release create "$TAG" "$PACKAGE_PATH" \
+            gh release create "$TAG" release/* \
               --target "$GITHUB_SHA" \
               --title "$TAG" \
               --generate-notes

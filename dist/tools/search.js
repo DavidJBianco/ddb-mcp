@@ -1,4 +1,5 @@
 import { getPage, isLoggedIn } from "../browser.js";
+import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
 import { extractLibraryBookCards } from "./library.js";
 const DDB_ORIGIN = "https://www.dndbeyond.com";
 const SOURCE_SLUG_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9/_-]*$/;
@@ -110,10 +111,11 @@ async function extractOrdinaryResults(page, category) {
 }
 async function searchSourcebooks(page, query, scope) {
     if (!(await isLoggedIn(page)))
-        throw new Error("Not logged in. Please run ddb_login first.");
+        throw new AuthenticationRequiredError();
     const ownership = scope === "accessible" ? "&ownership=owned-shared" : "";
     const url = `${DDB_ORIGIN}/en/library?type=sourcebooks${ownership}`;
     await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+    throwIfAuthenticationRedirect(page);
     const filter = page.locator("input[placeholder*='Filter by title' i]:visible").first();
     if ((await filter.count()) === 0) {
         throw new Error("D&D Beyond's sourcebook title filter was not found; the library layout may have changed.");
@@ -159,6 +161,7 @@ export async function search(context, query, category = "all", sourceScope) {
             ? `${DDB_ORIGIN}/search?q=${encodedQuery}`
             : `${DDB_ORIGIN}/${path}?filter-search=${encodedQuery}`;
         await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30_000 });
+        throwIfAuthenticationRedirect(page);
         await page.waitForTimeout(1500);
         results = await extractOrdinaryResults(page, category);
     }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -16,6 +16,20 @@ function dockerRun(label, args) {
   const name = `ddb-mcp-test-${label}-${process.pid}-${++containerSequence}`;
   try {
     return docker(["run", "--rm", "--name", name, ...args]);
+  } finally {
+    spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
+  }
+}
+
+function dockerRunInput(label, args, input) {
+  const name = `ddb-mcp-test-${label}-${process.pid}-${++containerSequence}`;
+  try {
+    const result = spawnSync("docker", ["run", "--rm", "--interactive", "--name", name, ...args], {
+      input,
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
   } finally {
     spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
   }
@@ -68,35 +82,34 @@ test("production image contains no test or session material", () => {
   assert.doesNotMatch(history, /session\.json|settings\.json|cookie|authorization|password/i);
 });
 
-test("session directory is writable while a read-only session bind remains immutable", async (t) => {
+test("session administration is writable only through an explicit mount while the MCP mount remains read-only", async (t) => {
   const volume = `ddb-mcp-test-${process.pid}-${Date.now()}`;
   docker(["volume", "create", volume]);
   t.after(() => {
     spawnSync("docker", ["volume", "rm", "--force", volume], { stdio: "ignore" });
   });
 
-  assert.equal(
-    dockerRun("session-volume", [
+  const validState = JSON.stringify({
+    cookies: [{ name: "synthetic", value: "private", domain: ".dndbeyond.com", path: "/", expires: 4102444800, httpOnly: true, secure: true, sameSite: "Lax" }],
+    origins: [],
+  });
+  assert.match(
+    dockerRunInput("session-volume", [
       "--mount",
       `type=volume,src=${volume},dst=/home/mcp/.config/ddb-mcp`,
       "--entrypoint",
-      "sh",
+      "node",
       image,
-      "-c",
-      "touch /home/mcp/.config/ddb-mcp/session.json && test -w /home/mcp/.config/ddb-mcp/session.json && echo writable",
-    ]),
-    "writable"
+      "dist/session-admin.js",
+      "import",
+    ], validState),
+    /"status":"imported"/
   );
-
-  const directory = await mkdtemp(join(tmpdir(), "ddb-mcp-session-test-"));
-  t.after(async () => rm(directory, { recursive: true, force: true }));
-  const sessionPath = join(directory, "session.json");
-  await writeFile(sessionPath, "{}", { mode: 0o644 });
 
   assert.equal(
     dockerRun("readonly-session", [
       "--mount",
-      `type=bind,src=${sessionPath},dst=/home/mcp/.config/ddb-mcp/session.json,readonly`,
+      `type=volume,src=${volume},dst=/home/mcp/.config/ddb-mcp,readonly`,
       "--entrypoint",
       "sh",
       image,

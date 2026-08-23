@@ -1,7 +1,8 @@
 import { chromium } from "playwright";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, statSync } from "fs";
 import { homedir } from "os";
 import { dirname, isAbsolute, join } from "path";
+import { AuthenticationRequiredError, isLoggedInOnCurrentPage, validateStorageState, verifyContextAuthentication, } from "./session-state.js";
 const configuredSessionPath = process.env.DDB_MCP_SESSION_PATH?.trim();
 if (configuredSessionPath && !isAbsolute(configuredSessionPath)) {
     throw new Error("DDB_MCP_SESSION_PATH must be an absolute path.");
@@ -10,6 +11,30 @@ export const SESSION_PATH = configuredSessionPath ?? join(homedir(), ".config", 
 export const SESSION_DIR = dirname(SESSION_PATH);
 let browserInstance = null;
 let contextInstance = null;
+let contextSessionFingerprint = null;
+async function discardContext() {
+    if (contextInstance) {
+        await contextInstance.close().catch(() => undefined);
+        contextInstance = null;
+    }
+    contextSessionFingerprint = null;
+}
+function readSessionFingerprint() {
+    if (!existsSync(SESSION_PATH))
+        throw new AuthenticationRequiredError();
+    try {
+        const stats = statSync(SESSION_PATH);
+        if (!stats.isFile())
+            throw new AuthenticationRequiredError();
+        validateStorageState(readFileSync(SESSION_PATH));
+        return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeMs}`;
+    }
+    catch (error) {
+        if (error instanceof AuthenticationRequiredError)
+            throw error;
+        throw new AuthenticationRequiredError();
+    }
+}
 export async function getBrowser() {
     if (browserInstance)
         return browserInstance;
@@ -22,51 +47,53 @@ export async function getBrowser() {
     });
     return browserInstance;
 }
-export async function getContext(browser) {
-    if (contextInstance)
-        return contextInstance;
-    if (!existsSync(SESSION_DIR)) {
-        mkdirSync(SESSION_DIR, { recursive: true });
+export async function getAuthenticatedContext() {
+    // Reject unusable state before starting the relatively expensive browser
+    // process. getContext validates the fingerprint again to avoid a TOCTOU gap.
+    try {
+        readSessionFingerprint();
     }
-    if (existsSync(SESSION_PATH)) {
-        contextInstance = await browser.newContext({
-            storageState: SESSION_PATH,
-            userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            viewport: { width: 1280, height: 800 },
-        });
+    catch (error) {
+        await discardContext();
+        throw error;
     }
-    else {
-        contextInstance = await browser.newContext({
-            userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            viewport: { width: 1280, height: 800 },
-        });
-    }
-    return contextInstance;
+    const browser = await getBrowser();
+    return getContext(browser);
 }
-export async function saveSession(context) {
-    if (!existsSync(SESSION_DIR)) {
-        mkdirSync(SESSION_DIR, { recursive: true });
+export async function getContext(browser) {
+    let fingerprint;
+    try {
+        fingerprint = readSessionFingerprint();
     }
-    await context.storageState({ path: SESSION_PATH });
+    catch (error) {
+        await discardContext();
+        throw error;
+    }
+    if (contextInstance && contextSessionFingerprint === fingerprint)
+        return contextInstance;
+    await discardContext();
+    const candidate = await browser.newContext({
+        storageState: SESSION_PATH,
+        viewport: { width: 1280, height: 800 },
+    });
+    try {
+        await verifyContextAuthentication(candidate);
+    }
+    catch (error) {
+        await candidate.close().catch(() => undefined);
+        if (error instanceof AuthenticationRequiredError)
+            throw error;
+        throw new AuthenticationRequiredError();
+    }
+    contextInstance = candidate;
+    contextSessionFingerprint = fingerprint;
+    return contextInstance;
 }
 export async function isLoggedIn(page) {
     try {
         await page.goto("https://www.dndbeyond.com", { waitUntil: "domcontentloaded", timeout: 15000 });
         await page.waitForTimeout(2000);
-        // If we got redirected off dndbeyond.com (e.g. to Wizards login), we're not logged in
-        const currentUrl = page.url();
-        if (!currentUrl.includes("dndbeyond.com") || currentUrl.includes("/login") || currentUrl.includes("/sign-in")) {
-            return false;
-        }
-        // Check for visible "Sign In" / "Log In" text — these only appear when NOT logged in
-        return await page.evaluate(() => {
-            const allElements = Array.from(document.querySelectorAll("a, button"));
-            const signInEl = allElements.find((el) => {
-                const text = (el.textContent || "").trim().toLowerCase();
-                return text === "sign in" || text === "log in";
-            });
-            return !signInEl;
-        });
+        return isLoggedInOnCurrentPage(page);
     }
     catch {
         return false;
@@ -79,10 +106,7 @@ export async function getPage(context) {
     return context.newPage();
 }
 export async function closeBrowser() {
-    if (contextInstance) {
-        await contextInstance.close();
-        contextInstance = null;
-    }
+    await discardContext();
     if (browserInstance) {
         await browserInstance.close();
         browserInstance = null;

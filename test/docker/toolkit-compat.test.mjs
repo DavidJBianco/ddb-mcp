@@ -18,7 +18,7 @@ test("Docker MCP Toolkit catalog entry describes the production image contract",
   assert.match(catalog, /^name: ddb-mcp-local$/m);
   assert.match(catalog, /^type: server$/m);
   assert.match(catalog, /^image: ddb-mcp-local:latest$/m);
-  assert.match(catalog, /^\s+- ddb-mcp-session:\/home\/mcp\/\.config\/ddb-mcp$/m);
+  assert.match(catalog, /^\s+- ddb-mcp-session:\/home\/mcp\/\.config\/ddb-mcp:ro$/m);
 });
 
 test("Docker MCP Toolkit routes MCP through the candidate profile", { timeout: 90_000 }, async (t) => {

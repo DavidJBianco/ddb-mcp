@@ -1,13 +1,15 @@
 import { getPage, isLoggedIn } from "../browser.js";
+import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
 export async function getCampaign(context, campaignId) {
     const page = await getPage(context);
     if (!(await isLoggedIn(page))) {
-        throw new Error("Not logged in. Please run ddb_login first.");
+        throw new AuthenticationRequiredError();
     }
     await page.goto(`https://www.dndbeyond.com/campaigns/${campaignId}`, {
         waitUntil: "networkidle",
         timeout: 30000,
     });
+    throwIfAuthenticationRedirect(page);
     await page.waitForTimeout(2000);
     const campaign = await page.evaluate(() => {
         const data = {};
@@ -45,12 +47,13 @@ export async function getCampaign(context, campaignId) {
 export async function listMyCampaigns(context) {
     const page = await getPage(context);
     if (!(await isLoggedIn(page))) {
-        throw new Error("Not logged in. Please run ddb_login first.");
+        throw new AuthenticationRequiredError();
     }
     await page.goto("https://www.dndbeyond.com/my-campaigns", {
         waitUntil: "networkidle",
         timeout: 30000,
     });
+    throwIfAuthenticationRedirect(page);
     await page.waitForTimeout(2000);
     const campaigns = await page.evaluate(() => {
         const list = [];

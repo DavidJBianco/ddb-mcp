@@ -33,7 +33,6 @@ test("every tool converts a browser dependency failure into an MCP tool error", 
     throw new Error("synthetic browser dependency failure");
   });
   const cases = [
-    ["ddb_login", {}],
     ["ddb_list_characters", {}],
     ["ddb_get_character", { character_id: "4242" }],
     ["ddb_download_character", { character_id: "4242", output_path: "/tmp/unused.json" }],
