@@ -1,4 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 import { createServer } from "../../dist/index.js";
@@ -10,7 +11,21 @@ const browser = await chromium.launch({
 });
 const context = await browser.newContext();
 const routeState = await installSyntheticRoutes(context);
-const server = createServer(async () => context);
+const syntheticPdf = await readFile(new URL("synthetic-character-sheet.pdf", import.meta.url));
+const server = createServer(async () => context, {
+  characterPdfDependencies: {
+    createHandle: () => "docker-synthetic",
+    fetchPdf: async () => ({
+      status: () => 200,
+      url: () => "https://www.dndbeyond.com/sheet-pdfs/synthetic-character-sheet.pdf",
+      headers: () => ({
+        "content-type": "application/pdf",
+        "content-length": String(syntheticPdf.length),
+      }),
+      body: async () => syntheticPdf,
+    }),
+  },
+});
 const transport = new StdioServerTransport();
 let closing;
 

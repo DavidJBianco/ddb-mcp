@@ -68,6 +68,26 @@ test("production image contains no test or session material", () => {
     "clean"
   );
   assert.equal(
+    dockerRun("pdf-viewer", [
+      "--entrypoint",
+      "sh",
+      image,
+      "-c",
+      "test -s /app/dist/apps/character-pdf-viewer.html && test -s /app/third_party/pdf-viewer/NOTICE.md && test \"$(sha256sum /app/dist/apps/character-pdf-viewer.html | cut -d ' ' -f 1)\" = df5cd587fb2da1b4d5f136caa7d199203764ecddf08c44c0ee07b085daf0b596 && echo present",
+    ]),
+    "present"
+  );
+  assert.equal(
+    dockerRun("pdf-build-dependencies", [
+      "--entrypoint",
+      "sh",
+      image,
+      "-c",
+      "for path in /app/node_modules/@modelcontextprotocol/server-pdf /app/node_modules/pdfjs-dist /app/node_modules/@cantoo/pdf-lib; do test ! -e \"$path\" || exit 1; done; echo pruned",
+    ]),
+    "pruned"
+  );
+  assert.equal(
     dockerRun("repository-files", [
       "--entrypoint",
       "sh",

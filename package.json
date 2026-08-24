@@ -7,12 +7,12 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/sync-pdf-viewer.mjs",
     "build:watch": "tsc --watch",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run test:offline",
-    "test:unit": "node --test test/ci-isolation.test.mjs test/docker-session-safeguards.test.mjs test/library.test.mjs test/navigate.test.mjs test/search.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
+    "test:unit": "node --test test/character-pdf.test.mjs test/ci-isolation.test.mjs test/docker-session-safeguards.test.mjs test/library.test.mjs test/navigate.test.mjs test/search.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
     "test:mcp": "node --test test/synthetic-harness.test.mjs test/mcp-integration.test.mjs test/mcp-contract.test.mjs test/failure-diagnostics.test.mjs",
     "test:offline": "npm run test:unit && npm run test:mcp",
     "test:docker": "docker build --tag mysterium:test . && MYSTERIUM_TEST_IMAGE=mysterium:test npm run test:docker:run",
@@ -24,10 +24,13 @@
     "build:auth": "make helper"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "playwright": "^1.49.0"
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "playwright": "^1.49.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/server-pdf": "1.7.5",
     "@types/node": "^25.3.0",
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.56.0",

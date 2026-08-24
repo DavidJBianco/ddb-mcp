@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdtemp, open, readFile, realpath, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, open, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
 import test from "node:test";
@@ -67,7 +68,7 @@ function validateSourcebookContent(response, expectedMaxChars) {
   }
 }
 
-async function callText(client, diagnostics, name, args = {}) {
+async function callResult(client, diagnostics, name, args = {}) {
   let result;
   try {
     result = await client.callTool({ name, arguments: args });
@@ -81,6 +82,11 @@ async function callText(client, diagnostics, name, args = {}) {
       `${name} returned a tool error; ${summarizeLiveFailure(responseText, { stderr: diagnostics() })}`
     );
   }
+  return result;
+}
+
+async function callText(client, diagnostics, name, args = {}) {
+  const result = await callResult(client, diagnostics, name, args);
   const block = result.content?.[0];
   requireStructure(block?.type === "text" && typeof block.text === "string", `${name} returned no text block`);
   return block.text;
@@ -156,6 +162,11 @@ test(
     const transport = liveTransport(sessionPath, outputDirectory);
     const diagnostics = captureStderr(transport);
     const client = new Client({ name: "mysterium-live-read-test", version: "1.0.0" });
+    client.registerCapabilities({
+      extensions: {
+        "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] },
+      },
+    });
     t.after(async () => client.close());
     try {
       await client.connect(transport);
@@ -192,21 +203,57 @@ test(
     );
 
     await t.test(
-      "downloads character JSON only to the external temporary directory",
+      "exports and validates a character PDF only in the external temporary directory",
       { skip: characters.length === 0 ? "account has no character available" : false },
       async () => {
         const characterId = characters[0]?.id;
         requireStructure(typeof characterId === "string" && characterId.length > 0, "character listing omitted an ID");
-        const inContainer = "/tmp/mysterium-live-output/character.json";
-        const onHost = join(outputDirectory, "character.json");
-        const outputPath = process.env.MYSTERIUM_LIVE_TRANSPORT === "docker" ? inContainer : onHost;
-        await callText(client, diagnostics, "mysterium_download_character", {
+        const exported = await callResult(client, diagnostics, "mysterium_export_character_pdf", {
           character_id: characterId,
-          output_path: outputPath,
         });
-        const downloaded = parseJson(await readFile(onHost, "utf8"), "downloaded character file");
-        requireStructure(downloaded && typeof downloaded === "object" && downloaded.data, "downloaded character shape changed");
-        await rm(onHost, { force: true });
+        const metadata = exported.structuredContent;
+        requireStructure(metadata?.mimeType === "application/pdf", "character PDF MIME metadata changed");
+        requireStructure(Number.isInteger(metadata?.totalBytes) && metadata.totalBytes > 0, "character PDF size metadata changed");
+        requireStructure(metadata.totalBytes <= 25 * 1024 * 1024, "character PDF exceeded the 25 MiB limit");
+        requireStructure(typeof metadata?.sha256 === "string" && /^[a-f0-9]{64}$/.test(metadata.sha256), "character PDF hash metadata changed");
+        requireStructure(typeof metadata?.url === "string" && metadata.url.startsWith("mysterium://character-pdf/"), "character PDF handle shape changed");
+
+        const chunks = [];
+        let offset = 0;
+        while (offset < metadata.totalBytes) {
+          const result = await callResult(client, diagnostics, "read_pdf_bytes", {
+            url: metadata.url,
+            offset,
+          });
+          const range = result.structuredContent;
+          requireStructure(range?.offset === offset, "character PDF chunk offset changed");
+          requireStructure(Number.isInteger(range?.byteCount) && range.byteCount > 0, "character PDF chunk length changed");
+          requireStructure(range.byteCount <= 512 * 1024, "character PDF chunk exceeded the range limit");
+          chunks.push(Buffer.from(range.bytes, "base64"));
+          offset += range.byteCount;
+          if (!range.hasMore) break;
+        }
+
+        const pdf = Buffer.concat(chunks);
+        requireStructure(pdf.length === metadata.totalBytes, "character PDF reconstructed length changed");
+        requireStructure(pdf.subarray(0, 5).toString("ascii") === "%PDF-", "character export did not reconstruct a PDF");
+        requireStructure(createHash("sha256").update(pdf).digest("hex") === metadata.sha256, "character PDF reconstructed hash changed");
+
+        const onHost = join(outputDirectory, "character-sheet.pdf");
+        try {
+          await writeFile(onHost, pdf, { mode: 0o600 });
+          // The real live gate requires Poppler's independent page inspection.
+          // The offline mock remains portable and validates its committed PDF
+          // through the reconstructed length, signature, and checksum above.
+          if (process.env.MYSTERIUM_LIVE_TRANSPORT !== "mock") {
+            const inspected = spawnSync("pdfinfo", [onHost], { encoding: "utf8", timeout: 15_000 });
+            requireStructure(inspected.status === 0, "pdfinfo could not inspect the character PDF");
+            const pages = inspected.stdout.match(/^Pages:\s+(\d+)$/m);
+            requireStructure(pages && Number(pages[1]) >= 1, "character PDF contained no pages");
+          }
+        } finally {
+          await rm(onHost, { force: true });
+        }
       }
     );
 

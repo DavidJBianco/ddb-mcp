@@ -9,6 +9,7 @@ RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
+COPY scripts/sync-pdf-viewer.mjs ./scripts/sync-pdf-viewer.mjs
 RUN npm run build && npm prune --omit=dev
 
 
@@ -40,6 +41,7 @@ RUN npx playwright install --with-deps chromium \
 # Application output changes much more often than the browser runtime. Keep it
 # after the expensive Playwright layer so normal source edits retain the cache.
 COPY --from=build /app/dist ./dist
+COPY third_party ./third_party
 
 USER mcp
 

@@ -1,4 +1,6 @@
 import { writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +11,8 @@ import { z } from "zod";
 const server = new McpServer({ name: "mysterium-live-mock", version: "1.0.0" });
 const text = (value) => ({ content: [{ type: "text", text: value }] });
 const sensitive = "SYNTHETIC_PRIVATE_MARKER";
+const syntheticPdf = await readFile(new URL("synthetic-character-sheet.pdf", import.meta.url));
+const syntheticPdfUrl = "mysterium://character-pdf/live-mock/dnd-beyond-character-4242.pdf";
 
 server.tool("mysterium_list_characters", "mock", {}, async () => {
   if (process.env.MYSTERIUM_LIVE_MOCK_FAIL_TOOL === "mysterium_list_characters") {
@@ -30,13 +34,52 @@ server.tool(
   async ({ character_id, fallback_scrape }) =>
     text(JSON.stringify(fallback_scrape ? { Name: sensitive } : { data: { id: character_id, name: sensitive } }))
 );
-server.tool(
-  "mysterium_download_character",
-  "mock",
-  { character_id: z.string(), output_path: z.string().optional() },
-  async ({ character_id, output_path }) => {
-    writeFileSync(output_path, JSON.stringify({ data: { id: character_id, name: sensitive } }));
-    return text("download complete");
+server.registerTool(
+  "mysterium_export_character_pdf",
+  {
+    description: "mock",
+    inputSchema: { character_id: z.string() },
+    _meta: { ui: { resourceUri: "ui://mysterium/character-pdf-viewer.html" } },
+  },
+  async () => ({
+    content: [{ type: "text", text: "synthetic PDF ready" }],
+    structuredContent: {
+      url: syntheticPdfUrl,
+      title: "dnd-beyond-character-4242.pdf",
+      filename: "dnd-beyond-character-4242.pdf",
+      mimeType: "application/pdf",
+      totalBytes: syntheticPdf.length,
+      sha256: createHash("sha256").update(syntheticPdf).digest("hex"),
+      initialPage: 1,
+    },
+    _meta: { interactEnabled: false, writable: false },
+  })
+);
+server.registerTool(
+  "read_pdf_bytes",
+  {
+    description: "mock",
+    inputSchema: {
+      url: z.string(),
+      offset: z.number().default(0),
+      byteCount: z.number().default(512 * 1024),
+    },
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  async ({ url, offset, byteCount }) => {
+    if (url !== syntheticPdfUrl) return { ...text("expired"), isError: true };
+    const bytes = syntheticPdf.subarray(offset, Math.min(offset + byteCount, syntheticPdf.length));
+    return {
+      content: [{ type: "text", text: "synthetic PDF bytes" }],
+      structuredContent: {
+        url,
+        bytes: bytes.toString("base64"),
+        offset,
+        byteCount: bytes.length,
+        totalBytes: syntheticPdf.length,
+        hasMore: offset + bytes.length < syntheticPdf.length,
+      },
+    };
   }
 );
 server.tool("mysterium_list_campaigns", "mock", {}, async () =>
