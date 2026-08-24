@@ -242,10 +242,15 @@ test(
         const onHost = join(outputDirectory, "character-sheet.pdf");
         try {
           await writeFile(onHost, pdf, { mode: 0o600 });
-          const inspected = spawnSync("pdfinfo", [onHost], { encoding: "utf8", timeout: 15_000 });
-          requireStructure(inspected.status === 0, "pdfinfo could not inspect the character PDF");
-          const pages = inspected.stdout.match(/^Pages:\s+(\d+)$/m);
-          requireStructure(pages && Number(pages[1]) >= 1, "character PDF contained no pages");
+          // The real live gate requires Poppler's independent page inspection.
+          // The offline mock remains portable and validates its committed PDF
+          // through the reconstructed length, signature, and checksum above.
+          if (process.env.MYSTERIUM_LIVE_TRANSPORT !== "mock") {
+            const inspected = spawnSync("pdfinfo", [onHost], { encoding: "utf8", timeout: 15_000 });
+            requireStructure(inspected.status === 0, "pdfinfo could not inspect the character PDF");
+            const pages = inspected.stdout.match(/^Pages:\s+(\d+)$/m);
+            requireStructure(pages && Number(pages[1]) >= 1, "character PDF contained no pages");
+          }
         } finally {
           await rm(onHost, { force: true });
         }

@@ -27,6 +27,9 @@ test("offline synthetic harness exercises the authenticated-test protocol safely
       env: isolatedChildEnvironment({
         MYSTERIUM_LIVE_TRANSPORT: "mock",
         MYSTERIUM_SESSION_PATH: sessionPath,
+        // The offline harness must not depend on optional host utilities such
+        // as Poppler's pdfinfo, which is absent from standard CI runners.
+        PATH: directory,
       }),
       timeout: 30_000,
     }
