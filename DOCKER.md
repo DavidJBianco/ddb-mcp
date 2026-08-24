@@ -194,12 +194,15 @@ traffic occurs only in the host browser. No host directories are mounted by the
 supplied Toolkit definition; the named session volume is read-only in the
 normal MCP runtime.
 
-The image contains the approved, prebuilt MCP PDF viewer generated during the
-build from the exact `@modelcontextprotocol/server-pdf` development dependency.
-The full example PDF server and its unrelated runtime dependencies are pruned;
-only Mysterium, the generated viewer, and the required license notices remain.
-PDF exports are held in bounded memory and are not written into the image or a
-container volume.
+The image contains Mysterium's source-built, read-only PDF viewer. It uses a
+directly pinned Mozilla PDF.js build and MCP Apps patterns adapted from the
+official Model Context Protocol PDF example. PDF.js, Vite, and other viewer
+build dependencies are pruned from the runtime image; only Mysterium, the
+self-contained viewer artifact, and required license notices remain. PDF
+exports are held in bounded server memory and are not written into the image or
+a container volume. A gzip-compressed copy is returned in app-private MCP Apps
+metadata so the host can restore the viewer across server restarts without
+placing the bytes in model-visible tool content.
 
 The image also contains Mysterium's self-contained stat-block viewer. Its
 Vanilla TypeScript application and bundled rasterizer use no remote assets.
@@ -207,7 +210,6 @@ Stat-block text is retrieved from the authenticated rendered page on demand and
 is not cached or persisted. PNG generation occurs inside the app; downloads use
 the host-mediated MCP Apps download method when the client supports it.
 
-Dependabot targets dependency updates at `dev`. Updating the exact PDF viewer
-package is deliberately not automatic: review the upstream and bundled
-licenses, update the approved version and SHA-256 together, then repeat the
-automated suite and manual Claude inline-view and download checks.
+Dependabot targets dependency updates at `dev`. PDF.js updates require review
+of upstream rendering and security changes, regenerated self-contained viewer
+artifacts, the automated suite, and manual inline-view and download checks.

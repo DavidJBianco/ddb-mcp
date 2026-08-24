@@ -8,6 +8,7 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { gzipSync } from "node:zlib";
 import type { BrowserContext } from "playwright";
 import { z } from "zod";
 
@@ -159,13 +160,24 @@ registerAppTool(
       const context = await getContextForTool();
       const pdf = await acquireCharacterPdf(context, character_id, options.characterPdfDependencies);
       const metadata = characterPdfStore.put(pdf);
+      const compressedPdf = gzipSync(pdf.bytes, { level: 9 });
       return {
         content: [{
           type: "text",
           text: `Character sheet PDF ready for inline viewing and download: ${metadata.filename} (${metadata.totalBytes} bytes, SHA-256 ${metadata.sha256}).`,
         }],
         structuredContent: metadata,
-        _meta: { interactEnabled: false, writable: false },
+        _meta: {
+          interactEnabled: false,
+          writable: false,
+          pdf: {
+            encoding: "gzip+base64",
+            data: compressedPdf.toString("base64"),
+            originalBytes: pdf.totalBytes,
+            compressedBytes: compressedPdf.length,
+            sha256: pdf.sha256,
+          },
+        },
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Character PDF export failed.";

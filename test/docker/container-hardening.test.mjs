@@ -73,7 +73,7 @@ test("production image contains no test or session material", () => {
       "sh",
       image,
       "-c",
-      "test -s /app/dist/apps/character-pdf-viewer.html && test -s /app/third_party/pdf-viewer/NOTICE.md && test \"$(sha256sum /app/dist/apps/character-pdf-viewer.html | cut -d ' ' -f 1)\" = df5cd587fb2da1b4d5f136caa7d199203764ecddf08c44c0ee07b085daf0b596 && echo present",
+      "test -s /app/dist/apps/character-pdf-viewer.html && test -s /app/third_party/pdf-viewer/NOTICE.md && ! grep -Eq '<script[^>]+src=|<link[^>]+href=' /app/dist/apps/character-pdf-viewer.html && grep -Fq 'Download PDF' /app/dist/apps/character-pdf-viewer.html && echo present",
     ]),
     "present"
   );
@@ -93,7 +93,7 @@ test("production image contains no test or session material", () => {
       "sh",
       image,
       "-c",
-      "for path in /app/node_modules/@modelcontextprotocol/server-pdf /app/node_modules/pdfjs-dist /app/node_modules/@cantoo/pdf-lib /app/node_modules/esbuild /app/node_modules/html2canvas; do test ! -e \"$path\" || exit 1; done; echo pruned",
+      "for path in /app/node_modules/@modelcontextprotocol/server-pdf /app/node_modules/pdfjs-dist /app/node_modules/@cantoo/pdf-lib /app/node_modules/esbuild /app/node_modules/vite /app/node_modules/vite-plugin-singlefile /app/node_modules/html2canvas; do test ! -e \"$path\" || exit 1; done; echo pruned",
     ]),
     "pruned"
   );

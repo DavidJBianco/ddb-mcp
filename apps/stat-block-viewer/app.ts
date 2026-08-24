@@ -1,5 +1,8 @@
 import { App } from "@modelcontextprotocol/ext-apps";
 import html2canvas from "html2canvas";
+import { element, installHostTheming, toolResultError, ViewerShell } from "../viewer/shell.js";
+import "../viewer/shell.css";
+import "./styles.css";
 
 type Candidate = {
   id: string; name: string; source: string | null; edition: string | null; legacy: boolean;
@@ -20,47 +23,30 @@ type Resolution =
   | { kind: "not_found"; query: string };
 
 const app = new App({ name: "Mysterium Stat Block Viewer", version: "1.0.0" }, { availableDisplayModes: ["inline", "fullscreen"] });
-const shell = document.querySelector<HTMLElement>("#app-shell")!;
-const status = document.querySelector<HTMLElement>("#status")!;
-const candidateList = document.querySelector<HTMLElement>("#candidate-list")!;
-const card = document.querySelector<HTMLElement>("#stat-block")!;
-const exportStage = document.querySelector<HTMLElement>("#export-stage")!;
-const title = document.querySelector<HTMLElement>("#toolbar-title")!;
+const shell = new ViewerShell(app, "Stat Block");
+const candidateList = element("div", "candidate-list");
+candidateList.id = "candidate-list";
+candidateList.hidden = true;
+const card = element("article", "stat-block");
+card.id = "stat-block";
+card.hidden = true;
+card.setAttribute("aria-labelledby", "creature-name");
+shell.content.append(candidateList, card);
+const exportStage = element("div");
+exportStage.id = "export-stage";
+exportStage.setAttribute("aria-hidden", "true");
+document.body.append(exportStage);
 let current: StatBlock | null = null;
 let loadingCandidateKey: string | null = null;
 let zoom = 1;
 
 function setStatus(message: string, error = false) {
-  status.textContent = message;
-  status.classList.toggle("error", error);
-  status.hidden = false;
+  shell.setStatus(message, error);
   card.hidden = true;
   candidateList.hidden = true;
 }
 
-function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
 function badge(text: string) { return element("span", "badge", text); }
-
-function toolResultError(result: { content?: unknown }, fallback: string) {
-  if (Array.isArray(result.content)) {
-    const message = result.content
-      .filter((item): item is { type: "text"; text: string } =>
-        typeof item === "object" && item !== null &&
-        (item as { type?: unknown }).type === "text" &&
-        typeof (item as { text?: unknown }).text === "string")
-      .map((item) => item.text.trim())
-      .filter(Boolean)
-      .join("\n");
-    if (message) return message;
-  }
-  return fallback;
-}
 
 function renderStatBlock(data: StatBlock) {
   current = data;
@@ -116,10 +102,11 @@ function renderStatBlock(data: StatBlock) {
     card.append(section);
   }
   if (data.creature.source) card.append(element("footer", "source-line", `Source: ${data.creature.source}`));
-  title.textContent = data.creature.name;
-  status.hidden = true;
+  shell.setTitle(data.creature.name);
+  shell.clearStatus();
   candidateList.hidden = true;
   card.hidden = false;
+  for (const id of ["copy-text", "copy-json", "download-png", "open-source"]) shell.setActionEnabled(id, true);
   applyZoom();
   window.requestAnimationFrame(updateImageExportAvailability);
 }
@@ -157,7 +144,7 @@ function appPrivateStatBlock(result: { _meta?: unknown }, candidate: Candidate):
 }
 
 function renderCandidates(resolution: Extract<Resolution, { kind: "candidates" }>) {
-  status.hidden = true;
+  shell.clearStatus();
   card.hidden = true;
   candidateList.replaceChildren(element("h2", "", `Choose a stat block for “${resolution.query}”`));
   for (const candidate of resolution.candidates) {
@@ -178,13 +165,7 @@ function renderCandidates(resolution: Extract<Resolution, { kind: "candidates" }
 function applyZoom() {
   card.style.transform = `scale(${zoom})`;
   card.style.marginBottom = card.hidden ? "0" : `${Math.max(0, card.offsetHeight * (zoom - 1))}px`;
-  document.querySelector<HTMLOutputElement>("#zoom-level")!.value = `${Math.round(zoom * 100)}%`;
-}
-
-function toast(message: string) {
-  const node = element("div", "toast", message);
-  document.body.append(node);
-  window.setTimeout(() => node.remove(), 2200);
+  zoomLevel.value = `${Math.round(zoom * 100)}%`;
 }
 
 async function writeClipboardText(text: string) {
@@ -202,7 +183,7 @@ async function writeClipboardText(text: string) {
     textarea.remove();
     if (!copied) throw new Error("Clipboard unavailable");
   }
-  toast("Copied");
+  shell.toast("Copied");
 }
 
 function slug(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "stat-block"; }
@@ -246,14 +227,12 @@ function makeExportPanels(): HTMLElement[] {
 }
 
 function updateImageExportAvailability() {
-  const copyImage = document.querySelector<HTMLButtonElement>("#copy-image")!;
   if (!current) {
-    copyImage.disabled = true;
+    shell.setActionEnabled("copy-image", false);
     return;
   }
   const panels = makeExportPanels();
-  copyImage.disabled = panels.length !== 1;
-  copyImage.title = panels.length === 1 ? "Copy image" : "Multi-panel blocks must be downloaded";
+  shell.setActionEnabled("copy-image", panels.length === 1, panels.length === 1 ? "Copy image" : "Multi-panel blocks must be downloaded");
   exportStage.replaceChildren();
 }
 
@@ -284,29 +263,24 @@ function downloadLocally(filename: string, blob: Blob) {
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-document.querySelector("#zoom-out")!.addEventListener("click", () => { zoom = Math.max(.6, zoom - .1); applyZoom(); });
-document.querySelector("#zoom-in")!.addEventListener("click", () => { zoom = Math.min(1.6, zoom + .1); applyZoom(); });
-document.querySelector("#copy-text")!.addEventListener("click", () => current && void writeClipboardText(current.markdown).catch(() => toast("Clipboard unavailable")));
-document.querySelector("#copy-json")!.addEventListener("click", () => current && void writeClipboardText(JSON.stringify(current, null, 2)).catch(() => toast("Clipboard unavailable")));
-document.querySelector("#open-source")!.addEventListener("click", () => {
-  if (!current) return;
-  if (app.getHostCapabilities()?.openLinks) void app.openLink({ url: current.creature.url });
-  else window.open(current.creature.url, "_blank", "noopener,noreferrer");
-});
-document.querySelector("#fullscreen")!.addEventListener("click", () => {
-  shell.classList.toggle("fullscreen");
-  void app.requestDisplayMode({ mode: shell.classList.contains("fullscreen") ? "fullscreen" : "inline" }).catch(() => undefined);
-});
-document.querySelector("#copy-image")!.addEventListener("click", async () => {
+shell.addAction({ id: "zoom-out", label: "−", title: "Zoom out", run: () => { zoom = Math.max(.6, zoom - .1); applyZoom(); } });
+const zoomLevel = element("output", "zoom-level", "100%");
+zoomLevel.id = "zoom-level";
+zoomLevel.setAttribute("aria-live", "polite");
+shell.addControl(zoomLevel);
+shell.addAction({ id: "zoom-in", label: "+", title: "Zoom in", run: () => { zoom = Math.min(1.6, zoom + .1); applyZoom(); } });
+shell.addAction({ id: "copy-text", label: "Copy text", run: () => { if (current) void writeClipboardText(current.markdown).catch(() => shell.toast("Clipboard unavailable")); } });
+shell.addAction({ id: "copy-json", label: "Copy JSON", run: () => { if (current) void writeClipboardText(JSON.stringify(current, null, 2)).catch(() => shell.toast("Clipboard unavailable")); } });
+shell.addAction({ id: "copy-image", label: "Copy image", run: async () => {
   try {
     const pngs = await renderPngs();
     if (pngs.length !== 1) return;
     if (!("ClipboardItem" in window)) throw new Error("Image clipboard unavailable.");
     await navigator.clipboard.write([new ClipboardItem({ "image/png": pngs[0].blob })]);
-    toast("Image copied");
-  } catch (error) { toast(error instanceof Error ? error.message : "Image copy failed"); }
-});
-document.querySelector("#download-png")!.addEventListener("click", async () => {
+    shell.toast("Image copied");
+  } catch (error) { shell.toast(error instanceof Error ? error.message : "Image copy failed"); }
+} });
+shell.addAction({ id: "download-png", label: "Download PNG", run: async () => {
   try {
     const pngs = await renderPngs();
     if (app.getHostCapabilities()?.downloadFile) {
@@ -314,13 +288,19 @@ document.querySelector("#download-png")!.addEventListener("click", async () => {
         type: "resource" as const,
         resource: { uri: `file:///${png.filename}`, mimeType: "image/png", blob: png.base64 },
       })) });
-      toast(result.isError ? "Download cancelled" : "Download ready");
+      shell.toast(result.isError ? "Download cancelled" : "Download ready");
     } else {
       pngs.forEach((png) => downloadLocally(png.filename, png.blob));
-      toast("Download ready");
+      shell.toast("Download ready");
     }
-  } catch (error) { toast(error instanceof Error ? error.message : "PNG export failed"); }
-});
+  } catch (error) { shell.toast(error instanceof Error ? error.message : "PNG export failed"); }
+} });
+shell.addAction({ id: "open-source", label: "Open D&D Beyond", run: () => {
+  if (!current) return;
+  if (app.getHostCapabilities()?.openLinks) return app.openLink({ url: current.creature.url }).then(() => undefined);
+  window.open(current.creature.url, "_blank", "noopener,noreferrer");
+} });
+for (const id of ["copy-text", "copy-json", "copy-image", "download-png", "open-source"]) shell.setActionEnabled(id, false);
 
 app.ontoolresult = (result) => {
   if (result.isError || !result.structuredContent) { setStatus("The stat block viewer could not be opened.", true); return; }
@@ -334,6 +314,8 @@ app.ontoolresult = (result) => {
   else setStatus(`No stat block was found for “${resolution.query}”.`, true);
 };
 
-void app.connect().catch((error) => {
+installHostTheming(app, shell);
+app.onteardown = async () => ({ });
+void app.connect().then(() => shell.applyHostContext(app.getHostContext())).catch((error) => {
   setStatus(error instanceof Error ? error.message : "The stat block viewer could not connect to its host.", true);
 });

@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 
@@ -7,11 +7,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.apps.json ./
 COPY src ./src
 COPY apps ./apps
-COPY scripts/sync-pdf-viewer.mjs ./scripts/sync-pdf-viewer.mjs
-COPY scripts/build-stat-block-viewer.mjs ./scripts/build-stat-block-viewer.mjs
+COPY scripts/build-viewers.mjs ./scripts/build-viewers.mjs
 RUN npm run build && npm prune --omit=dev
 
 

@@ -159,7 +159,10 @@ test("character PDF tools and UI resource expose the intended MCP Apps contract"
 
   const resource = await client.readResource({ uri: viewer.uri });
   assert.equal(resource.contents[0].mimeType, "text/html;profile=mcp-app");
-  assert.ok(resource.contents[0].text.length > 4_000_000);
+  assert.ok(resource.contents[0].text.length > 1_000_000);
+  assert.match(resource.contents[0].text, /Mysterium PDF Viewer/);
+  assert.match(resource.contents[0].text, /Download PDF/);
+  assert.doesNotMatch(resource.contents[0].text, /<script[^>]+src=|<link[^>]+href=/i);
   assert.deepEqual(resource.contents[0]._meta.ui.permissions, { clipboardWrite: {} });
   assert.deepEqual(resource.contents[0]._meta.ui.csp, {
     connectDomains: ["https://unpkg.com"],

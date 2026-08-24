@@ -154,9 +154,13 @@ with page, zoom, search, fullscreen, and download controls. It requires an MCP
 client that advertises MCP Apps support; unsupported clients receive an error
 before Mysterium contacts D&D Beyond.
 
-PDF data is limited to 25 MiB and retained only in a bounded in-memory cache for
-up to 60 minutes of inactivity. It is never written to the normal container
-filesystem. The official viewer may request PDF.js Standard-14 font data from
+PDF data is limited to 25 MiB and retained in a bounded in-memory server cache
+for up to 60 minutes of inactivity. The export result also carries a
+gzip-compressed copy in app-private `_meta`, allowing a supporting host to
+restore the viewer after the MCP server restarts without exposing the bytes to
+the model. The PDF is never written to the normal container filesystem.
+Mysterium's source-owned viewer uses Mozilla PDF.js and may request
+version-matched PDF.js Standard-14 font data from
 `unpkg.com` when the exported PDF does not embed a required standard font.
 
 ## Looking up stat blocks
