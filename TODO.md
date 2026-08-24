@@ -131,33 +131,33 @@ release plan or pull request.
   scraper provides only name, level, race, class, HP, abilities, and skills. A
   separately named partial-summary tool can be reconsidered only if a concrete
   use case emerges.
-- [ ] **Focused PDF client-compatibility probe:** Before implementing D&D
-  Beyond export, create a temporary standalone MCP test server—not a production
-  `mysterium` tool—that returns a tiny synthetic, non-private PDF as an embedded
-  blob resource with `mimeType: application/pdf`, a stable synthetic URI, and
-  small JSON/text metadata. Manually call it from Claude Desktop and confirm the
-  PDF is visible or downloadable and opens intact. Repeat with ChatGPT desktop
-  and representative clients where local MCP support is available, recording
-  client/version/result; Claude success is the minimum gate. Also test a
-  resource link only if embedded blobs are unsupported. Remove the probe from
-  client configuration and the repository after recording the decision.
-- [ ] **Focused live PDF acquisition probe:** Separately, use the external
+- [x] **Focused PDF client-compatibility probe:** Claude Desktop 1.34493.1
+  rejected a plain embedded `application/pdf` resource and could not
+  dereference the custom-scheme resource link, but successfully rendered and
+  downloaded the deterministic synthetic PDF through a temporary MCP App with
+  an inline viewer. This passes the minimum Claude gate and establishes the
+  MCP App delivery contract; see `PDF_PROBE_RESULTS.md`.
+- [x] **Focused live PDF acquisition probe:** The external
   authenticated session and D&D Beyond's visible “Export to PDF” workflow for
-  one owned character. Capture the download only in a secure temporary
-  directory, verify status/content type, `%PDF` signature, bounded size,
-  nonempty page structure, and unconditional cleanup, and report no character
-  values or PDF contents. Keep this explicit-opt-in and local; never run it in
-  GitHub Actions. This verifies acquisition, while the synthetic MCP probe
-  verifies client delivery.
+  one owned character returned HTTP 200 and `application/pdf`; the bounded file
+  had a `%PDF` signature and four pages. The secure temporary capture was
+  deleted unconditionally, and no character values or PDF contents were
+  reported. This remains an explicit-opt-in local workflow and must never run
+  in GitHub Actions; see `PDF_PROBE_RESULTS.md`.
+- [ ] **Codex Desktop PDF compatibility:** Build a focused local-client probe
+  for the production MCP App contract and verify inline viewing plus download
+  in Codex Desktop. Record the exact client version and results. This follow-up
+  does not block the initial Claude-only PDF export implementation.
 - [ ] After both probes pass, remove `mysterium_download_character` and add a clearly
   named read-only character-sheet PDF export tool. Drive the documented visible
-  export workflow, enforce timeout and size limits, return the PDF as an
-  embedded `application/pdf` MCP resource plus small structured JSON metadata,
-  and never persist it in the normal container. Cover missing characters,
+  export workflow, enforce timeout and size limits, and deliver the PDF through
+  a Claude-compatible MCP App with an inline viewer, download control, app-only
+  byte-reading tool, and small structured JSON metadata. Never persist it in
+  the normal container. Cover missing characters,
   unavailable export controls, popup/download failures, invalid or oversized
   responses, cleanup, redaction, Claude delivery, and a bounded live success.
-  If Claude cannot consume the probe, remove the old download tool and defer
-  PDF export rather than retaining container-local files.
+  Keep the viewer and its dependencies license-compliant, self-contained, and
+  inside the production container; do not introduce an external helper app.
 - [ ] **`mysterium_get_campaign` enrichment:** Use the observed read-only campaign
   details and short-character data plus permission-aware rendered extraction.
   Return a stable JSON envelope containing campaign ID/name/status/creation
