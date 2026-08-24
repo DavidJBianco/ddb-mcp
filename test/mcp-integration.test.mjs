@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { gunzipSync } from "node:zlib";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -71,7 +72,15 @@ test("an MCP Apps client exports and reconstructs a synthetic character PDF", as
   assert.equal(exported.isError, undefined);
   assert.equal(exported.structuredContent.totalBytes, bytes.length);
   assert.equal(exported.structuredContent.sha256, createHash("sha256").update(bytes).digest("hex"));
-  assert.deepEqual(exported._meta, { interactEnabled: false, writable: false });
+  assert.equal(exported._meta.interactEnabled, false);
+  assert.equal(exported._meta.writable, false);
+  assert.equal(exported._meta.pdf.encoding, "gzip+base64");
+  assert.equal(exported._meta.pdf.originalBytes, bytes.length);
+  assert.equal(exported._meta.pdf.compressedBytes, Buffer.from(exported._meta.pdf.data, "base64").length);
+  assert.equal(exported._meta.pdf.sha256, exported.structuredContent.sha256);
+  assert.deepEqual(gunzipSync(Buffer.from(exported._meta.pdf.data, "base64")), bytes);
+  assert.equal(JSON.stringify(exported.content).includes(exported._meta.pdf.data), false);
+  assert.equal(JSON.stringify(exported.structuredContent).includes(exported._meta.pdf.data), false);
 
   const loaded = [];
   let offset = 0;

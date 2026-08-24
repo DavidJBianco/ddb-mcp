@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -17,21 +16,24 @@ test("the MCP server version comes from package.json", async () => {
   );
 });
 
-test("the generated official PDF viewer and licenses are pinned", async () => {
+test("the generated read-only PDF viewer is self-contained and licensed", async () => {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
-  assert.equal(packageJson.devDependencies["@modelcontextprotocol/server-pdf"], "1.7.5");
+  assert.equal(packageJson.devDependencies["@modelcontextprotocol/server-pdf"], undefined);
+  assert.equal(packageJson.devDependencies["pdfjs-dist"], "6.2.108");
+  assert.equal(packageJson.devDependencies["vite-plugin-singlefile"], "2.3.0");
 
-  const viewer = await readFile(new URL("../dist/apps/character-pdf-viewer.html", import.meta.url));
-  assert.equal(
-    createHash("sha256").update(viewer).digest("hex"),
-    "df5cd587fb2da1b4d5f136caa7d199203764ecddf08c44c0ee07b085daf0b596"
-  );
+  const viewer = await readFile(new URL("../dist/apps/character-pdf-viewer.html", import.meta.url), "utf8");
+  assert.ok(viewer.length > 1_000_000);
+  assert.match(viewer, /Mysterium PDF Viewer/);
+  assert.match(viewer, /Download PDF/);
+  assert.match(viewer, /Search this PDF/);
+  assert.doesNotMatch(viewer, /Copy (?:text|JSON|image)|Download PNG/);
+  assert.doesNotMatch(viewer, /<script[^>]+src=|<link[^>]+href=/i);
 
   for (const name of [
     "NOTICE.md",
     "modelcontextprotocol-ext-apps-LICENSE.txt",
     "pdfjs-dist-LICENSE.txt",
-    "cantoo-pdf-lib-LICENSE.md",
     "standard-schema-LICENSE.txt",
     "zod-LICENSE.txt",
   ]) {
@@ -43,7 +45,8 @@ test("the generated official PDF viewer and licenses are pinned", async () => {
 test("the generated stat-block viewer is self-contained and licensed", async () => {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(packageJson.devDependencies.html2canvas, "^1.4.1");
-  assert.equal(packageJson.devDependencies.esbuild, "^0.25.12");
+  assert.equal(packageJson.devDependencies.esbuild, undefined);
+  assert.equal(packageJson.devDependencies.vite, "6.4.3");
 
   const viewer = await readFile(new URL("../dist/apps/stat-block-viewer.html", import.meta.url), "utf8");
   assert.ok(viewer.length > 100_000);
