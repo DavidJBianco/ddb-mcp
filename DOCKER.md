@@ -28,14 +28,16 @@ Run the offline container integration suite with:
 make test-docker
 ```
 
-`make test` runs linting, type checks, offline MCP tests, and the Go helper
-tests without building the production container. `make test-all` adds the
+`make test` runs linting, type checks, offline MCP tests, synthetic headless-
+Chromium MCP App tests, and the Go helper tests without building the production
+container. `make test-all` adds the
 container suite.
 
 The suite exercises MCP initialization through the normal image entrypoint and
 uses a read-only mounted synthetic Playwright backend for browser-backed tool
 calls, including character PDF export and byte reconstruction, normalized
-search attribution, and both accessible and catalog sourcebook-search scopes.
+search attribution, stat-block resolution and rendered extraction, and both
+accessible and catalog sourcebook-search scopes.
 Container networking is disabled, and test fixtures are not copied into the
 production image. It also checks the non-root runtime and session mounts.
 CI runs the complete browser suite natively on AMD64. The ARM64 image runs the
@@ -148,9 +150,9 @@ profiles feature to be enabled first.
 
 The current Toolkit gateway path does not forward Claude Desktop's
 `io.modelcontextprotocol/ui` capability to Mysterium. Toolkit-routed PDF export
-therefore fails closed before browser acquisition; the other non-App tools
-remain available. Use the direct container configuration below when Claude
-inline PDF viewing is required.
+and stat-block viewing therefore fail closed before browser acquisition; the
+non-App tools, including JSON stat-block lookup, remain available. Use the
+direct container configuration below when inline MCP App viewing is required.
 
 ## Direct container use
 
@@ -198,6 +200,12 @@ The full example PDF server and its unrelated runtime dependencies are pruned;
 only Mysterium, the generated viewer, and the required license notices remain.
 PDF exports are held in bounded memory and are not written into the image or a
 container volume.
+
+The image also contains Mysterium's self-contained stat-block viewer. Its
+Vanilla TypeScript application and bundled rasterizer use no remote assets.
+Stat-block text is retrieved from the authenticated rendered page on demand and
+is not cached or persisted. PNG generation occurs inside the app; downloads use
+the host-mediated MCP Apps download method when the client supports it.
 
 Dependabot targets dependency updates at `dev`. Updating the exact PDF viewer
 package is deliberately not automatic: review the upstream and bundled

@@ -1,6 +1,6 @@
 # Mysterium
 
-Mysterium is a Docker-first [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for authenticated D&D Beyond content. It gives MCP clients access to a user's characters, campaigns, sourcebooks, and rendered rules indexes through a persistent browser session.
+Mysterium is a Docker-first [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for authenticated D&D Beyond content. It gives MCP clients access to a user's characters, campaigns, sourcebooks, cataloged monster and NPC stat blocks, and rendered rules indexes through a persistent browser session.
 
 Mysterium is an independent fork of the MIT-licensed [ddb-mcp](https://github.com/ddb-mcp/ddb-mcp) project. The original project established the core D&D Beyond browser integration; this fork has a distinct name and direction so users can tell the two projects apart.
 
@@ -13,6 +13,7 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 - The normal server mounts authentication state read-only and runs as an unprivileged container user.
 - Sourcebook support includes library discovery, outlines, stable section identifiers, bounded Markdown chunks, and cursor-based continuation.
 - Search results use consistent JSON envelopes and expose normalized source attribution when D&D Beyond renders it.
+- Deterministic stat-block lookup covers monsters, named NPCs, and generic NPCs in D&D Beyond's monster catalog, with a selectable-text MCP App viewer and local PNG export.
 - Offline MCP contract tests, synthetic browser tests, container hardening checks, and Docker MCP Toolkit compatibility checks are part of the project workflow.
 
 ## Tools
@@ -27,12 +28,14 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 | `mysterium_list_library` | List accessible sourcebooks and their slugs. |
 | `mysterium_read_book` | Discover outlines or read bounded chapter and section content with cursor pagination. |
 | `mysterium_search` | Search rendered D&D Beyond indexes and sourcebook listings. |
+| `mysterium_get_stat_block` | Resolve a cataloged monster or NPC and return its normalized rendered stat block as JSON and Markdown. |
+| `mysterium_view_stat_block` | Resolve a cataloged monster or NPC and open its stat block in an MCP App viewer with copy and PNG export actions. |
 | `mysterium_navigate` | Navigate to a D&D Beyond URL and return its rendered text. |
 | `mysterium_interact` | Click, fill, or capture a screenshot on the current page. |
 | `mysterium_current_page` | Return text from the current browser page. |
 
-`read_pdf_bytes` is an app-only helper used by the inline PDF viewer. Compatible
-clients hide it from the model-facing tool list.
+`read_pdf_bytes` and `read_stat_block_for_app` are app-only helpers used by the
+inline viewers. Compatible clients hide them from the model-facing tool list.
 
 ## Quickstart
 
@@ -77,7 +80,7 @@ mysterium-auth validate --live
 
 ### 3. Connect an MCP client
 
-For Claude Desktop PDF viewing, configure the released container as a direct
+For Claude Desktop PDF and stat-block viewing, configure the released container as a direct
 stdio server. The configuration key becomes Claude's tool namespace; it does
 not change Mysterium's registered tool names.
 
@@ -103,7 +106,8 @@ Restart Claude Desktop after changing its configuration. In the manually
 verified client configuration, direct stdio preserved Claude's MCP Apps
 capability and rendered the PDF inline. The Docker MCP Toolkit gateway did not
 forward that capability, so Toolkit-routed calls were safely rejected before
-contacting D&D Beyond. Toolkit remains usable for Mysterium's non-App tools.
+contacting D&D Beyond. Toolkit remains usable for Mysterium's non-App tools,
+including `mysterium_get_stat_block`.
 
 Docker MCP Toolkit users should download `mysterium.yaml` from the same GitHub
 Release as the helper. That catalog is already pinned to the release's immutable
@@ -155,6 +159,39 @@ up to 60 minutes of inactivity. It is never written to the normal container
 filesystem. The official viewer may request PDF.js Standard-14 font data from
 `unpkg.com` when the exported PDF does not embed a required standard font.
 
+## Looking up stat blocks
+
+Use `mysterium_get_stat_block` when the model needs structured JSON or faithful
+Markdown. Supply exactly one of a creature name or an ID:
+
+```json
+{
+  "query": "Guard",
+  "legacy": "include"
+}
+```
+
+`legacy` defaults to `include`, which prefers a sole current exact-name match
+and falls back to a sole entry bearing D&D Beyond's rendered Legacy badge. Use
+`exclude` or `only` to restrict that badge status. Edition labels such as `5e`
+and `5.5e` are reported separately and never used to infer Legacy status.
+Ambiguous exact names return candidates rather than silently choosing different
+rules content. An inaccessible preferred match likewise returns its failure and
+available alternatives. Creature IDs are intended to be reused from a candidate
+or monster-search result in the current server session; after restarting the
+server, resolve the creature by name again so Mysterium can recover and validate
+its canonical slugged URL.
+
+Use `mysterium_view_stat_block` with the same arguments for a D&D-inspired,
+accessible MCP App presentation. Its selectable-text viewer supports zoom,
+fullscreen, text and JSON copying, opening the canonical D&D Beyond page, and
+local 2x PNG generation. Very tall blocks are divided at section boundaries
+into numbered panels. The self-contained viewer requests only clipboard
+permission and fetches the rendered stat block on demand; Mysterium does not
+persist or cache its text. Version 1 covers entries discoverable under D&D
+Beyond's monster catalog, including NPC-tagged entries, but not stat blocks
+found only in sourcebook prose or homebrew-only discovery.
+
 ## Reading sourcebooks
 
 Call `mysterium_list_library` to discover accessible book slugs. Calling `mysterium_read_book` with only `book_slug` returns the book outline. Use a chapter path with `mode: "outline"` to discover stable section IDs:
@@ -205,6 +242,10 @@ normal and container suites. `IMAGE`, `TEST_IMAGE`, and `BIN_DIR` can be
 overridden on the command line; run `make help` for the complete target list.
 These same targets are the CI entry points, so local and automated verification
 use the same commands.
+
+`make test` includes the synthetic MCP App browser tests in headless Chromium;
+these remain fully offline and never read the saved D&D Beyond session. Use
+`make test-browser` to run only that focused UI suite while iterating.
 
 Authenticated tests are deliberately separate, read-only, and explicitly opted into. See [LIVE_TESTING.md](LIVE_TESTING.md). Never place a D&D Beyond session in the repository or GitHub Actions.
 

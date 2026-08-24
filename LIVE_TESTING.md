@@ -50,13 +50,14 @@ into a fixture, container layer, log, CI secret, or artifact.
 The suite reuses one MCP server/browser context and runs sequentially. It
 checks session restoration, character list/API retrieval/rendered fallback,
 rendered character-sheet PDF export and bounded byte reconstruction, campaign list/detail, safe navigation and
-current-page retrieval, search, library listing, sourcebook book/chapter
+current-page retrieval, search, one public catalog monster lookup and rendered
+stat-block shape, library listing, sourcebook book/chapter
 outlines, bounded chapter content, deterministic chapter and section cursor
 continuation, section retrieval by ID and unique heading, image metadata shape,
 and a screenshot-only generic interaction.
 
 Assertions inspect shapes only. Test output must not contain names, IDs,
-private URLs, character JSON or PDF contents, campaign or sourcebook text, cookies, or the
+private URLs, character JSON or PDF contents, stat-block prose, campaign or sourcebook text, cookies, or the
 session path. On failure, the suite prints only allowlisted diagnostics such as
 the failing tool, error category, HTTP status, redacted D&D Beyond endpoint,
 and safe error code; successful tests remain quiet. The PDF is reconstructed

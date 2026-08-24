@@ -154,6 +154,45 @@ test("ordinary search results cover absent, multiple, and incomplete attribution
   ]);
 });
 
+test("monster search preserves rendered Legacy and edition metadata without inferring it from source age", async () => {
+  let currentUrl = "about:blank";
+  let navigationOptions;
+  let waitedForSelector;
+  const page = {
+    goto: async (url, options) => { currentUrl = url; navigationOptions = options; },
+    url: () => currentUrl,
+    waitForTimeout: async () => {},
+    waitForSelector: async (selector) => { waitedForSelector = selector; },
+    evaluate: async (_extractor, category) => {
+      assert.equal(category, "monsters");
+      return [
+        {
+          name: "Synthetic Watcher",
+          type: "7",
+          url: "https://www.dndbeyond.com/monsters/42-synthetic-watcher",
+          sources: [{ title: "Older Compatible Expansion", url: null }],
+          monster: {
+            source: "Older Compatible Expansion",
+            edition: "5e",
+            legacy: false,
+            challengeRating: "7",
+            type: "Aberration",
+            tags: ["NPC"],
+            access: "unknown",
+          },
+        },
+      ];
+    },
+  };
+  const parsed = JSON.parse(await search({ pages: () => [page] }, "Synthetic Watcher", "monsters"));
+  assert.equal(navigationOptions.waitUntil, "domcontentloaded");
+  assert.match(waitedForSelector, /listing-body/);
+  assert.equal(parsed.results[0].creatureId, "42");
+  assert.equal(parsed.results[0].monster.legacy, false);
+  assert.equal(parsed.results[0].monster.edition, "5e");
+  assert.deepEqual(parsed.results[0].monster.tags, ["NPC"]);
+});
+
 function sourcebookHarness(cards, options = {}) {
   const visits = [];
   const fills = [];

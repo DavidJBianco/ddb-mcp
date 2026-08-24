@@ -108,6 +108,7 @@ server.tool(
   { query: z.string(), category: z.string().optional(), source_scope: z.enum(["accessible", "all"]).optional() },
   async ({ query, category, source_scope }) => {
     const sourcebook = category === "sourcebooks";
+    const monster = category === "monsters";
     const results = sourcebook
       ? [{
           name: sensitive,
@@ -117,9 +118,64 @@ server.tool(
           access: source_scope === "all" ? "unavailable" : "accessible",
           sources: [],
         }]
-      : [{ name: sensitive, type: "1st Level", url: "https://www.dndbeyond.com/spells/synthetic", sources: [] }];
+      : monster
+        ? [{
+            name: "Guard",
+            type: "1/8",
+            url: "https://www.dndbeyond.com/monsters/16915-guard",
+            creatureId: "16915",
+            sources: [],
+            monster: { source: "Basic Rules", edition: "5e", legacy: true, challengeRating: "1/8", type: "Humanoid", tags: ["NPC"], access: "unknown" },
+          }]
+        : [{ name: sensitive, type: "1st Level", url: "https://www.dndbeyond.com/spells/synthetic", sources: [] }];
     return text(JSON.stringify({ query, category: category ?? "all", count: results.length, results }));
   }
+);
+const syntheticStatBlock = {
+  kind: "stat_block",
+  creature: {
+    id: "16915", name: "Guard", url: "https://www.dndbeyond.com/monsters/16915-guard",
+    source: "Basic Rules", edition: "5e", legacy: true, size: "Medium", type: "Humanoid",
+    alignment: "Any Alignment", tags: ["NPC"], challengeRating: "1/8",
+  },
+  attributes: [{ label: "Armor Class", value: "16" }, { label: "Hit Points", value: "11" }],
+  abilities: [
+    { name: "STR", score: 13, modifier: "+1", save: "+1" },
+    { name: "DEX", score: 12, modifier: "+1", save: "+1" },
+    { name: "CON", score: 12, modifier: "+1", save: "+1" },
+    { name: "INT", score: 10, modifier: "+0", save: "+0" },
+    { name: "WIS", score: 11, modifier: "+0", save: "+0" },
+    { name: "CHA", score: 10, modifier: "+0", save: "+0" },
+  ],
+  sections: [{ title: "Actions", kind: "actions", entries: [{ name: "Spear", text: "Spear. Synthetic action text." }] }],
+  markdown: "# Guard\n\n## Actions\n\nSynthetic action text.",
+};
+server.tool(
+  "mysterium_get_stat_block",
+  "mock",
+  { query: z.string().optional(), creature_id: z.string().optional(), legacy: z.enum(["include", "exclude", "only"]).optional() },
+  async () => text(JSON.stringify(syntheticStatBlock))
+);
+server.registerTool(
+  "mysterium_view_stat_block",
+  {
+    description: "mock",
+    inputSchema: { query: z.string().optional(), creature_id: z.string().optional(), legacy: z.enum(["include", "exclude", "only"]).optional() },
+    _meta: { ui: { resourceUri: "ui://mysterium/stat-block-viewer.html" } },
+  },
+  async () => ({
+    content: [{ type: "text", text: "Ready to display Guard." }],
+    structuredContent: { kind: "resolved", query: "Guard", normalizedQuery: "guard", legacy: "include", candidate: { id: "16915", name: "Guard" } },
+  })
+);
+server.registerTool(
+  "read_stat_block_for_app",
+  {
+    description: "mock",
+    inputSchema: { creature_id: z.string(), creature_url: z.string().url().optional() },
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  async () => ({ content: [{ type: "text", text: "Loaded Guard." }], structuredContent: syntheticStatBlock })
 );
 server.tool("mysterium_list_library", "mock", {}, async () =>
   text(JSON.stringify({ books: [{ slug: "synthetic-book", title: sensitive }] }))

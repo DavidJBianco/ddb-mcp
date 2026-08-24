@@ -314,6 +314,42 @@ test(
       }
     });
 
+    await t.test("resolves and reads a representative public stat block", async (statBlockTest) => {
+      const catalog = parseJson(
+        await callText(client, diagnostics, "mysterium_search", { query: "Guard", category: "monsters" }),
+        "mysterium_search monsters"
+      );
+      requireStructure(Array.isArray(catalog.results), "monster search results shape changed");
+      const guard = catalog.results.find(
+        (result) => result?.name?.trim().toLocaleLowerCase("en-US") === "guard" && /^\d+$/.test(result.creatureId ?? "")
+      );
+      if (!guard) {
+        statBlockTest.skip("the monster catalog returned no exact public Guard entry");
+        return;
+      }
+
+      const block = parseJson(
+        await callText(client, diagnostics, "mysterium_get_stat_block", { creature_id: guard.creatureId }),
+        "mysterium_get_stat_block"
+      );
+      requireStructure(block.kind === "stat_block", "stat-block result kind changed");
+      requireStructure(block.creature?.id === guard.creatureId, "stat-block creature ID changed");
+      requireStructure(typeof block.creature?.name === "string" && block.creature.name.length > 0, "stat-block name is missing");
+      requireStructure(Array.isArray(block.attributes) && block.attributes.length > 0, "stat-block attributes are missing");
+      const attributeLabels = block.attributes.map((attribute) => attribute?.label?.trim().toLocaleLowerCase("en-US"));
+      requireStructure(attributeLabels.some((label) => label === "armor class" || label === "ac"), "stat-block Armor Class/AC is missing");
+      requireStructure(attributeLabels.some((label) => label === "hit points" || label === "hp"), "stat-block Hit Points/HP is missing");
+      requireStructure(Array.isArray(block.abilities) && block.abilities.length === 6, "stat-block abilities are incomplete");
+      requireStructure(Array.isArray(block.sections) && block.sections.length > 0, "stat-block sections are missing");
+      requireStructure(typeof block.markdown === "string" && block.markdown.length > 0, "stat-block Markdown is missing");
+      requireStructure(
+        typeof block.creature?.url === "string" && /^https:\/\/www\.dndbeyond\.com\/monsters\/\d+(?:-[a-z0-9-]+)?$/i.test(block.creature.url),
+        "stat-block URL is unsafe or changed"
+      );
+      requireStructure([null, "5e", "5.5e"].includes(block.creature?.edition), "stat-block edition shape changed");
+      requireStructure(typeof block.creature?.legacy === "boolean", "stat-block Legacy status shape changed");
+    });
+
     await t.test("searches accessible and catalog sourcebooks without reading them", async () => {
       for (const sourceScope of [undefined, "all"]) {
         const parsed = parseJson(

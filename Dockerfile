@@ -9,7 +9,9 @@ RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
+COPY apps ./apps
 COPY scripts/sync-pdf-viewer.mjs ./scripts/sync-pdf-viewer.mjs
+COPY scripts/build-stat-block-viewer.mjs ./scripts/build-stat-block-viewer.mjs
 RUN npm run build && npm prune --omit=dev
 
 

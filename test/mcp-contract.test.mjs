@@ -43,6 +43,9 @@ test("every tool converts a browser dependency failure into an MCP tool error", 
     ["mysterium_list_characters", {}],
     ["mysterium_get_character", { character_id: "4242" }],
     ["mysterium_export_character_pdf", { character_id: "4242" }],
+    ["mysterium_get_stat_block", { query: "Synthetic Watcher" }],
+    ["mysterium_view_stat_block", { query: "Synthetic Watcher" }],
+    ["read_stat_block_for_app", { creature_id: "42" }],
     ["mysterium_get_campaign", { campaign_id: "7" }],
     ["mysterium_list_campaigns", {}],
     ["mysterium_navigate", { url: "https://www.dndbeyond.com/synthetic-page" }],
@@ -77,6 +80,9 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
     ["mysterium_get_character", {}],
     ["mysterium_export_character_pdf", {}],
     ["mysterium_export_character_pdf", { character_id: "not-a-number" }],
+    ["mysterium_get_stat_block", { creature_id: "not-a-number" }],
+    ["mysterium_view_stat_block", { creature_id: "not-a-number" }],
+    ["read_stat_block_for_app", { creature_id: "not-a-number" }],
     ["read_pdf_bytes", { url: "mysterium://character-pdf/missing/file.pdf", offset: -1 }],
     ["mysterium_get_campaign", {}],
     ["mysterium_navigate", {}],
@@ -111,6 +117,25 @@ test("character PDF export rejects a client without MCP Apps before browser acce
   assert.equal(contextRequested, false);
 });
 
+test("stat-block tools enforce XOR input and viewer capability before browser access", async (t) => {
+  let contextRequested = false;
+  const provider = async () => {
+    contextRequested = true;
+    throw new Error("browser must not be requested");
+  };
+  const client = await connect(t, provider, { supportsApps: false });
+
+  for (const arguments_ of [{}, { query: "Guard", creature_id: "16915" }]) {
+    const result = await client.callTool({ name: "mysterium_get_stat_block", arguments: arguments_ });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /exactly one/);
+  }
+  const viewer = await client.callTool({ name: "mysterium_view_stat_block", arguments: { query: "Guard" } });
+  assert.equal(viewer.isError, true);
+  assert.match(viewer.content[0].text, /does not advertise MCP Apps/);
+  assert.equal(contextRequested, false);
+});
+
 test("character PDF tools and UI resource expose the intended MCP Apps contract", async (t) => {
   const client = await connect(t, async () => {
     throw new Error("contract inspection must not request a browser");
@@ -140,6 +165,37 @@ test("character PDF tools and UI resource expose the intended MCP Apps contract"
     connectDomains: ["https://unpkg.com"],
     resourceDomains: ["https://unpkg.com"],
   });
+});
+
+test("stat-block tools and viewer resource expose separate model and app data paths", async (t) => {
+  const client = await connect(t, async () => {
+    throw new Error("contract inspection must not request a browser");
+  });
+  const listed = await client.listTools();
+  const getTool = listed.tools.find(({ name }) => name === "mysterium_get_stat_block");
+  assert.deepEqual(getTool.inputSchema.properties.legacy.enum, ["include", "exclude", "only"]);
+  assert.equal(getTool.inputSchema.required, undefined);
+
+  const viewTool = listed.tools.find(({ name }) => name === "mysterium_view_stat_block");
+  assert.equal(viewTool._meta.ui.resourceUri, "ui://mysterium/stat-block-viewer.html");
+  assert.equal(viewTool.annotations.readOnlyHint, true);
+  assert.deepEqual(viewTool.outputSchema.properties.kind.enum, ["resolved", "candidates", "not_found"]);
+
+  const appReader = listed.tools.find(({ name }) => name === "read_stat_block_for_app");
+  assert.deepEqual(appReader._meta.ui.visibility, ["app"]);
+  assert.match(appReader.inputSchema.properties.creature_id.pattern, /\\d/);
+  assert.equal(appReader.inputSchema.properties.creature_url.format, "uri");
+
+  const resources = await client.listResources();
+  const viewer = resources.resources.find(({ uri }) => uri === "ui://mysterium/stat-block-viewer.html");
+  assert.equal(viewer.mimeType, "text/html;profile=mcp-app");
+  const resource = await client.readResource({ uri: viewer.uri });
+  assert.equal(resource.contents[0].mimeType, "text/html;profile=mcp-app");
+  assert.ok(resource.contents[0].text.length > 100_000);
+  assert.match(resource.contents[0].text, /Download PNG/);
+  assert.doesNotMatch(resource.contents[0].text, /https:\/\/(?:unpkg|cdn)\./);
+  assert.deepEqual(resource.contents[0]._meta.ui.permissions, { clipboardWrite: {} });
+  assert.equal(resource.contents[0]._meta.ui.csp, undefined);
 });
 
 test("mysterium_read_book rejects invalid field combinations and malformed cursors before browser access", async (t) => {

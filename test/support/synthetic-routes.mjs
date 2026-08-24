@@ -18,6 +18,42 @@ const searchPage = `<!doctype html><html><body><main class="listing-body">
   </div>
 </main></body></html>`;
 
+const monsterSearchPage = `<!doctype html><html><body><main class="listing-body">
+  <div class="info" data-slug="synthetic-watcher">
+    <a class="link" href="/monsters/42-synthetic-watcher">Synthetic Watcher</a>
+    <div class="row monster-challenge"><span>7</span></div>
+    <div class="row monster-type">Aberration</div>
+    <div class="row monster-tags">NPC</div>
+    <div class="source">Synthetic Manual 5.5e</div>
+  </div>
+  <div class="info legacy" data-slug="synthetic-watcher-legacy">
+    <a class="link" href="/monsters/41-synthetic-watcher">Synthetic Watcher</a>
+    <div>Legacy This doesn't reflect the latest rules and lore.</div>
+    <div class="row monster-challenge"><span>6</span></div>
+    <div class="row monster-type">Aberration</div>
+    <div class="source">Synthetic Manual 5e</div>
+  </div>
+</main></body></html>`;
+
+const statBlockPage = `<!doctype html><html><body><main>
+  <article class="mon-stat-block" data-testid="monster-stat-block">
+    <header><h1>Synthetic Watcher</h1><p class="mon-stat-block__meta">Large Aberration, Neutral</p></header>
+    <p><strong>Armor Class</strong> 16 (synthetic armor)</p>
+    <p><strong>Hit Points</strong> 84 (8d10 + 40)</p>
+    <p><strong>Speed</strong> 30 ft., fly 40 ft.</p>
+    <div class="ability"><span>STR</span><span>18 (+4)</span></div><div class="ability"><span>DEX</span><span>14 (+2)</span></div><div class="ability"><span>CON</span><span>20 (+5)</span></div><div class="ability"><span>INT</span><span>12 (+1)</span></div><div class="ability"><span>WIS</span><span>16 (+3)</span></div><div class="ability"><span>CHA</span><span>10 (+0)</span></div>
+    <p><strong>Senses</strong> darkvision 120 ft., passive Perception 13</p>
+    <p><strong>Languages</strong> Common, Deep Speech</p>
+    <p><strong>Challenge</strong> 7 (2,900 XP)</p>
+    <h2>Traits</h2>
+    <p><strong>Steady Gaze.</strong> The watcher sees through entirely synthetic illusions.</p>
+    <h2>Actions</h2>
+    <p><strong>Observing Ray.</strong> Ranged Spell Attack: +7 to hit. Hit: 13 synthetic damage.</p>
+    <footer class="source">Synthetic Manual 5.5e</footer>
+  </article>
+  <section id="comments"><h2>Comments</h2><p>This comment must never be extracted.</p></section>
+</main></body></html>`;
+
 const charactersPage = `<!doctype html><html><body><main><ul>
   <li class="ddb-campaigns-character-card-wrapper">
     <div class="ddb-campaigns-character-card-header-upper-character-info">
@@ -165,6 +201,19 @@ export async function installSyntheticRoutes(context, options = {}) {
       (url.pathname === "/spells" || url.pathname === "/search")
     ) {
       await route.fulfill(html(searchPage));
+      return;
+    }
+
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/monsters") {
+      await route.fulfill(html(monsterSearchPage));
+      return;
+    }
+
+    if (
+      url.origin === "https://www.dndbeyond.com" &&
+      (url.pathname === "/monsters/42" || url.pathname === "/monsters/42-synthetic-watcher")
+    ) {
+      await route.fulfill(html(statBlockPage));
       return;
     }
 

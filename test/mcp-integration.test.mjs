@@ -88,6 +88,68 @@ test("an MCP Apps client exports and reconstructs a synthetic character PDF", as
   assert.deepEqual(Buffer.concat(loaded), bytes);
 });
 
+test("the stat-block viewer keeps canonical content app-private for redraws", async (t) => {
+  const resultRow = {
+    name: "Synthetic Watcher",
+    type: "7",
+    url: "https://www.dndbeyond.com/monsters/42-synthetic-watcher",
+    sources: [],
+    creatureId: "42",
+    monster: {
+      source: "Synthetic Manual",
+      edition: "5.5e",
+      legacy: false,
+      challengeRating: "7",
+      type: "Aberration",
+      tags: [],
+      access: "unknown",
+    },
+  };
+  const extracted = {
+    name: "Synthetic Watcher",
+    source: "Synthetic Manual",
+    edition: "5.5e",
+    legacy: false,
+    size: "Large",
+    type: "Aberration",
+    alignment: "Neutral",
+    tags: [],
+    challengeRating: "7",
+    attributes: [{ label: "AC", value: "16" }],
+    abilities: [],
+    sections: [{ title: "Actions", kind: "actions", entries: [{ name: "Ray", text: "Ray. Synthetic attack." }] }],
+    markdown: "# Synthetic Watcher",
+  };
+  const context = {
+    newPage: async () => {
+      let currentUrl = "about:blank";
+      return {
+        goto: async (url) => { currentUrl = url; },
+        url: () => currentUrl,
+        close: async () => {},
+        waitForTimeout: async () => {},
+        waitForSelector: async () => {},
+        evaluate: async (_extractor, argument) => {
+          if (currentUrl === "https://www.dndbeyond.com") return true;
+          if (argument === "monsters") return [resultRow];
+          return extracted;
+        },
+      };
+    },
+  };
+  const client = await connectClient(t, async () => context);
+  const viewed = await client.callTool({
+    name: "mysterium_view_stat_block",
+    arguments: { query: "Synthetic Watcher" },
+  });
+
+  assert.equal(viewed.isError, undefined);
+  assert.equal(viewed.structuredContent.kind, "resolved");
+  assert.equal(viewed.structuredContent.statBlock, undefined);
+  assert.equal(viewed._meta.statBlock.kind, "stat_block");
+  assert.equal(viewed._meta.statBlock.creature.name, "Synthetic Watcher");
+});
+
 test("an MCP client can discover and call tools through the real server", async (t) => {
   const visits = [];
   let contextRequests = 0;
@@ -115,7 +177,7 @@ test("an MCP client can discover and call tools through the real server", async 
   const listed = await client.listTools();
   assert.equal(
     client.getInstructions(),
-    "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes."
+    "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes."
   );
   const toolNames = listed.tools.map(({ name }) => name);
   assert.ok(toolNames.includes("mysterium_current_page"));
