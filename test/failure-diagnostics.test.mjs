@@ -41,3 +41,14 @@ test("offline subprocess diagnostics are appended only after failure", async () 
     /synthetic assertion failed\nsynthetic server diagnostics:\nfull synthetic stderr/
   );
 });
+
+test("stat-block live failures receive allowlisted actionable categories", () => {
+  assert.match(
+    summarizeLiveFailure("D&D Beyond's stat-block layout was not recognized."),
+    /category: stat-block layout/
+  );
+  assert.match(
+    summarizeLiveFailure("This stat block is not accessible with the current D&D Beyond account."),
+    /category: inaccessible content/
+  );
+});

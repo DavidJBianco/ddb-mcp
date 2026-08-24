@@ -166,6 +166,35 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.deepEqual(catalogSources.results.map(({ access }) => access), ["accessible", "unavailable"]);
     assert.match(catalogSources.results[1].url, /marketplace\.dndbeyond\.com/);
 
+    const statBlock = JSON.parse(await callSuccessfully("mysterium_get_stat_block", {
+      query: "Synthetic Watcher",
+    }));
+    assert.equal(statBlock.kind, "stat_block");
+    assert.equal(statBlock.creature.id, "42");
+    assert.equal(statBlock.creature.source, "Synthetic Manual");
+    assert.equal(statBlock.creature.edition, "5.5e");
+    assert.equal(statBlock.creature.legacy, false);
+    assert.match(statBlock.markdown, /Observing Ray/);
+    assert.doesNotMatch(statBlock.markdown, /comment must never/);
+
+    const viewedStatBlock = await client.callTool({
+      name: "mysterium_view_stat_block",
+      arguments: { query: "Synthetic Watcher" },
+    });
+    assert.equal(viewedStatBlock.isError, undefined);
+    calledTools.push("mysterium_view_stat_block");
+    assert.equal(viewedStatBlock.structuredContent.kind, "resolved");
+    assert.equal(viewedStatBlock.structuredContent.candidate.id, "42");
+
+    const appStatBlock = await client.callTool({
+      name: "read_stat_block_for_app",
+      arguments: { creature_id: "42" },
+    });
+    assert.equal(appStatBlock.isError, undefined);
+    calledTools.push("read_stat_block_for_app");
+    assert.equal(appStatBlock.structuredContent.kind, "stat_block");
+    assert.equal(appStatBlock.structuredContent.creature.name, "Synthetic Watcher");
+
     assert.equal(JSON.parse(await callSuccessfully("mysterium_list_library")).count, 1);
     const bookOutline = JSON.parse(await callSuccessfully("mysterium_read_book", {
       book_slug: "synthetic-handbook",

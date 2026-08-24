@@ -78,12 +78,22 @@ test("production image contains no test or session material", () => {
     "present"
   );
   assert.equal(
+    dockerRun("stat-block-viewer", [
+      "--entrypoint",
+      "sh",
+      image,
+      "-c",
+      "test -s /app/dist/apps/stat-block-viewer.html && test -s /app/third_party/stat-block-viewer/NOTICE.md && ! grep -Eq '<script[^>]+src=|<link[^>]+href=' /app/dist/apps/stat-block-viewer.html && echo present",
+    ]),
+    "present"
+  );
+  assert.equal(
     dockerRun("pdf-build-dependencies", [
       "--entrypoint",
       "sh",
       image,
       "-c",
-      "for path in /app/node_modules/@modelcontextprotocol/server-pdf /app/node_modules/pdfjs-dist /app/node_modules/@cantoo/pdf-lib; do test ! -e \"$path\" || exit 1; done; echo pruned",
+      "for path in /app/node_modules/@modelcontextprotocol/server-pdf /app/node_modules/pdfjs-dist /app/node_modules/@cantoo/pdf-lib /app/node_modules/esbuild /app/node_modules/html2canvas; do test ! -e \"$path\" || exit 1; done; echo pruned",
     ]),
     "pruned"
   );

@@ -39,3 +39,21 @@ test("the generated official PDF viewer and licenses are pinned", async () => {
     assert.ok(license.length > 100, `${name} must contain its attribution or license text`);
   }
 });
+
+test("the generated stat-block viewer is self-contained and licensed", async () => {
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(packageJson.devDependencies.html2canvas, "^1.4.1");
+  assert.equal(packageJson.devDependencies.esbuild, "^0.25.12");
+
+  const viewer = await readFile(new URL("../dist/apps/stat-block-viewer.html", import.meta.url), "utf8");
+  assert.ok(viewer.length > 100_000);
+  assert.match(viewer, /Mysterium Stat Block Viewer/);
+  assert.match(viewer, /Download PNG/);
+  assert.doesNotMatch(viewer, /<script[^>]+src=|<link[^>]+href=/i);
+  assert.doesNotMatch(viewer, /https:\/\/(?:unpkg|cdn)\./i);
+
+  for (const name of ["NOTICE.md", "html2canvas-LICENSE.txt", "bundled-dependencies-LICENSES.txt"]) {
+    const notice = await readFile(new URL(`../third_party/stat-block-viewer/${name}`, import.meta.url), "utf8");
+    assert.ok(notice.length > 100);
+  }
+});

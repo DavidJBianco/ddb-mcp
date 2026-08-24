@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mysterium Stat Block</title>
+  <style>/*__STAT_BLOCK_CSS__*/</style>
+</head>
+<body>
+  <main class="app-shell" id="app-shell">
+    <header class="toolbar" aria-label="Stat block controls">
+      <div class="toolbar-title" id="toolbar-title">Stat Block</div>
+      <div class="toolbar-controls">
+        <button id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">−</button>
+        <output id="zoom-level" aria-live="polite">100%</output>
+        <button id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in">+</button>
+        <button id="copy-text" type="button">Copy text</button>
+        <button id="copy-json" type="button">Copy JSON</button>
+        <button id="copy-image" type="button">Copy image</button>
+        <button id="download-png" type="button">Download PNG</button>
+        <button id="open-source" type="button">Open D&amp;D Beyond</button>
+        <button id="fullscreen" type="button" title="Fullscreen" aria-label="Toggle fullscreen">⛶</button>
+      </div>
+    </header>
+    <section class="content" id="content">
+      <div class="status" id="status" role="status">Loading stat block…</div>
+      <div class="candidate-list" id="candidate-list" hidden></div>
+      <article class="stat-block" id="stat-block" hidden aria-labelledby="creature-name"></article>
+    </section>
+  </main>
+  <div id="export-stage" aria-hidden="true"></div>
+  <script>/*__STAT_BLOCK_JS__*/</script>
+</body>
+</html>

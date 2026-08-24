@@ -3,6 +3,33 @@ import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../s
 import { extractLibraryBookCards } from "./library.js";
 const DDB_ORIGIN = "https://www.dndbeyond.com";
 const SOURCE_SLUG_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9/_-]*$/;
+const MONSTER_PATH_PATTERN = /^\/monsters\/(\d+)(?:-[a-zA-Z0-9][a-zA-Z0-9-]*)?\/?$/;
+const MAX_REMEMBERED_MONSTER_URLS = 512;
+const monsterUrlByCreatureId = new Map();
+function rememberMonsterUrl(creatureId, value) {
+    try {
+        const url = new URL(value, DDB_ORIGIN);
+        const urlId = url.protocol === "https:" && ["dndbeyond.com", "www.dndbeyond.com"].includes(url.hostname.toLowerCase())
+            ? url.pathname.match(MONSTER_PATH_PATTERN)?.[1]
+            : undefined;
+        if (urlId !== creatureId)
+            return;
+        monsterUrlByCreatureId.delete(creatureId);
+        monsterUrlByCreatureId.set(creatureId, url.href);
+        while (monsterUrlByCreatureId.size > MAX_REMEMBERED_MONSTER_URLS) {
+            const oldest = monsterUrlByCreatureId.keys().next().value;
+            if (oldest === undefined)
+                break;
+            monsterUrlByCreatureId.delete(oldest);
+        }
+    }
+    catch {
+        // Search results with malformed URLs are returned without a reusable creature URL.
+    }
+}
+export function rememberedMonsterUrl(creatureId) {
+    return monsterUrlByCreatureId.get(creatureId);
+}
 function normalizeText(value) {
     const normalized = (value ?? "").replace(/\s+/g, " ").trim();
     return normalized || null;
@@ -101,13 +128,68 @@ async function extractOrdinaryResults(page, category) {
                 const schoolEl = el.querySelector(".row.spell-school .school");
                 const schoolName = schoolEl ? (schoolEl.className.replace("school", "").trim() || "") : "";
                 const extras = [normalize(levelEl?.textContent), schoolName].filter(Boolean).join(" | ");
-                if (name)
-                    items.push({ name, type: extras, url, sources: sourcesFor(el, nameLink) });
+                const sources = sourcesFor(el, nameLink);
+                if (name && cat === "monsters") {
+                    const text = normalize(el.textContent);
+                    const editionMatch = text.match(/\b(5\.5e|5e)\b/i);
+                    const tagContainer = el.querySelector(".row.monster-tags, [class*='monster-tag' i], [data-testid*='tag' i]");
+                    const tags = normalize(tagContainer?.textContent)
+                        .replace(/^Monster Tags?:?\s*/i, "")
+                        .split(/[,;|]/)
+                        .map(normalize)
+                        .filter(Boolean);
+                    const sourceContainer = el.querySelector(".source, .sources, [data-testid*='source' i], [class*='source-name' i], [class*='sourcebook' i]");
+                    const source = normalize(sourceContainer?.textContent)
+                        .replace(/^Sources?:?\s*/i, "")
+                        .replace(/\s+(?:5\.5e|5e)$/i, "")
+                        .replace(/\s+/g, " ")
+                        .trim();
+                    const monsterType = normalize(el.querySelector(".row.monster-type, [class*='monster-type' i]")?.textContent);
+                    const unavailable = /view in store|purchase|unlock/i.test(text) || Boolean(el.querySelector("[class*='locked' i], [data-testid*='locked' i]"));
+                    items.push({
+                        name,
+                        type: extras,
+                        url,
+                        sources,
+                        monster: {
+                            source: source || null,
+                            edition: editionMatch ? editionMatch[1].toLowerCase() : null,
+                            legacy: /\bLegacy\b/i.test(text) || Boolean(el.querySelector("[class*='legacy' i], [data-testid*='legacy' i]")),
+                            challengeRating: normalize(levelEl?.textContent) || null,
+                            type: monsterType || null,
+                            tags,
+                            access: unavailable ? "unavailable" : "unknown",
+                        },
+                    });
+                }
+                else if (name)
+                    items.push({ name, type: extras, url, sources });
             });
         }
         return items;
     }, category);
-    return rawResults.map((result) => ({ ...result, sources: normalizeSourceAttributions(result.sources ?? []) }));
+    return rawResults.map((result) => {
+        let creatureId;
+        if (category === "monsters") {
+            try {
+                const parsed = new URL(result.url, DDB_ORIGIN);
+                creatureId = parsed.protocol === "https:" && (parsed.hostname === "dndbeyond.com" || parsed.hostname === "www.dndbeyond.com")
+                    ? parsed.pathname.match(MONSTER_PATH_PATTERN)?.[1] ?? null
+                    : null;
+            }
+            catch {
+                creatureId = null;
+            }
+        }
+        const normalized = {
+            ...result,
+            sources: normalizeSourceAttributions(result.sources ?? []),
+            ...(category === "monsters" ? { creatureId } : {}),
+        };
+        if (category === "monsters" && creatureId)
+            rememberMonsterUrl(creatureId, result.url);
+        return normalized;
+    });
 }
 async function searchSourcebooks(page, query, scope) {
     if (!(await isLoggedIn(page)))
@@ -135,9 +217,9 @@ async function searchSourcebooks(page, query, scope) {
     }));
     return { url, results };
 }
-export async function search(context, query, category = "all", sourceScope) {
+export async function searchResults(context, query, category = "all", sourceScope, pageOverride) {
     const scope = validateSearchRequest(category, sourceScope);
-    const page = await getPage(context);
+    const page = pageOverride ?? await getPage(context);
     let searchUrl;
     let results;
     if (category === "sourcebooks") {
@@ -160,11 +242,20 @@ export async function search(context, query, category = "all", sourceScope) {
         searchUrl = category === "all"
             ? `${DDB_ORIGIN}/search?q=${encodedQuery}`
             : `${DDB_ORIGIN}/${path}?filter-search=${encodedQuery}`;
-        await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 30_000 });
+        await page.goto(searchUrl, {
+            waitUntil: category === "monsters" ? "domcontentloaded" : "networkidle",
+            timeout: 30_000,
+        });
         throwIfAuthenticationRedirect(page);
+        if (category === "monsters") {
+            await page.waitForSelector(".listing-body, .search-results, [data-testid*='monster' i], main", { timeout: 15_000 }).catch(() => undefined);
+        }
         await page.waitForTimeout(1500);
         results = await extractOrdinaryResults(page, category);
     }
-    return JSON.stringify({ query, category, url: searchUrl, count: results.length, results }, null, 2);
+    return { query, category, url: searchUrl, count: results.length, results };
+}
+export async function search(context, query, category = "all", sourceScope) {
+    return JSON.stringify(await searchResults(context, query, category, sourceScope), null, 2);
 }
 //# sourceMappingURL=search.js.map

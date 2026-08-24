@@ -86,6 +86,12 @@ jobs:
           go-version-file: cmd/mysterium-auth/go.mod
           cache-dependency-path: cmd/mysterium-auth/go.sum
 
+      - name: Install locked dependencies
+        run: make deps
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
       - name: Verify release source
         run: |
           make test

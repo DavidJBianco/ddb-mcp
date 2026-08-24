@@ -23,7 +23,8 @@ help:
 		'make helper       Build $(AUTH_HELPER) for the current host' \
 		'make release-catalog  Generate a catalog pinned to RELEASE_IMAGE' \
 		'make check        Run lint and type checks' \
-		'make test         Run lint, type checks, offline tests, and Go tests' \
+		'make test         Run lint, type checks, offline tests (including browser UI), and Go tests' \
+		'make test-browser Run only the synthetic browser UI tests' \
 		'make test-docker  Build and exercise the production container' \
 		'make test-all     Run the normal and Docker test suites' \
 		'make live-test    Run the opt-in, read-only Docker live suite' \
@@ -75,6 +76,9 @@ test: check test-helper test-offline
 
 test-offline: deps
 	npm test
+
+test-browser: deps
+	npm run test:browser
 
 test-helper: check-auth-version
 	go -C cmd/mysterium-auth test ./...

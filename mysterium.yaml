@@ -4,6 +4,7 @@ type: server
 image: mysterium:local
 description: >-
   A locally built MCP server for authenticated D&D Beyond characters,
-  campaigns, sourcebooks, and rules content.
+  campaigns, sourcebooks, cataloged monster and NPC stat blocks, and rules
+  content.
 volumes:
   - mysterium-session:/home/mcp/.config/mysterium:ro

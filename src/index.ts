@@ -23,6 +23,13 @@ import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
 import { search, validateSearchRequest } from "./tools/search.js";
 import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
+import {
+  extractStatBlock,
+  getStatBlock,
+  resolveStatBlock,
+  validateStatBlockRequest,
+  type StatBlockRequest,
+} from "./tools/stat-block.js";
 import { PACKAGE_VERSION } from "./version.js";
 
 // Lazy-initialized shared browser context
@@ -37,7 +44,19 @@ export interface ServerOptions {
 }
 
 const CHARACTER_PDF_RESOURCE_URI = "ui://mysterium/character-pdf-viewer.html";
-const viewerPath = new URL("../dist/apps/character-pdf-viewer.html", import.meta.url);
+const characterPdfViewerPath = new URL("../dist/apps/character-pdf-viewer.html", import.meta.url);
+const STAT_BLOCK_RESOURCE_URI = "ui://mysterium/stat-block-viewer.html";
+const statBlockViewerPath = new URL("../dist/apps/stat-block-viewer.html", import.meta.url);
+
+const statBlockInputSchema = {
+  query: z.string().min(1).optional().describe("Creature name to resolve through D&D Beyond's monster catalog."),
+  creature_id: z.string().regex(/^\d+$/).optional().describe("Exact numeric creature ID returned by a previous candidate result."),
+  legacy: z.enum(["include", "exclude", "only"]).optional().describe("How to treat D&D Beyond's per-entry Legacy badge. Defaults to include while preferring a sole non-Legacy exact match."),
+};
+
+function statBlockRequest(query?: string, creatureId?: string, legacy?: "include" | "exclude" | "only"): StatBlockRequest {
+  return { query, creatureId, legacy };
+}
 
 export function createServer(
   getContextForTool: BrowserContextProvider = getSharedContext,
@@ -47,7 +66,7 @@ export function createServer(
     name: "mysterium",
     version: PACKAGE_VERSION,
   }, {
-    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
+    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
   });
   const characterPdfStore = new CharacterPdfStore(options.characterPdfDependencies);
 
@@ -205,7 +224,7 @@ registerAppResource(
     contents: [{
       uri: CHARACTER_PDF_RESOURCE_URI,
       mimeType: RESOURCE_MIME_TYPE,
-      text: await readFile(viewerPath, "utf8"),
+      text: await readFile(characterPdfViewerPath, "utf8"),
       _meta: {
         ui: {
           permissions: { clipboardWrite: {} },
@@ -215,6 +234,135 @@ registerAppResource(
           },
         },
       },
+    }],
+  })
+);
+
+// ─── Stat block lookup and viewer ───────────────────────────────────────────────────
+server.tool(
+  "mysterium_get_stat_block",
+  "Resolve and retrieve a rendered D&D Beyond stat block as normalized JSON and faithful Markdown. Covers cataloged monsters and NPCs; ambiguous exact names return candidates.",
+  statBlockInputSchema,
+  async ({ query, creature_id, legacy }) => {
+    try {
+      const request = statBlockRequest(query, creature_id, legacy);
+      validateStatBlockRequest(request);
+      const context = await getContextForTool();
+      const result = await getStatBlock(context, request);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        structuredContent: result,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Stat block lookup failed.";
+      return { content: [{ type: "text", text: `Failed to get stat block: ${msg}` }], isError: true };
+    }
+  }
+);
+
+registerAppTool(
+  server,
+  "mysterium_view_stat_block",
+  {
+    title: "View D&D Beyond Stat Block",
+    description: "Resolve a cataloged monster or NPC and display its authenticated D&D Beyond stat block in a read-only viewer with PNG export.",
+    inputSchema: statBlockInputSchema,
+    outputSchema: z.object({ kind: z.enum(["resolved", "candidates", "not_found"]) }).passthrough(),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    _meta: { ui: { resourceUri: STAT_BLOCK_RESOURCE_URI } },
+  },
+  async ({ query, creature_id, legacy }) => {
+    const request = statBlockRequest(query, creature_id, legacy);
+    try {
+      validateStatBlockRequest(request);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid stat block request.";
+      return { content: [{ type: "text", text: `Failed to view stat block: ${msg}` }], isError: true };
+    }
+    const uiCapability = getUiCapability(server.server.getClientCapabilities());
+    if (!uiCapability?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) {
+      return {
+        content: [{ type: "text", text: "This client does not advertise MCP Apps stat-block viewing support; no D&D Beyond request was made. Use mysterium_get_stat_block for JSON instead." }],
+        isError: true,
+      };
+    }
+    try {
+      const context = await getContextForTool();
+      const resolution = await resolveStatBlock(context, request);
+      const statBlock = resolution.kind === "resolved"
+        ? await extractStatBlock(context, resolution.candidate.id, resolution.candidate.url)
+        : undefined;
+      const summary = resolution.kind === "resolved"
+        ? `Ready to display ${resolution.candidate.name}.`
+        : resolution.kind === "candidates"
+          ? `Choose one of ${resolution.candidates.length} exact stat-block matches in the viewer.`
+          : `No exact stat block was found for ${resolution.query}.`;
+      return {
+        content: [{ type: "text", text: summary }],
+        structuredContent: resolution,
+        _meta: {
+          interactEnabled: true,
+          writable: false,
+          ...(statBlock ? { statBlock } : {}),
+        },
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Stat block viewer failed.";
+      return { content: [{ type: "text", text: `Failed to view stat block: ${msg}` }], isError: true };
+    }
+  }
+);
+
+registerAppTool(
+  server,
+  "read_stat_block_for_app",
+  {
+    title: "Read Stat Block for Viewer",
+    description: "Retrieve one rendered stat block for the Mysterium viewer. The model should not call this tool directly.",
+    inputSchema: {
+      creature_id: z.string().regex(/^\d+$/),
+      creature_url: z.string().url().optional(),
+    },
+    outputSchema: z.object({ kind: z.literal("stat_block") }).passthrough(),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  async ({ creature_id, creature_url }) => {
+    try {
+      const context = await getContextForTool();
+      const result = await extractStatBlock(context, creature_id, creature_url);
+      return {
+        content: [{ type: "text", text: `Loaded ${result.creature.name} for the stat-block viewer.` }],
+        structuredContent: result,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unable to load the stat block.";
+      return { content: [{ type: "text", text: msg }], isError: true };
+    }
+  }
+);
+
+registerAppResource(
+  server,
+  STAT_BLOCK_RESOURCE_URI,
+  STAT_BLOCK_RESOURCE_URI,
+  { mimeType: RESOURCE_MIME_TYPE },
+  async () => ({
+    contents: [{
+      uri: STAT_BLOCK_RESOURCE_URI,
+      mimeType: RESOURCE_MIME_TYPE,
+      text: await readFile(statBlockViewerPath, "utf8"),
+      _meta: { ui: { permissions: { clipboardWrite: {} } } },
     }],
   })
 );

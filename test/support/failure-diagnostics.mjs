@@ -54,6 +54,8 @@ export function summarizeLiveFailure(value, { stderr = "" } = {}) {
     ["timeout", /(?:timeout|timed[ _-]?out)/i],
     ["navigation or network", /(?:navigation|net::ERR_|ECONN|ENOTFOUND|network)/i],
     ["selector or DOM", /\b(?:selector|locator|element|DOM)\b/i],
+    ["inaccessible content", /\b(?:not accessible|unavailable|view in store|marketplace)\b/i],
+    ["stat-block layout", /(?:stat-block.*(?:layout|incomplete)|Armor Class\/AC|Hit Points\/HP)/i],
     ["browser closed", /\b(?:browser|page|context).*(?:closed|crashed|disconnected)\b/i],
     ["filesystem", /\b(?:ENOENT|EACCES|EPERM|read-only file system)\b/i],
     ["JSON or response shape", /\b(?:malformed JSON|JSON parse|response shape)\b/i],

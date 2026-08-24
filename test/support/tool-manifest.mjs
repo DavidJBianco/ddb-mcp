@@ -3,6 +3,7 @@ export const EXPECTED_TOOLS = [
   "mysterium_export_character_pdf",
   "mysterium_get_campaign",
   "mysterium_get_character",
+  "mysterium_get_stat_block",
   "mysterium_interact",
   "mysterium_list_campaigns",
   "mysterium_list_characters",
@@ -10,5 +11,7 @@ export const EXPECTED_TOOLS = [
   "mysterium_navigate",
   "mysterium_read_book",
   "mysterium_search",
+  "mysterium_view_stat_block",
   "read_pdf_bytes",
+  "read_stat_block_for_app",
 ];
