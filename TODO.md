@@ -148,7 +148,12 @@ release plan or pull request.
   for the production MCP App contract and verify inline viewing plus download
   in Codex Desktop. Record the exact client version and results. This follow-up
   does not block the initial Claude-only PDF export implementation.
-- [ ] After both probes pass, remove `mysterium_download_character` and add a clearly
+- [ ] **Docker MCP Toolkit PDF App compatibility:** Retest after Docker MCP
+  Gateway forwards the standardized `io.modelcontextprotocol/ui` capability to
+  downstream servers. Until then, use Claude Desktop's direct container stdio
+  configuration for PDF viewing; Toolkit-routed calls fail closed before
+  browser acquisition.
+- [x] After both probes pass, remove `mysterium_download_character` and add a clearly
   named read-only character-sheet PDF export tool. Drive the documented visible
   export workflow, enforce timeout and size limits, and deliver the PDF through
   a Claude-compatible MCP App with an inline viewer, download control, app-only
@@ -158,6 +163,11 @@ release plan or pull request.
   responses, cleanup, redaction, Claude delivery, and a bounded live success.
   Keep the viewer and its dependencies license-compliant, self-contained, and
   inside the production container; do not introduce an external helper app.
+  Implemented with the exact, hash-verified official viewer, a two-entry/50 MiB
+  in-memory cache with 60-minute sliding expiry, app-only bounded byte reads,
+  and direct-container Claude Desktop delivery. Offline, Docker, audit, live
+  acquisition, inline rendering, viewer controls, download, and downloaded-file
+  opening were verified; Codex and Toolkit Apps forwarding remain follow-ups.
 - [ ] **`mysterium_get_campaign` enrichment:** Use the observed read-only campaign
   details and short-character data plus permission-aware rendered extraction.
   Return a stable JSON envelope containing campaign ID/name/status/creation

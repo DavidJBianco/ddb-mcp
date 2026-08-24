@@ -1,9 +1,6 @@
 import { BrowserContext } from "playwright";
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
-import { writeFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
 
 export async function getCharacter(context: BrowserContext, characterId: string): Promise<string> {
   const page = await getPage(context);
@@ -37,21 +34,6 @@ export async function getCharacter(context: BrowserContext, characterId: string)
   }
 
   return JSON.stringify(result, null, 2);
-}
-
-export async function downloadCharacter(
-  context: BrowserContext,
-  characterId: string,
-  outputPath?: string
-): Promise<string> {
-  const jsonData = await getCharacter(context, characterId);
-  const parsed = JSON.parse(jsonData);
-  const charName: string = parsed?.data?.name ?? `character-${characterId}`;
-  const filename = `${charName.replace(/\s+/g, "-").toLowerCase()}-${characterId}.json`;
-  const savePath = outputPath ?? join(homedir(), "Downloads", filename);
-
-  writeFileSync(savePath, jsonData, "utf8");
-  return `Character data for '${charName}' saved to: ${savePath}`;
 }
 
 export async function listCharacters(context: BrowserContext): Promise<string> {

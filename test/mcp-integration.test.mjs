@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -9,9 +11,14 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../dist/index.js";
 import { captureStderr, withFailureDiagnostics } from "./support/failure-diagnostics.mjs";
 
-async function connectClient(t, contextProvider) {
-  const server = createServer(contextProvider);
+async function connectClient(t, contextProvider, serverOptions) {
+  const server = createServer(contextProvider, serverOptions);
   const client = new Client({ name: "mysterium-offline-test", version: "1.0.0" });
+  client.registerCapabilities({
+    extensions: {
+      "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] },
+    },
+  });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
   await server.connect(serverTransport);
@@ -24,6 +31,62 @@ async function connectClient(t, contextProvider) {
 
   return client;
 }
+
+test("an MCP Apps client exports and reconstructs a synthetic character PDF", async (t) => {
+  const bytes = await readFile(new URL("fixtures/synthetic-character-sheet.pdf", import.meta.url));
+  let currentUrl = "about:blank";
+  const page = {
+    goto: async (url) => {
+      currentUrl = url;
+    },
+    url: () => currentUrl,
+    waitForTimeout: async () => {},
+    evaluate: async () => true,
+    getByRole: () => ({ click: async () => {} }),
+    getByText: () => ({ click: async () => {} }),
+    locator: () => ({
+      first: () => ({
+        waitFor: async () => {},
+        getAttribute: async () => "/sheet-pdfs/synthetic.pdf",
+      }),
+    }),
+  };
+  const context = { pages: () => [page] };
+  const client = await connectClient(t, async () => context, {
+    characterPdfDependencies: {
+      createHandle: () => "mcp-integration",
+      fetchPdf: async () => ({
+        status: () => 200,
+        url: () => "https://www.dndbeyond.com/sheet-pdfs/synthetic.pdf",
+        headers: () => ({ "content-type": "application/pdf", "content-length": String(bytes.length) }),
+        body: async () => bytes,
+      }),
+    },
+  });
+
+  const exported = await client.callTool({
+    name: "mysterium_export_character_pdf",
+    arguments: { character_id: "4242" },
+  });
+  assert.equal(exported.isError, undefined);
+  assert.equal(exported.structuredContent.totalBytes, bytes.length);
+  assert.equal(exported.structuredContent.sha256, createHash("sha256").update(bytes).digest("hex"));
+  assert.deepEqual(exported._meta, { interactEnabled: false, writable: false });
+
+  const loaded = [];
+  let offset = 0;
+  do {
+    const range = await client.callTool({
+      name: "read_pdf_bytes",
+      arguments: { url: exported.structuredContent.url, offset },
+    });
+    assert.equal(range.isError, undefined);
+    loaded.push(Buffer.from(range.structuredContent.bytes, "base64"));
+    offset += range.structuredContent.byteCount;
+    if (!range.structuredContent.hasMore) break;
+  } while (true);
+  assert.deepEqual(Buffer.concat(loaded), bytes);
+});
 
 test("an MCP client can discover and call tools through the real server", async (t) => {
   const visits = [];

@@ -21,7 +21,7 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 | --- | --- |
 | `mysterium_list_characters` | List the characters available to the authenticated account. |
 | `mysterium_get_character` | Retrieve full character data. |
-| `mysterium_download_character` | Write character JSON to a requested local path. |
+| `mysterium_export_character_pdf` | Export an owned character sheet through D&D Beyond's rendered workflow and display it in a read-only MCP App PDF viewer. |
 | `mysterium_list_campaigns` | List campaigns in which the account participates. |
 | `mysterium_get_campaign` | Retrieve campaign details and active characters. |
 | `mysterium_list_library` | List accessible sourcebooks and their slugs. |
@@ -30,6 +30,9 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 | `mysterium_navigate` | Navigate to a D&D Beyond URL and return its rendered text. |
 | `mysterium_interact` | Click, fill, or capture a screenshot on the current page. |
 | `mysterium_current_page` | Return text from the current browser page. |
+
+`read_pdf_bytes` is an app-only helper used by the inline PDF viewer. Compatible
+clients hide it from the model-facing tool list.
 
 ## Quickstart
 
@@ -74,6 +77,34 @@ mysterium-auth validate --live
 
 ### 3. Connect an MCP client
 
+For Claude Desktop PDF viewing, configure the released container as a direct
+stdio server. The configuration key becomes Claude's tool namespace; it does
+not change Mysterium's registered tool names.
+
+```json
+{
+  "mcpServers": {
+    "mysterium": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "--interactive",
+        "--volume",
+        "mysterium-session:/home/mcp/.config/mysterium:ro",
+        "ghcr.io/davidjbianco/mysterium:vX.Y.Z"
+      ]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after changing its configuration. In the manually
+verified client configuration, direct stdio preserved Claude's MCP Apps
+capability and rendered the PDF inline. The Docker MCP Toolkit gateway did not
+forward that capability, so Toolkit-routed calls were safely rejected before
+contacting D&D Beyond. Toolkit remains usable for Mysterium's non-App tools.
+
 Docker MCP Toolkit users should download `mysterium.yaml` from the same GitHub
 Release as the helper. That catalog is already pinned to the release's immutable
 image, so it can be installed without editing:
@@ -90,7 +121,7 @@ The checked-in [`mysterium.yaml`](mysterium.yaml) is the source-build variant. I
 uses the same `mysterium` server identity and points to `mysterium:local`, the
 image produced by `make build`.
 
-An MCP client that launches containers directly can use the equivalent stdio command:
+Other MCP clients that launch containers directly can use the equivalent stdio command:
 
 ```bash
 docker run --rm --interactive \
@@ -101,6 +132,28 @@ docker run --rm --interactive \
 The server needs outbound HTTPS access to D&D Beyond. The session volume is mounted read-only during normal operation.
 
 See [DOCKER.md](DOCKER.md) for local image builds, Docker MCP Toolkit details, and container verification.
+
+## Exporting a character sheet PDF
+
+Call `mysterium_export_character_pdf` with the decimal character ID returned by
+`mysterium_list_characters`:
+
+```json
+{
+  "character_id": "12345678"
+}
+```
+
+The tool uses the rendered character sheet's **Manage** → **Export to PDF**
+workflow, validates the generated response, and opens a read-only inline viewer
+with page, zoom, search, fullscreen, and download controls. It requires an MCP
+client that advertises MCP Apps support; unsupported clients receive an error
+before Mysterium contacts D&D Beyond.
+
+PDF data is limited to 25 MiB and retained only in a bounded in-memory cache for
+up to 60 minutes of inactivity. It is never written to the normal container
+filesystem. The official viewer may request PDF.js Standard-14 font data from
+`unpkg.com` when the exported PDF does not embed a required standard font.
 
 ## Reading sourcebooks
 

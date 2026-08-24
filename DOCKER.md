@@ -34,10 +34,10 @@ container suite.
 
 The suite exercises MCP initialization through the normal image entrypoint and
 uses a read-only mounted synthetic Playwright backend for browser-backed tool
-calls, including normalized search attribution and both accessible and catalog
-sourcebook-search scopes. Container networking is disabled, and test fixtures
-are not copied into the production image. It also checks the non-root runtime
-and session mounts.
+calls, including character PDF export and byte reconstruction, normalized
+search attribution, and both accessible and catalog sourcebook-search scopes.
+Container networking is disabled, and test fixtures are not copied into the
+production image. It also checks the non-root runtime and session mounts.
 CI runs the complete browser suite natively on AMD64. The ARM64 image runs the
 same runtime-hardening checks and an exact MCP initialization/tool-list smoke
 test under QEMU; Chromium itself is not treated as reliable under emulation.
@@ -146,6 +146,12 @@ Connect the desired MCP client to the `mysterium` profile using Docker
 Desktop or the Docker MCP CLI. Current Docker Desktop releases may require the
 profiles feature to be enabled first.
 
+The current Toolkit gateway path does not forward Claude Desktop's
+`io.modelcontextprotocol/ui` capability to Mysterium. Toolkit-routed PDF export
+therefore fails closed before browser acquisition; the other non-App tools
+remain available. Use the direct container configuration below when Claude
+inline PDF viewing is required.
+
 ## Direct container use
 
 An MCP client can also launch the image directly over stdio:
@@ -156,7 +162,44 @@ docker run --rm --interactive \
   mysterium:local
 ```
 
+For a source build in Claude Desktop, add that command and arguments to
+`claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mysterium": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "--interactive",
+        "--volume",
+        "mysterium-session:/home/mcp/.config/mysterium:ro",
+        "mysterium:local"
+      ]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after changing this file. The `mysterium` object key is
+only Claude's connection namespace; the server still registers tool names such
+as `mysterium_export_character_pdf`.
+
 The container needs outbound HTTPS access to D&D Beyond. Authentication-provider
 traffic occurs only in the host browser. No host directories are mounted by the
 supplied Toolkit definition; the named session volume is read-only in the
 normal MCP runtime.
+
+The image contains the approved, prebuilt MCP PDF viewer generated during the
+build from the exact `@modelcontextprotocol/server-pdf` development dependency.
+The full example PDF server and its unrelated runtime dependencies are pruned;
+only Mysterium, the generated viewer, and the required license notices remain.
+PDF exports are held in bounded memory and are not written into the image or a
+container volume.
+
+Dependabot targets dependency updates at `dev`. Updating the exact PDF viewer
+package is deliberately not automatic: review the upstream and bundled
+licenses, update the approved version and SHA-256 together, then repeat the
+automated suite and manual Claude inline-view and download checks.

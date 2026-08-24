@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import test from "node:test";
 
 import { getCampaign, listMyCampaigns } from "../dist/tools/campaign.js";
-import { downloadCharacter, getCharacter, listCharacters } from "../dist/tools/character.js";
+import { getCharacter, listCharacters } from "../dist/tools/character.js";
 import { listLibrary, readBook } from "../dist/tools/library.js";
 import { getCurrentPageContent, interact } from "../dist/tools/navigate.js";
 
@@ -26,17 +23,11 @@ function contextFor(finalValue) {
   return { pages: () => [page] };
 }
 
-test("character tools handle synthetic API data, empty listings, and temporary downloads", async (t) => {
+test("character tools handle synthetic API data and empty listings", async () => {
   const characterContext = contextFor((argument) => ({
     data: { id: Number(argument), name: "Synthetic Hero" },
   }));
   assert.equal(JSON.parse(await getCharacter(characterContext, "4242")).data.id, 4242);
-
-  const directory = await mkdtemp(join(tmpdir(), "mysterium-test-"));
-  t.after(async () => rm(directory, { recursive: true, force: true }));
-  const outputPath = join(directory, "character.json");
-  await downloadCharacter(characterContext, "4242", outputPath);
-  assert.equal(JSON.parse(await readFile(outputPath, "utf8")).data.name, "Synthetic Hero");
 
   assert.deepEqual(JSON.parse(await listCharacters(contextFor([]))), []);
 });

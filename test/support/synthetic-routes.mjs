@@ -36,6 +36,13 @@ const characterSheetPage = `<!doctype html><html><body><main>
   <div class="hp-current">12</div>
 </main></body></html>`;
 
+const characterExportPage = `<!doctype html><html><body><main>
+  <h1 class="character-name">Synthetic Hero</h1>
+  <button type="button">Manage</button>
+  <button type="button">Export to PDF</button>
+  <a href="/sheet-pdfs/synthetic-character-sheet.pdf">Generated character PDF</a>
+</main></body></html>`;
+
 const campaignsPage = `<!doctype html><html><body><main><ul>
   <li class="ddb-campaigns-list-item-wrapper">
     <div class="ddb-campaigns-list-item-body-title">Synthetic Campaign</div>
@@ -168,6 +175,11 @@ export async function installSyntheticRoutes(context, options = {}) {
 
     if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/characters/999") {
       await route.fulfill(html(characterSheetPage));
+      return;
+    }
+
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/characters/4242") {
+      await route.fulfill(html(characterExportPage));
       return;
     }
 

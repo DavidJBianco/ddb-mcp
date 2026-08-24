@@ -7,9 +7,16 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../dist/index.js";
 import { EXPECTED_TOOLS } from "./support/tool-manifest.mjs";
 
-async function connect(t, contextProvider) {
-  const server = createServer(contextProvider);
+async function connect(t, contextProvider, { supportsApps = true, serverOptions } = {}) {
+  const server = createServer(contextProvider, serverOptions);
   const client = new Client({ name: "mysterium-contract-test", version: "1.0.0" });
+  if (supportsApps) {
+    client.registerCapabilities({
+      extensions: {
+        "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] },
+      },
+    });
+  }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
   await client.connect(clientTransport);
@@ -35,7 +42,7 @@ test("every tool converts a browser dependency failure into an MCP tool error", 
   const cases = [
     ["mysterium_list_characters", {}],
     ["mysterium_get_character", { character_id: "4242" }],
-    ["mysterium_download_character", { character_id: "4242", output_path: "/tmp/unused.json" }],
+    ["mysterium_export_character_pdf", { character_id: "4242" }],
     ["mysterium_get_campaign", { campaign_id: "7" }],
     ["mysterium_list_campaigns", {}],
     ["mysterium_navigate", { url: "https://www.dndbeyond.com/synthetic-page" }],
@@ -51,7 +58,13 @@ test("every tool converts a browser dependency failure into an MCP tool error", 
     assert.equal(result.isError, true, `${name} must return isError`);
     assert.match(result.content[0].text, /synthetic browser dependency failure/);
   }
-  assert.deepEqual(cases.map(([name]) => name).sort(), EXPECTED_TOOLS);
+  const byteResult = await client.callTool({
+    name: "read_pdf_bytes",
+    arguments: { url: "mysterium://character-pdf/missing/file.pdf" },
+  });
+  assert.equal(byteResult.isError, true);
+  assert.match(byteResult.content[0].text, /unavailable or expired/);
+  assert.deepEqual([...cases.map(([name]) => name), "read_pdf_bytes"].sort(), EXPECTED_TOOLS);
 });
 
 test("argument-bearing tools reject invalid MCP input before browser access", async (t) => {
@@ -62,7 +75,9 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
   });
   const cases = [
     ["mysterium_get_character", {}],
-    ["mysterium_download_character", {}],
+    ["mysterium_export_character_pdf", {}],
+    ["mysterium_export_character_pdf", { character_id: "not-a-number" }],
+    ["read_pdf_bytes", { url: "mysterium://character-pdf/missing/file.pdf", offset: -1 }],
     ["mysterium_get_campaign", {}],
     ["mysterium_navigate", {}],
     ["mysterium_interact", { action: "destroy", selector: "body" }],
@@ -78,6 +93,53 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
     assert.match(result.content[0].text, /Invalid arguments/);
   }
   assert.equal(contextRequested, false);
+});
+
+test("character PDF export rejects a client without MCP Apps before browser access", async (t) => {
+  let contextRequested = false;
+  const client = await connect(t, async () => {
+    contextRequested = true;
+    throw new Error("browser must not be requested");
+  }, { supportsApps: false });
+
+  const result = await client.callTool({
+    name: "mysterium_export_character_pdf",
+    arguments: { character_id: "4242" },
+  });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /does not advertise MCP Apps/);
+  assert.equal(contextRequested, false);
+});
+
+test("character PDF tools and UI resource expose the intended MCP Apps contract", async (t) => {
+  const client = await connect(t, async () => {
+    throw new Error("contract inspection must not request a browser");
+  });
+  const listed = await client.listTools();
+  const exportTool = listed.tools.find(({ name }) => name === "mysterium_export_character_pdf");
+  assert.deepEqual(exportTool.inputSchema.required, ["character_id"]);
+  assert.match(exportTool.inputSchema.properties.character_id.pattern, /\\d/);
+  assert.equal(exportTool.outputSchema.properties.mimeType.const, "application/pdf");
+  assert.equal(exportTool.annotations.readOnlyHint, true);
+  assert.equal(exportTool._meta.ui.resourceUri, "ui://mysterium/character-pdf-viewer.html");
+
+  const byteTool = listed.tools.find(({ name }) => name === "read_pdf_bytes");
+  assert.deepEqual(byteTool._meta.ui.visibility, ["app"]);
+  assert.equal(byteTool.inputSchema.properties.byteCount.maximum, 512 * 1024);
+  assert.equal(byteTool.annotations.idempotentHint, true);
+
+  const resources = await client.listResources();
+  const viewer = resources.resources.find(({ uri }) => uri === "ui://mysterium/character-pdf-viewer.html");
+  assert.equal(viewer.mimeType, "text/html;profile=mcp-app");
+
+  const resource = await client.readResource({ uri: viewer.uri });
+  assert.equal(resource.contents[0].mimeType, "text/html;profile=mcp-app");
+  assert.ok(resource.contents[0].text.length > 4_000_000);
+  assert.deepEqual(resource.contents[0]._meta.ui.permissions, { clipboardWrite: {} });
+  assert.deepEqual(resource.contents[0]._meta.ui.csp, {
+    connectDomains: ["https://unpkg.com"],
+    resourceDomains: ["https://unpkg.com"],
+  });
 });
 
 test("mysterium_read_book rejects invalid field combinations and malformed cursors before browser access", async (t) => {

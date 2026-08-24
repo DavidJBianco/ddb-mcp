@@ -1,8 +1,5 @@
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
-import { writeFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
 export async function getCharacter(context, characterId) {
     const page = await getPage(context);
     // Verify session
@@ -33,15 +30,6 @@ export async function getCharacter(context, characterId) {
         throw error;
     }
     return JSON.stringify(result, null, 2);
-}
-export async function downloadCharacter(context, characterId, outputPath) {
-    const jsonData = await getCharacter(context, characterId);
-    const parsed = JSON.parse(jsonData);
-    const charName = parsed?.data?.name ?? `character-${characterId}`;
-    const filename = `${charName.replace(/\s+/g, "-").toLowerCase()}-${characterId}.json`;
-    const savePath = outputPath ?? join(homedir(), "Downloads", filename);
-    writeFileSync(savePath, jsonData, "utf8");
-    return `Character data for '${charName}' saved to: ${savePath}`;
 }
 export async function listCharacters(context) {
     const page = await getPage(context);

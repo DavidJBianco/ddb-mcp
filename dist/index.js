@@ -1,9 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { getUiCapability, registerAppResource, registerAppTool, RESOURCE_MIME_TYPE, } from "@modelcontextprotocol/ext-apps/server";
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { closeBrowser, getAuthenticatedContext } from "./browser.js";
-import { getCharacter, downloadCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
+import { getCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
+import { acquireCharacterPdf, CharacterPdfStore, PDF_CHUNK_BYTES, } from "./tools/character-pdf.js";
 import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
 import { search, validateSearchRequest } from "./tools/search.js";
@@ -13,13 +16,16 @@ import { PACKAGE_VERSION } from "./version.js";
 async function getSharedContext() {
     return getAuthenticatedContext();
 }
-export function createServer(getContextForTool = getSharedContext) {
+const CHARACTER_PDF_RESOURCE_URI = "ui://mysterium/character-pdf-viewer.html";
+const viewerPath = new URL("../dist/apps/character-pdf-viewer.html", import.meta.url);
+export function createServer(getContextForTool = getSharedContext, options = {}) {
     const server = new McpServer({
         name: "mysterium",
         version: PACKAGE_VERSION,
     }, {
         instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
     });
+    const characterPdfStore = new CharacterPdfStore(options.characterPdfDependencies);
     // ─── mysterium_list_characters ──────────────────────────────────────────────────────
     server.tool("mysterium_list_characters", "List all characters in your D&D Beyond account, including their ID, level, race, and class.", {}, async () => {
         try {
@@ -61,24 +67,107 @@ export function createServer(getContextForTool = getSharedContext) {
             return { content: [{ type: "text", text: `Failed to get character: ${msg}` }], isError: true };
         }
     });
-    // ─── mysterium_download_character ───────────────────────────────────────────────────
-    server.tool("mysterium_download_character", "Download a character's full JSON data to a local file.", {
-        character_id: z.string().describe("The D&D Beyond character ID"),
-        output_path: z
-            .string()
-            .optional()
-            .describe("Full file path to save to (defaults to ~/Downloads/{name}-{id}.json)"),
-    }, async ({ character_id, output_path }) => {
+    // ─── mysterium_export_character_pdf ─────────────────────────────────────────────────
+    registerAppTool(server, "mysterium_export_character_pdf", {
+        title: "Export Character Sheet PDF",
+        description: "Export an owned D&D Beyond character sheet through the rendered Manage → Export to PDF workflow and display it in a read-only PDF viewer.",
+        inputSchema: {
+            character_id: z.string().regex(/^\d+$/).describe("The D&D Beyond character ID"),
+        },
+        outputSchema: z.object({
+            url: z.string(),
+            title: z.string(),
+            filename: z.string(),
+            mimeType: z.literal("application/pdf"),
+            totalBytes: z.number().int().positive(),
+            sha256: z.string().regex(/^[a-f0-9]{64}$/),
+            initialPage: z.literal(1),
+        }),
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: true,
+        },
+        _meta: { ui: { resourceUri: CHARACTER_PDF_RESOURCE_URI } },
+    }, async ({ character_id }) => {
+        const uiCapability = getUiCapability(server.server.getClientCapabilities());
+        if (!uiCapability?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) {
+            return {
+                content: [{ type: "text", text: "This client does not advertise MCP Apps PDF viewing support; no D&D Beyond request was made." }],
+                isError: true,
+            };
+        }
         try {
             const context = await getContextForTool();
-            const result = await downloadCharacter(context, character_id, output_path);
-            return { content: [{ type: "text", text: result }] };
+            const pdf = await acquireCharacterPdf(context, character_id, options.characterPdfDependencies);
+            const metadata = characterPdfStore.put(pdf);
+            return {
+                content: [{
+                        type: "text",
+                        text: `Character sheet PDF ready for inline viewing and download: ${metadata.filename} (${metadata.totalBytes} bytes, SHA-256 ${metadata.sha256}).`,
+                    }],
+                structuredContent: metadata,
+                _meta: { interactEnabled: false, writable: false },
+            };
         }
         catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { content: [{ type: "text", text: `Download failed: ${msg}` }], isError: true };
+            const msg = err instanceof Error ? err.message : "Character PDF export failed.";
+            return { content: [{ type: "text", text: `Failed to export character PDF: ${msg}` }], isError: true };
         }
     });
+    registerAppTool(server, "read_pdf_bytes", {
+        title: "Read Character PDF Bytes",
+        description: "Read a bounded byte range for the character PDF viewer. The model should not call this tool directly.",
+        inputSchema: {
+            url: z.string(),
+            offset: z.number().int().min(0).default(0),
+            byteCount: z.number().int().min(1).max(PDF_CHUNK_BYTES).default(PDF_CHUNK_BYTES),
+        },
+        outputSchema: z.object({
+            url: z.string(),
+            bytes: z.string(),
+            offset: z.number().int().min(0),
+            byteCount: z.number().int().min(0),
+            totalBytes: z.number().int().positive(),
+            hasMore: z.boolean(),
+        }),
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+        },
+        _meta: { ui: { visibility: ["app"] } },
+    }, async ({ url, offset, byteCount }) => {
+        try {
+            const range = characterPdfStore.read(url, offset, byteCount);
+            return {
+                content: [{ type: "text", text: `${range.byteCount} PDF bytes at offset ${range.offset}.` }],
+                structuredContent: range,
+            };
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : "Unable to read character PDF bytes.";
+            return { content: [{ type: "text", text: msg }], isError: true };
+        }
+    });
+    registerAppResource(server, CHARACTER_PDF_RESOURCE_URI, CHARACTER_PDF_RESOURCE_URI, { mimeType: RESOURCE_MIME_TYPE }, async () => ({
+        contents: [{
+                uri: CHARACTER_PDF_RESOURCE_URI,
+                mimeType: RESOURCE_MIME_TYPE,
+                text: await readFile(viewerPath, "utf8"),
+                _meta: {
+                    ui: {
+                        permissions: { clipboardWrite: {} },
+                        csp: {
+                            connectDomains: ["https://unpkg.com"],
+                            resourceDomains: ["https://unpkg.com"],
+                        },
+                    },
+                },
+            }],
+    }));
     // ─── mysterium_get_campaign ─────────────────────────────────────────────────────────
     server.tool("mysterium_get_campaign", "Fetch campaign information including player characters, notes, and description from a D&D Beyond campaign page.", {
         campaign_id: z.string().describe("The D&D Beyond campaign ID (found in the campaign URL)"),

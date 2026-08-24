@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -21,6 +23,11 @@ async function connectDockerClient(t, args, containerName) {
   });
   const diagnostics = captureStderr(transport);
   const client = new Client({ name: "mysterium-docker-test", version: "1.0.0" });
+  client.registerCapabilities({
+    extensions: {
+      "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] },
+    },
+  });
   t.after(async () => {
     await client.close();
     spawnSync("docker", ["rm", "--force", containerName], { stdio: "ignore" });
@@ -82,10 +89,23 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
 
     const characterText = await callSuccessfully("mysterium_get_character", { character_id: "4242" });
     assert.equal(JSON.parse(characterText).data.name, "Synthetic Hero");
-    await callSuccessfully("mysterium_download_character", {
-      character_id: "4242",
-      output_path: "/tmp/synthetic-character.json",
+    const pdfResult = await client.callTool({
+      name: "mysterium_export_character_pdf",
+      arguments: { character_id: "4242" },
     });
+    assert.equal(pdfResult.isError, undefined);
+    calledTools.push("mysterium_export_character_pdf");
+    const pdfBytes = await readFile(new URL("../fixtures/synthetic-character-sheet.pdf", import.meta.url));
+    assert.equal(pdfResult.structuredContent.totalBytes, pdfBytes.length);
+    assert.equal(pdfResult.structuredContent.sha256, createHash("sha256").update(pdfBytes).digest("hex"));
+
+    const rangeResult = await client.callTool({
+      name: "read_pdf_bytes",
+      arguments: { url: pdfResult.structuredContent.url },
+    });
+    assert.equal(rangeResult.isError, undefined);
+    calledTools.push("read_pdf_bytes");
+    assert.deepEqual(Buffer.from(rangeResult.structuredContent.bytes, "base64"), pdfBytes);
 
     assert.equal(
       JSON.parse(await callSuccessfully("mysterium_get_campaign", { campaign_id: "7" })).name,
