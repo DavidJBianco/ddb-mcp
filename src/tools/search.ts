@@ -349,6 +349,6 @@ export async function search(
   query: string,
   category: SearchCategory = "all",
   sourceScope?: SourceScope
-): Promise<string> {
-  return JSON.stringify(await searchResults(context, query, category, sourceScope), null, 2);
+): Promise<SearchEnvelope> {
+  return searchResults(context, query, category, sourceScope);
 }

@@ -41,8 +41,8 @@ test("campaign tools return deterministic empty and detail shapes", async () => 
 });
 
 test("library tools handle empty listings and structured short content", async () => {
-  assert.deepEqual(JSON.parse(await listLibrary(contextFor([]))), { count: 0, books: [] });
-  const output = JSON.parse(await readBook(contextFor({
+  assert.deepEqual(await listLibrary(contextFor([])), { count: 0, books: [] });
+  const output = await readBook(contextFor({
     title: "Synthetic Heading",
     outline: [{ id: "section-synthetic-heading-1", title: "Synthetic Heading", level: 2, parentId: null }],
     blocks: [
@@ -50,7 +50,7 @@ test("library tools handle empty listings and structured short content", async (
       { text: "Original fixture paragraph.", imageIds: [] },
     ],
     images: [],
-  }), { bookSlug: "synthetic-handbook", chapterSlug: "safe-examples" }));
+  }), { bookSlug: "synthetic-handbook", chapterSlug: "safe-examples" });
   assert.match(output.text, /## Synthetic Heading/);
   assert.match(output.text, /Original fixture paragraph/);
 });

@@ -153,38 +153,38 @@ test("book and chapter outlines return structured discovery responses", async ()
     blocks: [],
     images: [],
   };
-  const book = JSON.parse(await readBook(contextFor(bookOutline), { bookSlug: "synthetic-handbook" }));
+  const book = await readBook(contextFor(bookOutline), { bookSlug: "synthetic-handbook" });
   assert.equal(book.kind, "outline");
   assert.equal(book.entries[0].chapterSlug, "safe-examples");
   assert.equal(book.done, true);
 
-  const chapter = JSON.parse(await readBook(contextFor(extractedChapter), {
+  const chapter = await readBook(contextFor(extractedChapter), {
     bookSlug: "synthetic-handbook",
     chapterSlug: "safe-examples",
     mode: "outline",
-  }));
+  });
   assert.equal(chapter.entries[1].parentId, "section-intro-1");
 });
 
 test("section reads resolve stable IDs, report ambiguity, paginate, and carry image metadata", async () => {
-  const first = JSON.parse(await readBook(contextFor(extractedChapter), {
+  const first = await readBook(contextFor(extractedChapter), {
     bookSlug: "synthetic-handbook",
     chapterSlug: "safe-examples",
     section: "section-intro-1",
     maxChars: 35,
-  }));
+  });
   assert.equal(first.kind, "content");
   assert.equal(first.done, false);
   assert.ok(first.nextCursor);
 
   const pages = [first];
   while (!pages.at(-1).done) {
-    pages.push(JSON.parse(await readBook(contextFor(extractedChapter), {
+    pages.push(await readBook(contextFor(extractedChapter), {
       bookSlug: "synthetic-handbook",
       chapterSlug: "safe-examples",
       section: "section-intro-1",
       cursor: pages.at(-1).nextCursor,
-    })));
+    }));
   }
   assert.match(pages.map(({ text }) => text).join(""), /Detail paragraph/);
   assert.deepEqual([...new Set(pages.flatMap(({ images }) => images).map(({ id }) => id))], ["image-1"]);
@@ -202,10 +202,10 @@ test("stable retries reproduce chunks and changed extracted content invalidates 
     chapterSlug: "safe-examples",
     maxChars: 20,
   };
-  const first = JSON.parse(await readBook(contextFor(extractedChapter), request));
+  const first = await readBook(contextFor(extractedChapter), request);
   const retryA = await readBook(contextFor(extractedChapter), { ...request, cursor: first.nextCursor });
   const retryB = await readBook(contextFor(extractedChapter), { ...request, cursor: first.nextCursor });
-  assert.equal(retryA, retryB);
+  assert.deepEqual(retryA, retryB);
 
   const changed = structuredClone(extractedChapter);
   changed.blocks[0].text = "## Changed";

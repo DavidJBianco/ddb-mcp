@@ -44,6 +44,53 @@ export interface LibraryBookCard {
     bookSlug: string | null;
     access: SourcebookAccess;
 }
+export interface LibraryBook {
+    title: string;
+    slug: string;
+    ownership: string;
+    url: string;
+}
+export interface LibraryEnvelope {
+    count: number;
+    books: LibraryBook[];
+}
+export interface ReadBookOutlineResult {
+    kind: "outline";
+    book: {
+        slug: string;
+        title?: string;
+    };
+    scope: {
+        bookSlug: string;
+        title: string;
+    } | {
+        chapterSlug: string;
+        title: string;
+    };
+    url: string;
+    entries: OutlineEntry[];
+    nextCursor: null;
+    done: true;
+}
+export interface ReadBookContentResult {
+    kind: "content";
+    book: {
+        slug: string;
+    };
+    chapter: {
+        slug: string;
+        title: string;
+        url: string;
+    };
+    section?: OutlineEntry;
+    text: string;
+    images: ImageMetadata[];
+    nextCursor: string | null;
+    done: boolean;
+    maxChars: number;
+    serverMaxChars: number;
+}
+export type ReadBookResult = ReadBookOutlineResult | ReadBookContentResult;
 interface CursorPayload {
     version: 1;
     bookSlug: string;
@@ -67,8 +114,8 @@ export declare function encodeCursor(payload: CursorPayload): string;
 export declare function decodeCursor(cursor: string): CursorPayload;
 export declare function validateReadBookRequest(request: ReadBookRequest): Required<Pick<ReadBookRequest, "bookSlug" | "mode" | "maxChars">> & ReadBookRequest;
 export declare function paginateBlocks(blocks: ContentBlock[], maxChars: number, start?: CursorPosition): PageChunk;
-export declare function listLibrary(context: BrowserContext): Promise<string>;
+export declare function listLibrary(context: BrowserContext): Promise<LibraryEnvelope>;
 export declare function extractLibraryBookCards(page: Page): Promise<LibraryBookCard[]>;
-export declare function readBook(context: BrowserContext, input: ReadBookRequest): Promise<string>;
+export declare function readBook(context: BrowserContext, input: ReadBookRequest): Promise<ReadBookResult>;
 export {};
 //# sourceMappingURL=library.d.ts.map

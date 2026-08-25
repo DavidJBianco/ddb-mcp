@@ -256,6 +256,6 @@ export async function searchResults(context, query, category = "all", sourceScop
     return { query, category, url: searchUrl, count: results.length, results };
 }
 export async function search(context, query, category = "all", sourceScope) {
-    return JSON.stringify(await searchResults(context, query, category, sourceScope), null, 2);
+    return searchResults(context, query, category, sourceScope);
 }
 //# sourceMappingURL=search.js.map

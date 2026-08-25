@@ -58,6 +58,43 @@ export interface LibraryBookCard {
   access: SourcebookAccess;
 }
 
+export interface LibraryBook {
+  title: string;
+  slug: string;
+  ownership: string;
+  url: string;
+}
+
+export interface LibraryEnvelope {
+  count: number;
+  books: LibraryBook[];
+}
+
+export interface ReadBookOutlineResult {
+  kind: "outline";
+  book: { slug: string; title?: string };
+  scope: { bookSlug: string; title: string } | { chapterSlug: string; title: string };
+  url: string;
+  entries: OutlineEntry[];
+  nextCursor: null;
+  done: true;
+}
+
+export interface ReadBookContentResult {
+  kind: "content";
+  book: { slug: string };
+  chapter: { slug: string; title: string; url: string };
+  section?: OutlineEntry;
+  text: string;
+  images: ImageMetadata[];
+  nextCursor: string | null;
+  done: boolean;
+  maxChars: number;
+  serverMaxChars: number;
+}
+
+export type ReadBookResult = ReadBookOutlineResult | ReadBookContentResult;
+
 interface CursorPayload {
   version: 1;
   bookSlug: string;
@@ -264,7 +301,7 @@ function selectSection(extracted: ExtractedBookPage, selector?: string): {
   return { blocks: extracted.blocks.slice(start, end), section };
 }
 
-export async function listLibrary(context: BrowserContext): Promise<string> {
+export async function listLibrary(context: BrowserContext): Promise<LibraryEnvelope> {
   const page = await getPage(context);
 
   if (!(await isLoggedIn(page))) {
@@ -286,7 +323,7 @@ export async function listLibrary(context: BrowserContext): Promise<string> {
     url,
   }));
 
-  return JSON.stringify({ count: books.length, books }, null, 2);
+  return { count: books.length, books };
 }
 
 export async function extractLibraryBookCards(page: Page): Promise<LibraryBookCard[]> {
@@ -574,12 +611,12 @@ async function extractBookPage(context: BrowserContext, request: ReturnType<type
   return { extracted, url };
 }
 
-export async function readBook(context: BrowserContext, input: ReadBookRequest): Promise<string> {
+export async function readBook(context: BrowserContext, input: ReadBookRequest): Promise<ReadBookResult> {
   const request = validateReadBookRequest(input);
   const { extracted, url } = await extractBookPage(context, request);
 
   if (request.mode === "outline") {
-    return JSON.stringify({
+    return {
       kind: "outline",
       book: request.chapterSlug ? { slug: request.bookSlug } : { slug: request.bookSlug, title: extracted.title },
       scope: request.chapterSlug
@@ -589,7 +626,7 @@ export async function readBook(context: BrowserContext, input: ReadBookRequest):
       entries: extracted.outline,
       nextCursor: null,
       done: true,
-    }, null, 2);
+    };
   }
 
   const selected = selectSection(extracted, request.section);
@@ -619,10 +656,10 @@ export async function readBook(context: BrowserContext, input: ReadBookRequest):
     fingerprint,
   }) : null;
 
-  return JSON.stringify({
+  return {
     kind: "content",
     book: { slug: request.bookSlug },
-    chapter: { slug: request.chapterSlug, title: extracted.title, url },
+    chapter: { slug: request.chapterSlug!, title: extracted.title, url },
     ...(selected.section ? { section: selected.section } : {}),
     text: chunk.text,
     images,
@@ -630,5 +667,5 @@ export async function readBook(context: BrowserContext, input: ReadBookRequest):
     done: nextCursor === null,
     maxChars: request.maxChars,
     serverMaxChars: SERVER_MAX_CHARS,
-  }, null, 2);
+  };
 }
