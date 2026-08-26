@@ -52,10 +52,11 @@ release requires all of the following before merge:
    mocks, synthetic fixtures, local browser pages, and Docker smoke tests, but
    it must never receive a D&D Beyond session or contact D&D Beyond.
 4. Run the complete live test suite locally, outside GitHub Actions, using the
-   helper-managed session volume and the dedicated live-test target. Record the
-   command, commit SHA, result, and any skipped tests in the release PR. If the
-   live suite does not yet exist, cannot run, or does not pass, the release is
-   blocked unless the user explicitly accepts that exception.
+   helper-managed session volume and `make test-release` (or the targeted
+   `make live-test`). Record the command, commit SHA, result, and any skipped
+   tests in the release PR. If the live suite does not yet exist, cannot run,
+   or does not pass, the release is blocked unless the user explicitly accepts
+   that exception.
 5. Obtain the user's release approval after the automated and live results are
    available. Merge or squash the release PR; do not rebase-merge it because
    the release workflow compares the release commit with its first parent.
@@ -86,9 +87,10 @@ Use the locked dependency graph. Do not casually regenerate `package-lock.json`.
 ```bash
 make build
 make test
+make test-core
 make test-docker
-make test-all
 # Explicit local release gate only; see LIVE_TESTING.md:
+make test-release
 make live-test-host
 make live-test
 ```
@@ -97,18 +99,16 @@ The Makefile is the canonical build and test interface for local development
 and CI. Its targets may delegate to locked npm and Go commands; invoke those
 underlying commands directly only when diagnosing a failing target.
 
-The default test suite is offline and includes unit tests plus MCP protocol
-integration tests over both in-memory and subprocess stdio transports with an
-injected mock Playwright context. For every source change, run at least
-`make test`. Review
+The default `make test` suite is fully non-live. It builds the current server,
+viewers, helper, and candidate image, then runs host, browser, and Docker tests,
+including MCP protocol integration over both in-memory and subprocess stdio
+transports with an injected mock Playwright context. For every source change,
+run `make test`. Review
 changes under `dist/` after building and commit the generated files that
 correspond to the edited source.
 
-For container-related changes, also run:
-
-```bash
-make test-docker
-```
+Use `make test-core`, `make test-browser`, or `make test-docker` only for a
+targeted iteration loop; each builds the artifact it exercises.
 
 Do not claim authenticated or live-site behavior was verified unless it was
 actually exercised with a suitable local session. Build-only verification is
@@ -192,8 +192,9 @@ confidence that cannot be established with offline fixtures.
   release pull request.
 - Do not run a live test unless the task explicitly calls for it or the user
   approves it after being told what pages and account data it will access.
-- Treat invocation of the dedicated live-test target as explicit opt-in; do not
-  require a redundant authorization environment flag.
+- Treat invocation of `make live-test`, `make live-test-host`, or
+  `make test-release` as explicit opt-in; do not require a redundant
+  authorization environment flag.
 - Reuse the normal helper-managed Docker volume for Docker live tests and mount
   it read-only. Host-only diagnostics may use an explicitly selected external
   session path. Never copy session state into the repository or test artifacts.
@@ -225,7 +226,7 @@ they must:
 - Live in separately selectable host and Docker suites, exposed through
   targets such as `make live-test-write-host` and `make live-test-write`.
   They must never run through `make test`, `make live-test-host`,
-  `make live-test`, ordinary CI, or the default
+  `make live-test`, `make test-release`, ordinary CI, or the default
   release verification.
 - Require a separate explicit write-test environment opt-in in addition to
   invoking the command and satisfying the normal live-session opt-ins.

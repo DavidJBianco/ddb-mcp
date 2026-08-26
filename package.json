@@ -12,7 +12,7 @@
     "lint": "eslint src/ apps/",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.apps.json",
     "test": "npm run build && npm run test:offline && npm run test:browser:only",
-    "test:unit": "node --test test/character-pdf.test.mjs test/ci-isolation.test.mjs test/docker-session-safeguards.test.mjs test/library.test.mjs test/navigate.test.mjs test/search.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/stat-block.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
+    "test:unit": "node --test test/character-pdf.test.mjs test/ci-isolation.test.mjs test/docker-session-safeguards.test.mjs test/library.test.mjs test/make-targets.test.mjs test/navigate.test.mjs test/search.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/stat-block.test.mjs test/tool-behavior.test.mjs test/version.test.mjs",
     "test:mcp": "node --test test/synthetic-harness.test.mjs test/mcp-integration.test.mjs test/mcp-contract.test.mjs test/failure-diagnostics.test.mjs",
     "test:offline": "npm run test:unit && npm run test:mcp",
     "test:browser": "npm run build && npm run test:browser:only",
@@ -20,7 +20,7 @@
     "test:docker": "docker build --tag mysterium:test . && MYSTERIUM_TEST_IMAGE=mysterium:test npm run test:docker:run",
     "test:docker:architecture": "node --test --test-concurrency=1 test/docker/architecture-smoke.test.mjs test/docker/container-hardening.test.mjs test/docker/toolkit-compat.test.mjs",
     "test:docker:run": "node --test --test-concurrency=1 test/docker/*.test.mjs",
-    "test:live": "npm run build && node --test --test-concurrency=1 test/live/live-read.test.mjs",
+    "test:live": "node --test --test-concurrency=1 test/live/live-read.test.mjs",
     "test:live:docker": "node test/live/run-live-docker.mjs",
     "test:go": "cd cmd/mysterium-auth && go test ./...",
     "build:auth": "make helper"

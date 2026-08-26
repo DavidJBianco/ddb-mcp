@@ -10,7 +10,7 @@ test("offline safeguard: GitHub workflows cannot invoke authenticated tests", as
   );
 
   for (const content of contents) {
-    assert.doesNotMatch(content, /npm run test:live(?::docker)?|make live-test(?:-host)?/);
+    assert.doesNotMatch(content, /npm run test:live(?::docker)?|make live-test(?:-host)?|make test-release/);
   }
 });
 

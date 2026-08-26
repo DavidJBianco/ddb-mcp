@@ -4,8 +4,17 @@ Live tests are a local release gate, not a GitHub Actions job. They make
 authenticated, read-only requests to D&D Beyond. The suite never performs a
 fresh login, clicks account controls, fills forms, or modifies D&D Beyond data.
 
-Invoking a dedicated live-test Make target is the explicit opt-in. No additional
-authorization environment flag is required.
+Invoking `make live-test`, `make live-test-host`, or `make test-release` is the
+explicit opt-in. No additional authorization environment flag is required.
+
+For complete release-candidate verification, run:
+
+```bash
+make test-release
+```
+
+This runs every non-live test, builds one candidate image, and then reuses that
+exact image for the read-only Docker live suite.
 
 ## Docker live suite
 
@@ -17,8 +26,8 @@ make login
 make live-test
 ```
 
-`make live-test` verifies that the volume exists and has the `mysterium-auth`
-ownership labels before building and running the candidate image. The volume is
+`make live-test` builds the candidate image, verifies that the volume exists
+and has the `mysterium-auth` ownership labels, and then runs that image. The volume is
 mounted read-only at `/home/mcp/.config/mysterium`; session state is never
 copied to a host test file. Override the volume only when deliberately using a
 separately helper-managed volume:
@@ -27,8 +36,9 @@ separately helper-managed volume:
 MYSTERIUM_SESSION_VOLUME=another-managed-volume make live-test
 ```
 
-The Docker command builds `mysterium:live` before testing. Set
-`MYSTERIUM_LIVE_IMAGE` only when a different local candidate tag is required.
+The Docker command uses `mysterium:test` by default. Set `TEST_IMAGE` when a
+different local candidate tag is required. Within `make test-release`, Make
+builds that image once and both the offline Docker and live suites reuse it.
 The test container has a recognizable `mysterium-live-test-<runner-pid>` name
 and an `org.mysterium.test-suite=live` label. Normal MCP shutdown removes it
 through Docker's `--rm`; the runner also force-removes that exact name after
@@ -101,7 +111,7 @@ Add a record like this to the `dev` to `main` release PR:
 
 ```text
 Live test commit: <full commit SHA>
-Command: make live-test
+Command: make test-release
 Result: pass | fail
 Skips: none | <structural test names and approved reason>
 Manual fresh-login check: pass | not run with approved exception
