@@ -25,6 +25,12 @@ release plan or pull request.
 - [x] Add Docker MCP Toolkit integration coverage beyond a plain `docker run`,
   including catalog loading and an MCP call through a Toolkit profile where
   the test environment supports it.
+- [ ] Evaluate making the authoritative non-live suite fully containerized so
+  linting, type checks, Node unit/MCP/browser tests, Go helper tests, and
+  production-image tests run in a consistent Linux environment on macOS,
+  Windows, and Linux hosts. Retain focused host targets for fast iteration,
+  reuse the same candidate image across applicable stages, and weigh the added
+  Docker requirement and runtime before changing the current test workflow.
 
 ## Live test suite
 
