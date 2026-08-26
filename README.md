@@ -37,6 +37,24 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 `read_pdf_bytes` and `read_stat_block_for_app` are app-only helpers used by the
 inline viewers. Compatible clients hide them from the model-facing tool list.
 
+### Structured response contracts
+
+The mature model-facing JSON tools publish MCP output schemas and return the
+same result in both `structuredContent` and the JSON text content block:
+
+- `mysterium_list_library` returns `{ count, books }`.
+- `mysterium_search` returns `{ query, category, url, count, results }` with
+  ordinary, monster, or sourcebook result details appropriate to the category.
+- `mysterium_read_book` returns a `kind: "outline"` discovery result or a
+  `kind: "content"` result with bounded text, images, and cursor state.
+- `mysterium_get_stat_block` returns `kind: "stat_block"`, `"candidates"`, or
+  `"not_found"`.
+
+Successful results are validated before delivery; failures remain MCP tool
+errors with `isError: true`. MCP App entry points and app-private transport
+tools also publish exact output schemas, but retain concise text summaries so
+PDF bytes and complete rendering payloads are not duplicated.
+
 ## Quickstart
 
 ### Requirements

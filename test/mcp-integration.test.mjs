@@ -157,6 +157,22 @@ test("the stat-block viewer keeps canonical content app-private for redraws", as
   assert.equal(viewed.structuredContent.statBlock, undefined);
   assert.equal(viewed._meta.statBlock.kind, "stat_block");
   assert.equal(viewed._meta.statBlock.creature.name, "Synthetic Watcher");
+  assert.match(viewed.content[0].text, /^Ready to display/);
+  assert.throws(() => JSON.parse(viewed.content[0].text));
+
+  const modelResult = await client.callTool({
+    name: "mysterium_get_stat_block",
+    arguments: { query: "Synthetic Watcher" },
+  });
+  assert.deepEqual(JSON.parse(modelResult.content[0].text), modelResult.structuredContent);
+
+  const appResult = await client.callTool({
+    name: "read_stat_block_for_app",
+    arguments: { creature_id: "42", creature_url: resultRow.url },
+  });
+  assert.equal(appResult.structuredContent.kind, "stat_block");
+  assert.match(appResult.content[0].text, /^Loaded Synthetic Watcher/);
+  assert.throws(() => JSON.parse(appResult.content[0].text));
 });
 
 test("an MCP client can discover and call tools through the real server", async (t) => {
@@ -174,8 +190,10 @@ test("an MCP client can discover and call tools through the real server", async 
     url: () => "https://www.dndbeyond.com/synthetic-current-page",
     goto: async (url, options) => visits.push({ url, options }),
     waitForTimeout: async () => {},
-    evaluate: async (_extractor, argument) =>
-      argument === "spells" ? syntheticResults : "Synthetic current page content",
+    evaluate: async (_extractor, argument) => {
+      if (argument === "spells") return visits.at(-1)?.url.includes("missing") ? [] : syntheticResults;
+      return "Synthetic current page content";
+    },
   };
   const context = { pages: () => [page] };
   const client = await connectClient(t, async () => {
@@ -241,9 +259,75 @@ test("an MCP client can discover and call tools through the real server", async 
     arguments: { query: "shield", category: "spells" },
   });
   assert.equal(searchResult.isError, undefined);
-  assert.deepEqual(JSON.parse(searchResult.content[0].text).results, syntheticResults);
+  assert.deepEqual(JSON.parse(searchResult.content[0].text), searchResult.structuredContent);
+  assert.deepEqual(searchResult.structuredContent.results, syntheticResults);
   assert.equal(visits[0].url, "https://www.dndbeyond.com/spells?filter-search=shield");
   assert.equal(contextRequests, 2);
+
+  const emptySearch = await client.callTool({
+    name: "mysterium_search",
+    arguments: { query: "missing", category: "spells" },
+  });
+  assert.deepEqual(JSON.parse(emptySearch.content[0].text), emptySearch.structuredContent);
+  assert.deepEqual(emptySearch.structuredContent.results, []);
+});
+
+test("library and sourcebook tools return schema-validated JSON parity", async (t) => {
+  let currentUrl = "about:blank";
+  const bookOutline = {
+    title: "Synthetic Handbook",
+    outline: [{
+      id: "toc-safe-examples-1",
+      title: "Safe Examples",
+      level: 1,
+      parentId: null,
+      chapterSlug: "safe-examples",
+      url: "https://www.dndbeyond.com/sources/synthetic-handbook/safe-examples",
+    }],
+    blocks: [],
+    images: [],
+  };
+  const chapter = {
+    title: "Safe Examples",
+    outline: [{ id: "section-intro-1", title: "Intro", level: 2, parentId: null }],
+    blocks: [
+      { text: "## Intro", headingId: "section-intro-1", headingLevel: 2, imageIds: [] },
+      { text: "Synthetic sourcebook paragraph.", imageIds: [] },
+    ],
+    images: [],
+  };
+  const page = {
+    goto: async (url) => { currentUrl = url; },
+    url: () => currentUrl,
+    waitForTimeout: async () => {},
+    waitForSelector: async () => {},
+    evaluate: async (_extractor, argument) => {
+      if (currentUrl === "https://www.dndbeyond.com" && argument === undefined) return true;
+      if (currentUrl.includes("/en/library")) return [];
+      return currentUrl.endsWith("/safe-examples") ? chapter : bookOutline;
+    },
+  };
+  const client = await connectClient(t, async () => ({ pages: () => [page] }));
+
+  const library = await client.callTool({ name: "mysterium_list_library", arguments: {} });
+  assert.deepEqual(JSON.parse(library.content[0].text), library.structuredContent);
+  assert.deepEqual(library.structuredContent, { count: 0, books: [] });
+
+  const outline = await client.callTool({
+    name: "mysterium_read_book",
+    arguments: { book_slug: "synthetic-handbook" },
+  });
+  assert.deepEqual(JSON.parse(outline.content[0].text), outline.structuredContent);
+  assert.equal(outline.structuredContent.kind, "outline");
+
+  const content = await client.callTool({
+    name: "mysterium_read_book",
+    arguments: { book_slug: "synthetic-handbook", chapter_slug: "safe-examples", max_chars: 20 },
+  });
+  assert.deepEqual(JSON.parse(content.content[0].text), content.structuredContent);
+  assert.equal(content.structuredContent.kind, "content");
+  assert.equal(content.structuredContent.done, false);
+  assert.ok(content.structuredContent.nextCursor);
 });
 
 test("MCP input validation rejects invalid arguments before browser access", async (t) => {

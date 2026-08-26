@@ -151,6 +151,8 @@ test("character PDF tools and UI resource expose the intended MCP Apps contract"
   const byteTool = listed.tools.find(({ name }) => name === "read_pdf_bytes");
   assert.deepEqual(byteTool._meta.ui.visibility, ["app"]);
   assert.equal(byteTool.inputSchema.properties.byteCount.maximum, 512 * 1024);
+  assert.deepEqual(byteTool.outputSchema.required.sort(), ["byteCount", "bytes", "hasMore", "offset", "totalBytes", "url"].sort());
+  assert.equal(byteTool.outputSchema.additionalProperties, false);
   assert.equal(byteTool.annotations.idempotentHint, true);
 
   const resources = await client.listResources();
@@ -178,6 +180,8 @@ test("stat-block tools and viewer resource expose separate model and app data pa
   const getTool = listed.tools.find(({ name }) => name === "mysterium_get_stat_block");
   assert.deepEqual(getTool.inputSchema.properties.legacy.enum, ["include", "exclude", "only"]);
   assert.equal(getTool.inputSchema.required, undefined);
+  assert.deepEqual(getTool.outputSchema.properties.kind.enum, ["stat_block", "candidates", "not_found"]);
+  assert.equal(getTool.outputSchema.additionalProperties, false);
 
   const viewTool = listed.tools.find(({ name }) => name === "mysterium_view_stat_block");
   assert.equal(viewTool._meta.ui.resourceUri, "ui://mysterium/stat-block-viewer.html");
@@ -188,6 +192,8 @@ test("stat-block tools and viewer resource expose separate model and app data pa
   assert.deepEqual(appReader._meta.ui.visibility, ["app"]);
   assert.match(appReader.inputSchema.properties.creature_id.pattern, /\\d/);
   assert.equal(appReader.inputSchema.properties.creature_url.format, "uri");
+  assert.equal(appReader.outputSchema.properties.kind.const, "stat_block");
+  assert.equal(appReader.outputSchema.additionalProperties, false);
 
   const resources = await client.listResources();
   const viewer = resources.resources.find(({ uri }) => uri === "ui://mysterium/stat-block-viewer.html");
@@ -199,6 +205,28 @@ test("stat-block tools and viewer resource expose separate model and app data pa
   assert.doesNotMatch(resource.contents[0].text, /https:\/\/(?:unpkg|cdn)\./);
   assert.deepEqual(resource.contents[0]._meta.ui.permissions, { clipboardWrite: {} });
   assert.equal(resource.contents[0]._meta.ui.csp, undefined);
+});
+
+test("mature model-facing tools publish exact output schemas", async (t) => {
+  const client = await connect(t, async () => {
+    throw new Error("contract inspection must not request a browser");
+  });
+  const tools = new Map((await client.listTools()).tools.map((tool) => [tool.name, tool]));
+
+  const library = tools.get("mysterium_list_library").outputSchema;
+  assert.deepEqual(library.required.sort(), ["books", "count"]);
+  assert.equal(library.properties.count.minimum, 0);
+  assert.equal(library.additionalProperties, false);
+
+  const search = tools.get("mysterium_search").outputSchema;
+  assert.deepEqual(search.required.sort(), ["category", "count", "query", "results", "url"]);
+  assert.deepEqual(search.properties.category.enum, ["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"]);
+  assert.equal(search.additionalProperties, false);
+
+  const readBook = tools.get("mysterium_read_book").outputSchema;
+  assert.deepEqual(readBook.properties.kind.enum, ["outline", "content"]);
+  assert.deepEqual(readBook.required.sort(), ["book", "done", "kind", "nextCursor"]);
+  assert.equal(readBook.additionalProperties, false);
 });
 
 test("mysterium_read_book rejects invalid field combinations and malformed cursors before browser access", async (t) => {

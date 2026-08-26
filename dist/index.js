@@ -13,6 +13,8 @@ import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
 import { search, validateSearchRequest } from "./tools/search.js";
 import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
 import { extractStatBlock, getStatBlock, resolveStatBlock, validateStatBlockRequest, } from "./tools/stat-block.js";
+import { libraryEnvelopeSchema, readBookResultSchema, searchEnvelopeSchema, statBlockResolutionSchema, statBlockResultSchema, statBlockSchema, } from "./tool-contracts.js";
+import { jsonToolResult } from "./tool-result.js";
 import { PACKAGE_VERSION } from "./version.js";
 // Lazy-initialized shared browser context
 async function getSharedContext() {
@@ -192,16 +194,17 @@ export function createServer(getContextForTool = getSharedContext, options = {})
             }],
     }));
     // ─── Stat block lookup and viewer ───────────────────────────────────────────────────
-    server.tool("mysterium_get_stat_block", "Resolve and retrieve a rendered D&D Beyond stat block as normalized JSON and faithful Markdown. Covers cataloged monsters and NPCs; ambiguous exact names return candidates.", statBlockInputSchema, async ({ query, creature_id, legacy }) => {
+    server.registerTool("mysterium_get_stat_block", {
+        description: "Resolve and retrieve a rendered D&D Beyond stat block as normalized JSON and faithful Markdown. Covers cataloged monsters and NPCs; ambiguous exact names return candidates.",
+        inputSchema: statBlockInputSchema,
+        outputSchema: statBlockResultSchema,
+    }, async ({ query, creature_id, legacy }) => {
         try {
             const request = statBlockRequest(query, creature_id, legacy);
             validateStatBlockRequest(request);
             const context = await getContextForTool();
             const result = await getStatBlock(context, request);
-            return {
-                content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-                structuredContent: result,
-            };
+            return jsonToolResult(result);
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : "Stat block lookup failed.";
@@ -212,7 +215,7 @@ export function createServer(getContextForTool = getSharedContext, options = {})
         title: "View D&D Beyond Stat Block",
         description: "Resolve a cataloged monster or NPC and display its authenticated D&D Beyond stat block in a read-only viewer with PNG export.",
         inputSchema: statBlockInputSchema,
-        outputSchema: z.object({ kind: z.enum(["resolved", "candidates", "not_found"]) }).passthrough(),
+        outputSchema: statBlockResolutionSchema,
         annotations: {
             readOnlyHint: true,
             destructiveHint: false,
@@ -269,7 +272,7 @@ export function createServer(getContextForTool = getSharedContext, options = {})
             creature_id: z.string().regex(/^\d+$/),
             creature_url: z.string().url().optional(),
         },
-        outputSchema: z.object({ kind: z.literal("stat_block") }).passthrough(),
+        outputSchema: statBlockSchema,
         annotations: {
             readOnlyHint: true,
             destructiveHint: false,
@@ -375,22 +378,26 @@ export function createServer(getContextForTool = getSharedContext, options = {})
         }
     });
     // ─── mysterium_search ───────────────────────────────────────────────────────────────
-    server.tool("mysterium_search", "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, sourcebooks, or general results. Results include normalized source attribution when D&D Beyond exposes it. Sourcebook searches default to accessible books.", {
-        query: z.string().describe("The search query (e.g. 'Fireball', 'Beholder', 'Vorpal Sword')"),
-        category: z
-            .enum(["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"])
-            .optional()
-            .describe("Category to search within (defaults to 'all'). Use 'sourcebooks' to search the rendered D&D Beyond library by title."),
-        source_scope: z
-            .enum(["accessible", "all"])
-            .optional()
-            .describe("Sourcebook availability scope. Defaults to 'accessible'; 'all' also returns unavailable catalog/store results. Valid only with category 'sourcebooks'."),
+    server.registerTool("mysterium_search", {
+        description: "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, sourcebooks, or general results. Results include normalized source attribution when D&D Beyond exposes it. Sourcebook searches default to accessible books.",
+        inputSchema: {
+            query: z.string().describe("The search query (e.g. 'Fireball', 'Beholder', 'Vorpal Sword')"),
+            category: z
+                .enum(["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"])
+                .optional()
+                .describe("Category to search within (defaults to 'all'). Use 'sourcebooks' to search the rendered D&D Beyond library by title."),
+            source_scope: z
+                .enum(["accessible", "all"])
+                .optional()
+                .describe("Sourcebook availability scope. Defaults to 'accessible'; 'all' also returns unavailable catalog/store results. Valid only with category 'sourcebooks'."),
+        },
+        outputSchema: searchEnvelopeSchema,
     }, async ({ query, category, source_scope }) => {
         try {
             validateSearchRequest(category ?? "all", source_scope);
             const context = await getContextForTool();
             const results = await search(context, query, category ?? "all", source_scope);
-            return { content: [{ type: "text", text: results }] };
+            return jsonToolResult(results);
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -398,11 +405,15 @@ export function createServer(getContextForTool = getSharedContext, options = {})
         }
     });
     // ─── mysterium_list_library ─────────────────────────────────────────────────────────
-    server.tool("mysterium_list_library", "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with mysterium_read_book.", {}, async () => {
+    server.registerTool("mysterium_list_library", {
+        description: "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with mysterium_read_book.",
+        inputSchema: {},
+        outputSchema: libraryEnvelopeSchema,
+    }, async () => {
         try {
             const context = await getContextForTool();
             const books = await listLibrary(context);
-            return { content: [{ type: "text", text: books }] };
+            return jsonToolResult(books);
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -410,37 +421,41 @@ export function createServer(getContextForTool = getSharedContext, options = {})
         }
     });
     // ─── mysterium_read_book ────────────────────────────────────────────────────────────
-    server.tool("mysterium_read_book", "Discover an accessible D&D Beyond sourcebook's table of contents or chapter headings, or read bounded chapter or section Markdown with cursor pagination. Returns a JSON envelope with nextCursor and done.", {
-        book_slug: z
-            .string()
-            .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
-            .describe("Required sourcebook path after /sources/ (for example, 'dnd/phb-2024')."),
-        chapter_slug: z
-            .string()
-            .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
-            .optional()
-            .describe("Optional chapter path returned by a book outline. With no mode it selects content; omit it to retrieve the book outline."),
-        mode: z
-            .enum(["outline", "content"])
-            .optional()
-            .describe("Optional operation. Defaults to 'outline' without chapter_slug and 'content' with chapter_slug."),
-        section: z
-            .string()
-            .min(1)
-            .optional()
-            .describe("Optional stable section ID from a chapter outline, or an exact unique heading. Valid only for chapter content."),
-        cursor: z
-            .string()
-            .min(1)
-            .optional()
-            .describe("Opaque nextCursor from the preceding content response. Reuse the same book_slug, chapter_slug, section, and character limit."),
-        max_chars: z
-            .number()
-            .int()
-            .positive()
-            .max(SERVER_MAX_CHARS)
-            .optional()
-            .describe(`Maximum Markdown characters in a content chunk. Defaults to 10000 and cannot exceed ${SERVER_MAX_CHARS}.`),
+    server.registerTool("mysterium_read_book", {
+        description: "Discover an accessible D&D Beyond sourcebook's table of contents or chapter headings, or read bounded chapter or section Markdown with cursor pagination. Returns a JSON envelope with nextCursor and done.",
+        inputSchema: {
+            book_slug: z
+                .string()
+                .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
+                .describe("Required sourcebook path after /sources/ (for example, 'dnd/phb-2024')."),
+            chapter_slug: z
+                .string()
+                .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
+                .optional()
+                .describe("Optional chapter path returned by a book outline. With no mode it selects content; omit it to retrieve the book outline."),
+            mode: z
+                .enum(["outline", "content"])
+                .optional()
+                .describe("Optional operation. Defaults to 'outline' without chapter_slug and 'content' with chapter_slug."),
+            section: z
+                .string()
+                .min(1)
+                .optional()
+                .describe("Optional stable section ID from a chapter outline, or an exact unique heading. Valid only for chapter content."),
+            cursor: z
+                .string()
+                .min(1)
+                .optional()
+                .describe("Opaque nextCursor from the preceding content response. Reuse the same book_slug, chapter_slug, section, and character limit."),
+            max_chars: z
+                .number()
+                .int()
+                .positive()
+                .max(SERVER_MAX_CHARS)
+                .optional()
+                .describe(`Maximum Markdown characters in a content chunk. Defaults to 10000 and cannot exceed ${SERVER_MAX_CHARS}.`),
+        },
+        outputSchema: readBookResultSchema,
     }, async ({ book_slug, chapter_slug, mode, section, cursor, max_chars }) => {
         try {
             const request = {
@@ -454,7 +469,7 @@ export function createServer(getContextForTool = getSharedContext, options = {})
             validateReadBookRequest(request);
             const context = await getContextForTool();
             const content = await readBook(context, request);
-            return { content: [{ type: "text", text: content }] };
+            return jsonToolResult(content);
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
