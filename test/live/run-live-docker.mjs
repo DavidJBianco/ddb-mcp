@@ -33,10 +33,19 @@ try {
 
 const image = process.env.MYSTERIUM_LIVE_IMAGE ?? "mysterium:live";
 const containerName = `mysterium-live-test-${process.pid}`;
-const build = spawnSync("docker", ["build", "--tag", image, "."], { stdio: "inherit" });
-if (build.status !== 0) {
-  process.stderr.write("Live Docker candidate image build failed.\n");
-  process.exit(build.status ?? 1);
+const skipBuild = process.env.MYSTERIUM_LIVE_SKIP_BUILD === "1";
+if (skipBuild) {
+  const candidate = spawnSync("docker", ["image", "inspect", image], { stdio: "ignore" });
+  if (candidate.status !== 0) {
+    process.stderr.write("Live Docker tests could not find the prebuilt candidate image.\n");
+    process.exit(candidate.status ?? 1);
+  }
+} else {
+  const build = spawnSync("docker", ["build", "--tag", image, "."], { stdio: "inherit" });
+  if (build.status !== 0) {
+    process.stderr.write("Live Docker candidate image build failed.\n");
+    process.exit(build.status ?? 1);
+  }
 }
 
 let cleanedUp = false;

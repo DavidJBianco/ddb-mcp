@@ -52,7 +52,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Offline tests
-        run: make test
+        run: make test-core
 
       - name: Verify generated output is current
         run: git diff --exit-code -- dist/

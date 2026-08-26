@@ -255,15 +255,17 @@ Development still uses the locked Node and Go toolchains to build and test the p
 ```bash
 make build
 make test
-make test-docker
+# Explicit authenticated release verification only:
+make test-release
 ```
 
 `make build` regenerates `dist/`, builds `mysterium:local`, and writes a
-matching host helper to `bin/mysterium-auth`. Use `make test-all` for both the
-normal and container suites. `IMAGE`, `TEST_IMAGE`, and `BIN_DIR` can be
-overridden on the command line; run `make help` for the complete target list.
-These same targets are the CI entry points, so local and automated verification
-use the same commands.
+matching host helper to `bin/mysterium-auth`. `make test` builds the current
+server, viewer, helper, and candidate image before running every non-live host,
+browser, and Docker test. `IMAGE`, `TEST_IMAGE`, and `BIN_DIR` can be overridden
+on the command line; run `make help` for the complete target list. CI uses the
+same targeted bundles without duplicating its architecture-specific Docker
+jobs.
 
 `make test` includes the synthetic MCP App browser tests in headless Chromium;
 these remain fully offline and never read the saved D&D Beyond session. Use

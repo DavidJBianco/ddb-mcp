@@ -13,7 +13,7 @@ RELEASE_DIR ?= release
 RELEASE_IMAGE ?=
 AUTH_LDFLAGS = -s -w -X main.version=$(PACKAGE_VERSION) -X main.defaultImage=$(IMAGE)
 
-.PHONY: help deps build build-server image helper sync-auth-version check-auth-version release-catalog check audit test test-offline test-helper test-docker test-all live-test-host live-test login run
+.PHONY: help deps build build-server image helper sync-auth-version check-auth-version release-catalog check audit test test-core test-offline test-browser test-helper test-image test-docker test-release live-test-host live-test login run
 
 help:
 	@printf '%s\n' \
@@ -23,10 +23,11 @@ help:
 		'make helper       Build $(AUTH_HELPER) for the current host' \
 		'make release-catalog  Generate a catalog pinned to RELEASE_IMAGE' \
 		'make check        Run lint and type checks' \
-		'make test         Run lint, type checks, offline tests (including browser UI), and Go tests' \
+		'make test         Build and run every non-live test, including Docker' \
+		'make test-core    Build and run the non-container test suite' \
 		'make test-browser Run only the synthetic browser UI tests' \
 		'make test-docker  Build and exercise the production container' \
-		'make test-all     Run the normal and Docker test suites' \
+		'make test-release Run all non-live tests, then the opt-in read-only live suite' \
 		'make live-test    Run the opt-in, read-only Docker live suite' \
 		'make live-test-host  Run the opt-in host live suite' \
 		'make audit        Audit production npm dependencies' \
@@ -72,31 +73,38 @@ check: deps
 audit: deps
 	npm audit --audit-level=high --omit=dev
 
-test: check test-helper test-offline
+test: test-core test-docker
 
-test-offline: deps
-	npm test
+test-core: check test-helper test-offline
 
-test-browser: deps
-	npm run test:browser
+test-offline: build-server
+	npm run test:offline
+	npm run test:browser:only
+
+test-browser: build-server
+	npm run test:browser:only
 
 test-helper: check-auth-version
+	node -e "require('node:fs').mkdirSync(process.argv[1], { recursive: true })" "$(BIN_DIR)"
+	go -C cmd/mysterium-auth build -trimpath -ldflags "$(AUTH_LDFLAGS)" -o "$(AUTH_HELPER_ABS)" .
 	go -C cmd/mysterium-auth test ./...
 	go -C cmd/mysterium-auth vet ./...
 
-test-docker: deps
+test-image: deps
 ifeq ($(BUILD_DOCKER_IMAGE),1)
 	docker build --tag "$(TEST_IMAGE)" .
 endif
+
+test-docker: test-image
 	MYSTERIUM_TEST_IMAGE="$(TEST_IMAGE)" npm run "$(DOCKER_TEST_SCRIPT)"
 
-test-all: test test-docker
+test-release: test live-test
 
-live-test-host: deps
+live-test-host: build-server
 	npm run test:live
 
-live-test: deps
-	npm run test:live:docker
+live-test: test-image
+	MYSTERIUM_LIVE_IMAGE="$(TEST_IMAGE)" MYSTERIUM_LIVE_SKIP_BUILD=1 npm run test:live:docker
 
 login: image helper
 	"./$(AUTH_HELPER)" login --image "$(IMAGE)"

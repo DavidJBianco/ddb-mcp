@@ -5,7 +5,6 @@
 ## Verification
 
 - [ ] `make test`
-- [ ] `make test-docker`, if container behavior changed
 
 ## Release checklist (`dev` → `main` only)
 

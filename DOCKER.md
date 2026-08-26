@@ -22,16 +22,16 @@ The image installs the Chromium version matched to the locked Playwright
 dependency and runs the MCP server over standard input/output under Xvfb. The
 runtime process uses the unprivileged `mcp` user (UID 10001).
 
-Run the offline container integration suite with:
+Run every non-live test, including the container integration suite, with:
 
 ```bash
-make test-docker
+make test
 ```
 
-`make test` runs linting, type checks, offline MCP tests, synthetic headless-
-Chromium MCP App tests, and the Go helper tests without building the production
-container. `make test-all` adds the
-container suite.
+`make test` builds the current server, viewers, helper, and candidate image,
+then runs linting, type checks, offline MCP tests, synthetic headless-Chromium
+MCP App tests, Go helper tests, and the container suite. Use `make test-docker`
+to build and run only the container bundle while iterating.
 
 The suite exercises MCP initialization through the normal image entrypoint and
 uses a read-only mounted synthetic Playwright backend for browser-backed tool

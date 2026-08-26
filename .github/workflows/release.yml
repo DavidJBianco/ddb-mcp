@@ -94,7 +94,7 @@ jobs:
 
       - name: Verify release source
         run: |
-          make test
+          make test-core
           make audit
           git diff --exit-code -- dist/
           test -z "$(gofmt -l cmd/mysterium-auth)"
