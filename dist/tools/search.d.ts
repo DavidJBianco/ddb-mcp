@@ -52,5 +52,5 @@ export interface SearchEnvelope {
     results: Array<OrdinarySearchResult | SourcebookSearchResult>;
 }
 export declare function searchResults(context: BrowserContext, query: string, category?: SearchCategory, sourceScope?: SourceScope, pageOverride?: Page): Promise<SearchEnvelope>;
-export declare function search(context: BrowserContext, query: string, category?: SearchCategory, sourceScope?: SourceScope): Promise<string>;
+export declare function search(context: BrowserContext, query: string, category?: SearchCategory, sourceScope?: SourceScope): Promise<SearchEnvelope>;
 //# sourceMappingURL=search.d.ts.map

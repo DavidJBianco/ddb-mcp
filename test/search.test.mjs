@@ -48,8 +48,7 @@ test("search builds a category URL and returns structured results", async () => 
   ];
   const harness = searchHarness(expectedResults);
 
-  const output = await search(harness.context, "fire bolt", "spells");
-  const parsed = JSON.parse(output);
+  const parsed = await search(harness.context, "fire bolt", "spells");
 
   assert.equal(
     harness.visits[0].url,
@@ -65,9 +64,7 @@ test("search builds a category URL and returns structured results", async () => 
 test("search reports an empty synthetic result set", async () => {
   const harness = searchHarness([]);
 
-  const output = await search(harness.context, "missing spell", "spells");
-
-  const parsed = JSON.parse(output);
+  const parsed = await search(harness.context, "missing spell", "spells");
   assert.equal(parsed.count, 0);
   assert.deepEqual(parsed.results, []);
   assert.match(parsed.url, /filter-search=missing%20spell/);
@@ -141,7 +138,7 @@ test("ordinary search results cover absent, multiple, and incomplete attribution
     },
   ]);
 
-  const parsed = JSON.parse(await search(harness.context, "sources", "spells"));
+  const parsed = await search(harness.context, "sources", "spells");
   assert.deepEqual(parsed.results[0].sources, []);
   assert.deepEqual(parsed.results[1].sources, [
     {
@@ -184,7 +181,7 @@ test("monster search preserves rendered Legacy and edition metadata without infe
       ];
     },
   };
-  const parsed = JSON.parse(await search({ pages: () => [page] }, "Synthetic Watcher", "monsters"));
+  const parsed = await search({ pages: () => [page] }, "Synthetic Watcher", "monsters");
   assert.equal(navigationOptions.waitUntil, "domcontentloaded");
   assert.match(waitedForSelector, /listing-body/);
   assert.equal(parsed.results[0].creatureId, "42");
@@ -233,7 +230,7 @@ test("sourcebook search defaults to accessible books", async () => {
     },
   ]);
 
-  const parsed = JSON.parse(await search(harness.context, "handbook", "sourcebooks"));
+  const parsed = await search(harness.context, "handbook", "sourcebooks");
   assert.equal(harness.visits[1].url, "https://www.dndbeyond.com/en/library?type=sourcebooks&ownership=owned-shared");
   assert.deepEqual(harness.fills, ["handbook"]);
   assert.equal(parsed.count, 1);
@@ -253,7 +250,7 @@ test("all-sourcebook scope preserves unavailable and unknown catalog entries", a
     { title: "Unclear Book", ownership: "", url: "https://www.dndbeyond.com/library/unclear", bookSlug: null, access: "unknown" },
   ];
   const harness = sourcebookHarness(cards);
-  const parsed = JSON.parse(await search(harness.context, "book", "sourcebooks", "all"));
+  const parsed = await search(harness.context, "book", "sourcebooks", "all");
 
   assert.equal(harness.visits[1].url, "https://www.dndbeyond.com/en/library?type=sourcebooks");
   assert.deepEqual(parsed.results.map(({ access }) => access), ["unavailable", "unknown"]);
@@ -261,7 +258,7 @@ test("all-sourcebook scope preserves unavailable and unknown catalog entries", a
 });
 
 test("sourcebook search returns a JSON envelope for no matches", async () => {
-  const parsed = JSON.parse(await search(sourcebookHarness([]).context, "missing", "sourcebooks"));
+  const parsed = await search(sourcebookHarness([]).context, "missing", "sourcebooks");
   assert.equal(parsed.count, 0);
   assert.deepEqual(parsed.results, []);
 });

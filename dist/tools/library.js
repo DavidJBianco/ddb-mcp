@@ -184,7 +184,7 @@ export async function listLibrary(context) {
         ownership,
         url,
     }));
-    return JSON.stringify({ count: books.length, books }, null, 2);
+    return { count: books.length, books };
 }
 export async function extractLibraryBookCards(page) {
     return page.evaluate(() => {
@@ -466,7 +466,7 @@ export async function readBook(context, input) {
     const request = validateReadBookRequest(input);
     const { extracted, url } = await extractBookPage(context, request);
     if (request.mode === "outline") {
-        return JSON.stringify({
+        return {
             kind: "outline",
             book: request.chapterSlug ? { slug: request.bookSlug } : { slug: request.bookSlug, title: extracted.title },
             scope: request.chapterSlug
@@ -476,7 +476,7 @@ export async function readBook(context, input) {
             entries: extracted.outline,
             nextCursor: null,
             done: true,
-        }, null, 2);
+        };
     }
     const selected = selectSection(extracted, request.section);
     const selectedImageIds = new Set(selected.blocks.flatMap(({ imageIds }) => imageIds));
@@ -499,7 +499,7 @@ export async function readBook(context, input) {
         offset: chunk.next.offset,
         fingerprint,
     }) : null;
-    return JSON.stringify({
+    return {
         kind: "content",
         book: { slug: request.bookSlug },
         chapter: { slug: request.chapterSlug, title: extracted.title, url },
@@ -510,6 +510,6 @@ export async function readBook(context, input) {
         done: nextCursor === null,
         maxChars: request.maxChars,
         serverMaxChars: SERVER_MAX_CHARS,
-    }, null, 2);
+    };
 }
 //# sourceMappingURL=library.js.map

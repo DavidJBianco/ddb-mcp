@@ -73,6 +73,17 @@ release plan or pull request.
 - [ ] Add contract tests for each reworked tool's JSON schema, empty result,
   partial result, upstream-shape change, and MCP error shape. Do not silently
   switch schemas when a fallback path is used.
+- [x] Publish exact output schemas and structured/JSON-text parity for the
+  mature `mysterium_list_library`, `mysterium_search`, `mysterium_read_book`,
+  and `mysterium_get_stat_block` response families. Validate MCP App results
+  through exact schemas while retaining concise App summaries rather than
+  duplicating PDF bytes or full renderer payloads.
+- [ ] When reviewing the deferred `mysterium_list_characters`,
+  `mysterium_get_character`, `mysterium_list_campaigns`,
+  `mysterium_get_campaign`, `mysterium_navigate`, `mysterium_current_page`, and
+  `mysterium_interact` designs, define each stable success envelope, empty and
+  partial result semantics, exact output schema, `structuredContent`, JSON-text
+  behavior, and contract tests before considering the tool release-ready.
 
 ## Character and campaign retrieval
 
@@ -131,6 +142,11 @@ release plan or pull request.
   scraper provides only name, level, race, class, HP, abilities, and skills. A
   separately named partial-summary tool can be reconsidered only if a concrete
   use case emerges.
+- [ ] **`mysterium_list_campaigns` contract:** Review campaign-list retrieval
+  alongside the campaign detail design. Define a stable normalized envelope,
+  empty-list behavior, exact output schema, structured/JSON-text parity, and
+  changed-upstream-shape tests without exposing administrative links or invite
+  secrets.
 - [x] **Focused PDF client-compatibility probe:** Claude Desktop 1.34493.1
   rejected a plain embedded `application/pdf` resource and could not
   dereference the custom-scheme resource link, but successfully rendered and
@@ -163,11 +179,13 @@ release plan or pull request.
   responses, cleanup, redaction, Claude delivery, and a bounded live success.
   Keep the viewer and its dependencies license-compliant, self-contained, and
   inside the production container; do not introduce an external helper app.
-  Implemented with the exact, hash-verified official viewer, a two-entry/50 MiB
-  in-memory cache with 60-minute sliding expiry, app-only bounded byte reads,
-  and direct-container Claude Desktop delivery. Offline, Docker, audit, live
-  acquisition, inline rendering, viewer controls, download, and downloaded-file
-  opening were verified; Codex and Toolkit Apps forwarding remain follow-ups.
+  Implemented with a source-owned shared Mysterium viewer shell and read-only
+  Mozilla PDF.js renderer, a two-entry/50 MiB in-memory cache with 60-minute
+  sliding expiry, gzip-compressed app-private restoration, app-only bounded
+  byte reads, searchable page text and form values, and direct-container Claude
+  Desktop delivery. Offline, Docker, audit, live acquisition, inline rendering,
+  viewer controls, download, and downloaded-file opening were verified; Codex
+  and Toolkit Apps forwarding remain follow-ups.
 - [ ] **`mysterium_get_campaign` enrichment:** Use the observed read-only campaign
   details and short-character data plus permission-aware rendered extraction.
   Return a stable JSON envelope containing campaign ID/name/status/creation
@@ -184,8 +202,9 @@ release plan or pull request.
   fields distinctly without revealing that hidden content exists to an
   unauthorized viewer. Test DM and player views, campaigns with no characters
   or notes, private characters, content sharing on/off, changed selectors,
-  upstream-detail failure with safe rendered fallback, and JSON contract
-  parity. Keep game-log retrieval and all mutations out of scope.
+  upstream-detail failure with safe rendered fallback, exact output schema,
+  `structuredContent`, JSON-text parity, and contract validation. Keep game-log
+  retrieval and all mutations out of scope.
 
 ## Future Maps and Journals exploration
 
@@ -206,7 +225,8 @@ release plan or pull request.
 
 - [ ] Review `mysterium_navigate`, `mysterium_current_page`, and `mysterium_interact` as a
   separate project before extending them. Reassess their stateful shared-page
-  contract, documentation, JSON response shapes, truncation, non-mutating DOM
+  contract, documentation, stable JSON response envelopes, exact output
+  schemas, structured/JSON-text behavior, truncation, non-mutating DOM
   extraction, click/fill safeguards, sensitive-value redaction, redirect
   checks, and whether screenshots should be returned directly as MCP image
   content instead of an inaccessible container-local `/tmp` path.
