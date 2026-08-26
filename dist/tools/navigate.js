@@ -1,16 +1,18 @@
 import { getPage } from "../browser.js";
 import { AuthenticationRequiredError, isLoggedInOnCurrentPage } from "../session-state.js";
+import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 export async function navigate(context, url) {
     const page = await getPage(context);
     if (!isAllowedDdbUrl(url)) {
         throw new Error("Only D&D Beyond URLs (https://www.dndbeyond.com/...) are supported.");
     }
-    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+    await openDomReadyPage(page, url, 30_000);
     if (!isAllowedDdbUrl(page.url())) {
         throw new Error("Navigation redirected outside D&D Beyond and was blocked.");
     }
     if (!(await isLoggedInOnCurrentPage(page)))
         throw new AuthenticationRequiredError();
+    await waitForRenderedContent(page, "body", 10_000);
     await page.waitForTimeout(1500);
     // Extract page text content and convert to readable markdown-ish format
     const content = await page.evaluate(() => {

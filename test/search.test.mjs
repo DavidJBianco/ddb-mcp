@@ -54,7 +54,7 @@ test("search builds a category URL and returns structured results", async () => 
     harness.visits[0].url,
     "https://www.dndbeyond.com/spells?filter-search=fire%20bolt"
   );
-  assert.equal(harness.visits[0].options.waitUntil, "networkidle");
+  assert.equal(harness.visits[0].options.waitUntil, "domcontentloaded");
   assert.equal(parsed.query, "fire bolt");
   assert.equal(parsed.category, "spells");
   assert.equal(parsed.count, 1);

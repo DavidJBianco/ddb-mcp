@@ -3,6 +3,7 @@ import type { BrowserContext, Page } from "playwright";
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
 import { extractLibraryBookCards, type LibraryBookCard } from "./library.js";
+import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 
 export type SearchCategory = "spells" | "monsters" | "items" | "races" | "classes" | "feats" | "sourcebooks" | "all";
 export type SourceScope = "accessible" | "all";
@@ -263,8 +264,9 @@ async function searchSourcebooks(page: Page, query: string, scope: SourceScope):
 
   const ownership = scope === "accessible" ? "&ownership=owned-shared" : "";
   const url = `${DDB_ORIGIN}/en/library?type=sourcebooks${ownership}`;
-  await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+  await openDomReadyPage(page, url, 30_000);
   throwIfAuthenticationRedirect(page);
+  await waitForRenderedContent(page, "input[placeholder*='Filter by title' i]:visible", 15_000);
 
   const filter = page.locator("input[placeholder*='Filter by title' i]:visible").first();
   if ((await filter.count()) === 0) {
@@ -326,17 +328,13 @@ export async function searchResults(
     searchUrl = category === "all"
       ? `${DDB_ORIGIN}/search?q=${encodedQuery}`
       : `${DDB_ORIGIN}/${path}?filter-search=${encodedQuery}`;
-    await page.goto(searchUrl, {
-      waitUntil: category === "monsters" ? "domcontentloaded" : "networkidle",
-      timeout: 30_000,
-    });
+    await openDomReadyPage(page, searchUrl, 30_000);
     throwIfAuthenticationRedirect(page);
-    if (category === "monsters") {
-      await page.waitForSelector(
-        ".listing-body, .search-results, [data-testid*='monster' i], main",
-        { timeout: 15_000 }
-      ).catch(() => undefined);
-    }
+    await waitForRenderedContent(
+      page,
+      ".listing-body, .search-results, .results-item, [data-testid*='monster' i], main",
+      15_000
+    );
     await page.waitForTimeout(1500);
     results = await extractOrdinaryResults(page, category);
   }

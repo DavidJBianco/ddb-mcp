@@ -1,6 +1,7 @@
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
 import { extractLibraryBookCards } from "./library.js";
+import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 const DDB_ORIGIN = "https://www.dndbeyond.com";
 const SOURCE_SLUG_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9/_-]*$/;
 const MONSTER_PATH_PATTERN = /^\/monsters\/(\d+)(?:-[a-zA-Z0-9][a-zA-Z0-9-]*)?\/?$/;
@@ -196,8 +197,9 @@ async function searchSourcebooks(page, query, scope) {
         throw new AuthenticationRequiredError();
     const ownership = scope === "accessible" ? "&ownership=owned-shared" : "";
     const url = `${DDB_ORIGIN}/en/library?type=sourcebooks${ownership}`;
-    await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+    await openDomReadyPage(page, url, 30_000);
     throwIfAuthenticationRedirect(page);
+    await waitForRenderedContent(page, "input[placeholder*='Filter by title' i]:visible", 15_000);
     const filter = page.locator("input[placeholder*='Filter by title' i]:visible").first();
     if ((await filter.count()) === 0) {
         throw new Error("D&D Beyond's sourcebook title filter was not found; the library layout may have changed.");
@@ -242,14 +244,9 @@ export async function searchResults(context, query, category = "all", sourceScop
         searchUrl = category === "all"
             ? `${DDB_ORIGIN}/search?q=${encodedQuery}`
             : `${DDB_ORIGIN}/${path}?filter-search=${encodedQuery}`;
-        await page.goto(searchUrl, {
-            waitUntil: category === "monsters" ? "domcontentloaded" : "networkidle",
-            timeout: 30_000,
-        });
+        await openDomReadyPage(page, searchUrl, 30_000);
         throwIfAuthenticationRedirect(page);
-        if (category === "monsters") {
-            await page.waitForSelector(".listing-body, .search-results, [data-testid*='monster' i], main", { timeout: 15_000 }).catch(() => undefined);
-        }
+        await waitForRenderedContent(page, ".listing-body, .search-results, .results-item, [data-testid*='monster' i], main", 15_000);
         await page.waitForTimeout(1500);
         results = await extractOrdinaryResults(page, category);
     }

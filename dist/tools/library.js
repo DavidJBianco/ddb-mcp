@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 export const DEFAULT_MAX_CHARS = 10_000;
 export const SERVER_MAX_CHARS = 25_000;
 const SLUG_PATTERN = /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/;
@@ -171,11 +172,9 @@ export async function listLibrary(context) {
     if (!(await isLoggedIn(page))) {
         throw new AuthenticationRequiredError();
     }
-    await page.goto("https://www.dndbeyond.com/en/library?type=sourcebooks&ownership=owned-shared", {
-        waitUntil: "networkidle",
-        timeout: 30000,
-    });
+    await openDomReadyPage(page, "https://www.dndbeyond.com/en/library?type=sourcebooks&ownership=owned-shared", 30_000);
     throwIfAuthenticationRedirect(page);
+    await waitForRenderedContent(page, "div[data-testid='sourceCard'], input[placeholder*='Filter by title' i], main", 15_000);
     await page.waitForTimeout(2000);
     const cards = await extractLibraryBookCards(page);
     const books = cards.map(({ title, bookSlug, ownership, url }) => ({
@@ -236,9 +235,9 @@ async function extractBookPage(context, request) {
     if (!(await isLoggedIn(page)))
         throw new AuthenticationRequiredError();
     const url = `https://www.dndbeyond.com/sources/${request.bookSlug}${request.chapterSlug ? `/${request.chapterSlug}` : ""}`;
-    await page.goto(url, { waitUntil: "networkidle", timeout: 45_000 });
+    await openDomReadyPage(page, url, 45_000);
     throwIfAuthenticationRedirect(page);
-    await page.waitForSelector("article, .content-container, .p-content, [class*='TableOfContents']", { timeout: 15_000 }).catch(() => { });
+    await waitForRenderedContent(page, "article, .content-container, .p-content, [class*='TableOfContents']", 15_000);
     const extracted = await page.evaluate(({ bookSlug, isBookOutline }) => {
         const liveRoot = document.querySelector("article") ??
             document.querySelector(".content-container") ??

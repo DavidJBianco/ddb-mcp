@@ -1,6 +1,7 @@
 import { BrowserContext } from "playwright";
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 
 export async function getCampaign(context: BrowserContext, campaignId: string): Promise<string> {
   const page = await getPage(context);
@@ -9,11 +10,9 @@ export async function getCampaign(context: BrowserContext, campaignId: string): 
     throw new AuthenticationRequiredError();
   }
 
-  await page.goto(`https://www.dndbeyond.com/campaigns/${campaignId}`, {
-    waitUntil: "networkidle",
-    timeout: 30000,
-  });
+  await openDomReadyPage(page, `https://www.dndbeyond.com/campaigns/${campaignId}`, 30_000);
   throwIfAuthenticationRedirect(page);
+  await waitForRenderedContent(page, "h1.page-title, .ddb-campaigns-detail, main", 15_000);
   await page.waitForTimeout(2000);
 
   const campaign = await page.evaluate(() => {
@@ -58,11 +57,9 @@ export async function listMyCampaigns(context: BrowserContext): Promise<string> 
     throw new AuthenticationRequiredError();
   }
 
-  await page.goto("https://www.dndbeyond.com/my-campaigns", {
-    waitUntil: "networkidle",
-    timeout: 30000,
-  });
+  await openDomReadyPage(page, "https://www.dndbeyond.com/my-campaigns", 30_000);
   throwIfAuthenticationRedirect(page);
+  await waitForRenderedContent(page, "li.ddb-campaigns-list-item-wrapper, main", 15_000);
   await page.waitForTimeout(2000);
 
   const campaigns = await page.evaluate(() => {

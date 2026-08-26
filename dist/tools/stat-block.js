@@ -1,5 +1,6 @@
 import { isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, isDdbHostname, throwIfAuthenticationRedirect } from "../session-state.js";
+import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 import { rememberedMonsterUrl, searchResults } from "./search.js";
 const DDB_ORIGIN = "https://www.dndbeyond.com";
 const CREATURE_ID_PATTERN = /^\d+$/;
@@ -115,7 +116,7 @@ async function extractStatBlockFromPage(page, creatureId, hintedUrl) {
         throw new Error("No validated catalog URL is known for this creature_id. Resolve the creature by query first, then retry the returned ID.");
     }
     const requested = safeMonsterUrl(knownUrl, creatureId);
-    await page.goto(requested.href, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await openDomReadyPage(page, requested.href, 45_000);
     const finalUrl = page.url();
     try {
         throwIfAuthenticationRedirect(page);
@@ -139,7 +140,7 @@ async function extractStatBlockFromPage(page, creatureId, hintedUrl) {
     catch {
         throw new StatBlockInaccessibleError(inaccessibleMessage(page));
     }
-    await page.waitForSelector("[data-testid*='stat-block' i], .mon-stat-block-2024, .mon-stat-block, [class*='mon-stat-block'], [class*='StatBlock'], article", { timeout: 15_000 }).catch(() => undefined);
+    await waitForRenderedContent(page, "[data-testid*='stat-block' i], .mon-stat-block-2024, .mon-stat-block, [class*='mon-stat-block'], [class*='StatBlock'], article", 15_000);
     const extracted = await page.evaluate(() => {
         const normalize = (value) => (value ?? "").replace(/\s+/g, " ").trim();
         const hasArmorClass = (value) => /(?:\bArmor Class\b|\bAC\s*\d)/i.test(value);
