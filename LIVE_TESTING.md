@@ -119,3 +119,29 @@ Helper volume validation: mysterium-auth validate --live => pass | fail | not ru
 ```
 
 Never paste the real session path or any returned account content into the PR.
+
+## Published release verification
+
+### v1.1.0
+
+- Release PR: [#22](https://github.com/DavidJBianco/mysterium/pull/22)
+- Release commit: `3c0367b0252ae5c784ef7a9658dc15ddd0077597`
+- Local release gate: `make test-release` passed at candidate commit
+  `9425c72b62b9109f02756c0ab2a49a07e37f7741` with 19 live tests passed,
+  0 failed, and 0 skipped. The non-live Docker MCP Toolkit routed-profile
+  check was skipped because its runtime was unavailable; its offline catalog
+  contract check passed.
+- GitHub Release: [v1.1.0](https://github.com/DavidJBianco/mysterium/releases/tag/v1.1.0),
+  targeting the exact release commit. All five helper archives passed their
+  published checksums, contained the expected executable and `LICENSE`, and
+  the published catalog pinned `ghcr.io/davidjbianco/mysterium:v1.1.0`.
+- Published image index:
+  `sha256:02c0dc7d50e51f3258599b69e3a90784ffbf22d0beb8a95f67c05d484ad9ddf3`.
+  Its `linux/amd64` and `linux/arm64` manifests were pulled by immutable
+  digest and each passed the six production-image hardening and runtime smoke
+  tests. The amd64 test ran under Docker emulation on an arm64 host.
+- Both architecture manifests have attached SPDX SBOM and SLSA provenance
+  statements. Their OCI labels identify version `1.1.0`, the MIT license, the
+  repository source, and the exact release commit. Runtime checks confirmed
+  the non-root `mcp` user and expected entrypoint, and found no session,
+  credential, test, or repository material in the image.
