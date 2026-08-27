@@ -1,57 +1,205 @@
 name: Release
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release (e.g. 1.0.1)"
-        required: true
-        type: string
 
 permissions:
   contents: write
+  packages: write
+  pull-requests: read
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Create Release
+    name: Tag, Release & Publish GHCR Image
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Verify this commit came from a dev release PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Releases must run from main; got: $GITHUB_REF" >&2
+            exit 1
+          fi
+
+          PR_NUMBER=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
+            --jq '[.[] | select(.base.ref == "main" and .head.ref == "dev" and .merged_at != null)][0].number // empty')
+          if [ -z "$PR_NUMBER" ]; then
+            echo "main releases must come from a merged dev -> main pull request" >&2
+            exit 1
+          fi
+          echo "Release PR: #${PR_NUMBER}"
+
+      - name: Resolve and validate release version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          LOCK_VERSION=$(node -p "require('./package-lock.json').version")
+          PREVIOUS_VERSION=$(git show "${GITHUB_SHA}^1:package.json" | node -e \
+            "let input = ''; process.stdin.on('data', chunk => input += chunk); process.stdin.on('end', () => console.log(JSON.parse(input).version));")
+
+          node -e \
+            "if (!/^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?$/.test(process.argv[1])) process.exit(1)" \
+            "$VERSION"
+
+          if [ "$VERSION" != "$LOCK_VERSION" ]; then
+            echo "package.json ($VERSION) and package-lock.json ($LOCK_VERSION) versions differ" >&2
+            exit 1
+          fi
+          if [ "$VERSION" = "$PREVIOUS_VERSION" ]; then
+            echo "Release PR did not change the version from $PREVIOUS_VERSION" >&2
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+          if git show-ref --tags --verify --quiet "refs/tags/${TAG}"; then
+            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+            if [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
+              echo "$TAG already points to $TAG_COMMIT, not $GITHUB_SHA" >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: cmd/mysterium-auth/go.mod
+          cache-dependency-path: cmd/mysterium-auth/go.sum
 
-      - name: Bump version
-        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
+      - name: Install locked dependencies
+        run: make deps
 
-      - name: Build
-        run: npm run build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
-      - name: Pack
-        run: npm pack
-
-      - name: Commit, tag and push
+      - name: Verify release source
         run: |
-          git config user.name "ddb-mcp-admin"
-          git config user.email "ddb-mcp-admin@users.noreply.github.com"
-          git add package.json package-lock.json dist/
-          git commit -m "Release v${{ github.event.inputs.version }}"
-          git tag "v${{ github.event.inputs.version }}"
-          git push origin main "v${{ github.event.inputs.version }}"
+          make test-core
+          make audit
+          git diff --exit-code -- dist/
+          test -z "$(gofmt -l cmd/mysterium-auth)"
 
-      - name: Create GitHub release
+      - name: Generate version-pinned Docker MCP catalog
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          gh release create "v${{ github.event.inputs.version }}" \
-            "ddb-mcp-${{ github.event.inputs.version }}.tgz" \
-            --title "v${{ github.event.inputs.version }}" \
-            --generate-notes
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:${TAG}"
+          make release-catalog RELEASE_IMAGE="$IMAGE"
+
+      - name: Build host authentication helpers
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:${TAG}"
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.defaultImage=${IMAGE}"
+          cp LICENSE release/LICENSE
+          build_helper() {
+            (cd cmd/mysterium-auth && GOOS="$1" GOARCH="$2" CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "../../release/mysterium-auth$3" .)
+            if [ "$1" = windows ]; then
+              (cd release && zip "mysterium-auth_${1}_${2}.zip" "mysterium-auth$3" LICENSE)
+            else
+              tar -C release -czf "release/mysterium-auth_${1}_${2}.tar.gz" "mysterium-auth$3" LICENSE
+            fi
+            rm "release/mysterium-auth$3"
+          }
+          build_helper darwin amd64 ""
+          build_helper darwin arm64 ""
+          build_helper linux amd64 ""
+          build_helper linux arm64 ""
+          build_helper windows amd64 ".exe"
+          (cd release && sha256sum mysterium-auth_*.tar.gz mysterium-auth_*.zip > checksums.txt)
+
+      - name: Resolve lowercase GHCR image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.tag }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and publish multi-platform image
+        id: image-build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Create annotated tag if needed
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git show-ref --tags --verify --quiet "refs/tags/${TAG}"; then
+            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+            if [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
+              echo "$TAG already points to $TAG_COMMIT, not $GITHUB_SHA" >&2
+              exit 1
+            fi
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag --annotate "$TAG" --message "Release $TAG" "$GITHUB_SHA"
+            git push origin "$TAG"
+          fi
+
+      - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --generate-notes
+          fi

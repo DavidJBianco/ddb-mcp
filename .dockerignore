@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+dist
+coverage
+cmd
+*.log
+npm-debug.log*
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Never send D&D Beyond browser sessions or local credentials to the daemon.
+session.json
+.config/mysterium
+.mysterium

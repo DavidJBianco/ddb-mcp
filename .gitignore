@@ -1,2 +1,10 @@
 node_modules/
+bin/
 *.js.map
+.env
+.env.*
+!.env.example
+session.json
+.config/mysterium/
+.mysterium/
+.DS_Store

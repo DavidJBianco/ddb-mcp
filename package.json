@@ -1,27 +1,47 @@
 {
-  "name": "ddb-mcp",
-  "version": "1.0.2",
-  "description": "D&D Beyond MCP Server with Google Auth",
+  "name": "mysterium",
+  "version": "1.1.0",
+  "license": "MIT",
+  "description": "Docker-first MCP server for authenticated D&D Beyond content",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.apps.json && node scripts/build-viewers.mjs",
     "build:watch": "tsc --watch",
-    "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint src/ apps/",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.apps.json",
+    "test": "npm run build && npm run test:offline && npm run test:browser:only",
+    "test:unit": "node --test test/character-pdf.test.mjs test/ci-isolation.test.mjs test/docker-session-safeguards.test.mjs test/library.test.mjs test/make-targets.test.mjs test/navigate.test.mjs test/navigation-readiness.test.mjs test/search.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/stat-block.test.mjs test/tool-behavior.test.mjs test/tool-contracts.test.mjs test/version.test.mjs",
+    "test:mcp": "node --test test/synthetic-harness.test.mjs test/mcp-integration.test.mjs test/mcp-contract.test.mjs test/failure-diagnostics.test.mjs",
+    "test:offline": "npm run test:unit && npm run test:mcp",
+    "test:browser": "npm run build && npm run test:browser:only",
+    "test:browser:only": "node --test --test-concurrency=1 test/*-browser.test.mjs",
+    "test:docker": "docker build --tag mysterium:test . && MYSTERIUM_TEST_IMAGE=mysterium:test npm run test:docker:run",
+    "test:docker:architecture": "node --test --test-concurrency=1 test/docker/architecture-smoke.test.mjs test/docker/container-hardening.test.mjs test/docker/toolkit-compat.test.mjs",
+    "test:docker:run": "node --test --test-concurrency=1 test/docker/*.test.mjs",
+    "test:live": "node --test --test-concurrency=1 test/live/live-read.test.mjs",
+    "test:live:docker": "node test/live/run-live-docker.mjs",
+    "test:go": "cd cmd/mysterium-auth && go test ./...",
+    "build:auth": "make helper"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "playwright": "^1.49.0"
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "playwright": "^1.49.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.56.0",
     "eslint": "^10.0.1",
+    "html2canvas": "^1.4.1",
+    "pdfjs-dist": "6.2.108",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vite": "6.4.3",
+    "vite-plugin-singlefile": "2.3.0"
   }
 }

@@ -1,47 +1,45 @@
 import { getPage, isLoggedIn } from "../browser.js";
-import { writeFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 export async function getCharacter(context, characterId) {
     const page = await getPage(context);
     // Verify session
     if (!(await isLoggedIn(page))) {
-        throw new Error("Not logged in. Please run ddb_login first.");
+        throw new AuthenticationRequiredError();
     }
     // Use the page context to make an authenticated fetch (cookies are shared)
-    const result = await page.evaluate(async (id) => {
-        const url = `https://character-service.dndbeyond.com/character/v5/character/${id}`;
-        const resp = await fetch(url, {
-            credentials: "include",
-            headers: {
-                Accept: "application/json",
-            },
-        });
-        if (!resp.ok) {
-            throw new Error(`API returned ${resp.status}: ${resp.statusText}`);
+    let result;
+    try {
+        result = await page.evaluate(async (id) => {
+            const url = `https://character-service.dndbeyond.com/character/v5/character/${id}`;
+            const resp = await fetch(url, {
+                credentials: "include",
+                headers: {
+                    Accept: "application/json",
+                },
+            });
+            if (!resp.ok) {
+                throw new Error(`API returned ${resp.status}: ${resp.statusText}`);
+            }
+            return resp.json();
+        }, characterId);
+    }
+    catch (error) {
+        if (error instanceof Error && /API returned (401|403)\b/.test(error.message)) {
+            throw new AuthenticationRequiredError();
         }
-        return resp.json();
-    }, characterId);
+        throw error;
+    }
     return JSON.stringify(result, null, 2);
-}
-export async function downloadCharacter(context, characterId, outputPath) {
-    const jsonData = await getCharacter(context, characterId);
-    const parsed = JSON.parse(jsonData);
-    const charName = parsed?.data?.name ?? `character-${characterId}`;
-    const filename = `${charName.replace(/\s+/g, "-").toLowerCase()}-${characterId}.json`;
-    const savePath = outputPath ?? join(homedir(), "Downloads", filename);
-    writeFileSync(savePath, jsonData, "utf8");
-    return `Character data for '${charName}' saved to: ${savePath}`;
 }
 export async function listCharacters(context) {
     const page = await getPage(context);
     if (!(await isLoggedIn(page))) {
-        throw new Error("Not logged in. Please run ddb_login first.");
+        throw new AuthenticationRequiredError();
     }
-    await page.goto("https://www.dndbeyond.com/characters", {
-        waitUntil: "networkidle",
-        timeout: 30000,
-    });
+    await openDomReadyPage(page, "https://www.dndbeyond.com/characters", 30_000);
+    throwIfAuthenticationRedirect(page);
+    await waitForRenderedContent(page, "li.ddb-campaigns-character-card-wrapper, main", 15_000);
     await page.waitForTimeout(2000);
     const characters = await page.evaluate(() => {
         const list = [];
@@ -67,12 +65,11 @@ export async function listCharacters(context) {
 export async function scrapeCharacterSheet(context, characterId) {
     const page = await getPage(context);
     if (!(await isLoggedIn(page))) {
-        throw new Error("Not logged in. Please run ddb_login first.");
+        throw new AuthenticationRequiredError();
     }
-    await page.goto(`https://www.dndbeyond.com/characters/${characterId}`, {
-        waitUntil: "networkidle",
-        timeout: 30000,
-    });
+    await openDomReadyPage(page, `https://www.dndbeyond.com/characters/${characterId}`, 30_000);
+    throwIfAuthenticationRedirect(page);
+    await waitForRenderedContent(page, ".character-name, .ddbc-character-name, .ddbc-character-sheet, main", 15_000);
     await page.waitForTimeout(2000);
     const content = await page.evaluate(() => {
         // Extract key sections from the character sheet

@@ -1,52 +1,93 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  getUiCapability,
+  registerAppResource,
+  registerAppTool,
+  RESOURCE_MIME_TYPE,
+} from "@modelcontextprotocol/ext-apps/server";
+import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import { gzipSync } from "node:zlib";
+import type { BrowserContext } from "playwright";
 import { z } from "zod";
 
-import { getBrowser, getContext } from "./browser.js";
-import { login } from "./auth.js";
-import { getCharacter, downloadCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
+import { closeBrowser, getAuthenticatedContext } from "./browser.js";
+import { getCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
+import {
+  acquireCharacterPdf,
+  CharacterPdfStore,
+  PDF_CHUNK_BYTES,
+  type CharacterPdfDependencies,
+} from "./tools/character-pdf.js";
 import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
-import { search } from "./tools/search.js";
-import { listLibrary, readBook } from "./tools/library.js";
-
-const server = new McpServer({
-  name: "dndbeyond",
-  version: "1.0.0",
-});
+import { search, validateSearchRequest } from "./tools/search.js";
+import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
+import {
+  extractStatBlock,
+  getStatBlock,
+  resolveStatBlock,
+  validateStatBlockRequest,
+  type StatBlockRequest,
+} from "./tools/stat-block.js";
+import {
+  libraryEnvelopeSchema,
+  readBookResultSchema,
+  searchEnvelopeSchema,
+  statBlockResolutionSchema,
+  statBlockResultSchema,
+  statBlockSchema,
+} from "./tool-contracts.js";
+import { jsonToolResult } from "./tool-result.js";
+import { PACKAGE_VERSION } from "./version.js";
 
 // Lazy-initialized shared browser context
 async function getSharedContext() {
-  const browser = await getBrowser();
-  const context = await getContext(browser);
-  return context;
+  return getAuthenticatedContext();
 }
 
-// ─── ddb_login ────────────────────────────────────────────────────────────────
-server.tool(
-  "ddb_login",
-  "Launch a browser and log into D&D Beyond via Google OAuth. Run this once to save your session to disk. Subsequent tool calls restore the session automatically.",
-  {},
-  async () => {
-    try {
-      const context = await getSharedContext();
-      const result = await login(context);
-      return { content: [{ type: "text", text: result }] };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { content: [{ type: "text", text: `Login failed: ${msg}` }], isError: true };
-    }
-  }
-);
+export type BrowserContextProvider = () => Promise<BrowserContext>;
 
-// ─── ddb_list_characters ──────────────────────────────────────────────────────
+export interface ServerOptions {
+  characterPdfDependencies?: CharacterPdfDependencies;
+}
+
+const CHARACTER_PDF_RESOURCE_URI = "ui://mysterium/character-pdf-viewer.html";
+const characterPdfViewerPath = new URL("../dist/apps/character-pdf-viewer.html", import.meta.url);
+const STAT_BLOCK_RESOURCE_URI = "ui://mysterium/stat-block-viewer.html";
+const statBlockViewerPath = new URL("../dist/apps/stat-block-viewer.html", import.meta.url);
+
+const statBlockInputSchema = {
+  query: z.string().min(1).optional().describe("Creature name to resolve through D&D Beyond's monster catalog."),
+  creature_id: z.string().regex(/^\d+$/).optional().describe("Exact numeric creature ID returned by a previous candidate result."),
+  legacy: z.enum(["include", "exclude", "only"]).optional().describe("How to treat D&D Beyond's per-entry Legacy badge. Defaults to include while preferring a sole non-Legacy exact match."),
+};
+
+function statBlockRequest(query?: string, creatureId?: string, legacy?: "include" | "exclude" | "only"): StatBlockRequest {
+  return { query, creatureId, legacy };
+}
+
+export function createServer(
+  getContextForTool: BrowserContextProvider = getSharedContext,
+  options: ServerOptions = {}
+) {
+  const server = new McpServer({
+    name: "mysterium",
+    version: PACKAGE_VERSION,
+  }, {
+    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
+  });
+  const characterPdfStore = new CharacterPdfStore(options.characterPdfDependencies);
+
+// ─── mysterium_list_characters ──────────────────────────────────────────────────────
 server.tool(
-  "ddb_list_characters",
+  "mysterium_list_characters",
   "List all characters in your D&D Beyond account, including their ID, level, race, and class.",
   {},
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const result = await listCharacters(context);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
@@ -56,9 +97,9 @@ server.tool(
   }
 );
 
-// ─── ddb_get_character ────────────────────────────────────────────────────────
+// ─── mysterium_get_character ────────────────────────────────────────────────────────
 server.tool(
-  "ddb_get_character",
+  "mysterium_get_character",
   "Fetch full character data JSON from the D&D Beyond character service API. Requires character ID (the number in the character URL).",
   {
     character_id: z.string().describe("The D&D Beyond character ID (e.g. '12345678')"),
@@ -69,13 +110,13 @@ server.tool(
   },
   async ({ character_id, fallback_scrape }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const data = await getCharacter(context, character_id);
       return { content: [{ type: "text", text: data }] };
     } catch (err) {
       if (fallback_scrape) {
         try {
-          const context = await getSharedContext();
+          const context = await getContextForTool();
           const scraped = await scrapeCharacterSheet(context, character_id);
           return { content: [{ type: "text", text: scraped }] };
         } catch (scrapeErr) {
@@ -89,39 +130,274 @@ server.tool(
   }
 );
 
-// ─── ddb_download_character ───────────────────────────────────────────────────
-server.tool(
-  "ddb_download_character",
-  "Download a character's full JSON data to a local file.",
+// ─── mysterium_export_character_pdf ─────────────────────────────────────────────────
+registerAppTool(
+  server,
+  "mysterium_export_character_pdf",
   {
-    character_id: z.string().describe("The D&D Beyond character ID"),
-    output_path: z
-      .string()
-      .optional()
-      .describe("Full file path to save to (defaults to ~/Downloads/{name}-{id}.json)"),
+    title: "Export Character Sheet PDF",
+    description: "Export an owned D&D Beyond character sheet through the rendered Manage → Export to PDF workflow and display it in a read-only PDF viewer.",
+    inputSchema: {
+      character_id: z.string().regex(/^\d+$/).describe("The D&D Beyond character ID"),
+    },
+    outputSchema: z.object({
+      url: z.string(),
+      title: z.string(),
+      filename: z.string(),
+      mimeType: z.literal("application/pdf"),
+      totalBytes: z.number().int().positive(),
+      sha256: z.string().regex(/^[a-f0-9]{64}$/),
+      initialPage: z.literal(1),
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    _meta: { ui: { resourceUri: CHARACTER_PDF_RESOURCE_URI } },
   },
-  async ({ character_id, output_path }) => {
+  async ({ character_id }) => {
+    const uiCapability = getUiCapability(server.server.getClientCapabilities());
+    if (!uiCapability?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) {
+      return {
+        content: [{ type: "text", text: "This client does not advertise MCP Apps PDF viewing support; no D&D Beyond request was made." }],
+        isError: true,
+      };
+    }
     try {
-      const context = await getSharedContext();
-      const result = await downloadCharacter(context, character_id, output_path);
-      return { content: [{ type: "text", text: result }] };
+      const context = await getContextForTool();
+      const pdf = await acquireCharacterPdf(context, character_id, options.characterPdfDependencies);
+      const metadata = characterPdfStore.put(pdf);
+      const compressedPdf = gzipSync(pdf.bytes, { level: 9 });
+      return {
+        content: [{
+          type: "text",
+          text: `Character sheet PDF ready for inline viewing and download: ${metadata.filename} (${metadata.totalBytes} bytes, SHA-256 ${metadata.sha256}).`,
+        }],
+        structuredContent: metadata,
+        _meta: {
+          interactEnabled: false,
+          writable: false,
+          pdf: {
+            encoding: "gzip+base64",
+            data: compressedPdf.toString("base64"),
+            originalBytes: pdf.totalBytes,
+            compressedBytes: compressedPdf.length,
+            sha256: pdf.sha256,
+          },
+        },
+      };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { content: [{ type: "text", text: `Download failed: ${msg}` }], isError: true };
+      const msg = err instanceof Error ? err.message : "Character PDF export failed.";
+      return { content: [{ type: "text", text: `Failed to export character PDF: ${msg}` }], isError: true };
     }
   }
 );
 
-// ─── ddb_get_campaign ─────────────────────────────────────────────────────────
+registerAppTool(
+  server,
+  "read_pdf_bytes",
+  {
+    title: "Read Character PDF Bytes",
+    description: "Read a bounded byte range for the character PDF viewer. The model should not call this tool directly.",
+    inputSchema: {
+      url: z.string(),
+      offset: z.number().int().min(0).default(0),
+      byteCount: z.number().int().min(1).max(PDF_CHUNK_BYTES).default(PDF_CHUNK_BYTES),
+    },
+    outputSchema: z.object({
+      url: z.string(),
+      bytes: z.string(),
+      offset: z.number().int().min(0),
+      byteCount: z.number().int().min(0),
+      totalBytes: z.number().int().positive(),
+      hasMore: z.boolean(),
+    }),
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  async ({ url, offset, byteCount }) => {
+    try {
+      const range = characterPdfStore.read(url, offset, byteCount);
+      return {
+        content: [{ type: "text", text: `${range.byteCount} PDF bytes at offset ${range.offset}.` }],
+        structuredContent: range,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unable to read character PDF bytes.";
+      return { content: [{ type: "text", text: msg }], isError: true };
+    }
+  }
+);
+
+registerAppResource(
+  server,
+  CHARACTER_PDF_RESOURCE_URI,
+  CHARACTER_PDF_RESOURCE_URI,
+  { mimeType: RESOURCE_MIME_TYPE },
+  async () => ({
+    contents: [{
+      uri: CHARACTER_PDF_RESOURCE_URI,
+      mimeType: RESOURCE_MIME_TYPE,
+      text: await readFile(characterPdfViewerPath, "utf8"),
+      _meta: {
+        ui: {
+          permissions: { clipboardWrite: {} },
+          csp: {
+            connectDomains: ["https://unpkg.com"],
+            resourceDomains: ["https://unpkg.com"],
+          },
+        },
+      },
+    }],
+  })
+);
+
+// ─── Stat block lookup and viewer ───────────────────────────────────────────────────
+server.registerTool(
+  "mysterium_get_stat_block",
+  {
+    description: "Resolve and retrieve a rendered D&D Beyond stat block as normalized JSON and faithful Markdown. Covers cataloged monsters and NPCs; ambiguous exact names return candidates.",
+    inputSchema: statBlockInputSchema,
+    outputSchema: statBlockResultSchema,
+  },
+  async ({ query, creature_id, legacy }) => {
+    try {
+      const request = statBlockRequest(query, creature_id, legacy);
+      validateStatBlockRequest(request);
+      const context = await getContextForTool();
+      const result = await getStatBlock(context, request);
+      return jsonToolResult(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Stat block lookup failed.";
+      return { content: [{ type: "text", text: `Failed to get stat block: ${msg}` }], isError: true };
+    }
+  }
+);
+
+registerAppTool(
+  server,
+  "mysterium_view_stat_block",
+  {
+    title: "View D&D Beyond Stat Block",
+    description: "Resolve a cataloged monster or NPC and display its authenticated D&D Beyond stat block in a read-only viewer with PNG export.",
+    inputSchema: statBlockInputSchema,
+    outputSchema: statBlockResolutionSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    _meta: { ui: { resourceUri: STAT_BLOCK_RESOURCE_URI } },
+  },
+  async ({ query, creature_id, legacy }) => {
+    const request = statBlockRequest(query, creature_id, legacy);
+    try {
+      validateStatBlockRequest(request);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Invalid stat block request.";
+      return { content: [{ type: "text", text: `Failed to view stat block: ${msg}` }], isError: true };
+    }
+    const uiCapability = getUiCapability(server.server.getClientCapabilities());
+    if (!uiCapability?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) {
+      return {
+        content: [{ type: "text", text: "This client does not advertise MCP Apps stat-block viewing support; no D&D Beyond request was made. Use mysterium_get_stat_block for JSON instead." }],
+        isError: true,
+      };
+    }
+    try {
+      const context = await getContextForTool();
+      const resolution = await resolveStatBlock(context, request);
+      const statBlock = resolution.kind === "resolved"
+        ? await extractStatBlock(context, resolution.candidate.id, resolution.candidate.url)
+        : undefined;
+      const summary = resolution.kind === "resolved"
+        ? `Ready to display ${resolution.candidate.name}.`
+        : resolution.kind === "candidates"
+          ? `Choose one of ${resolution.candidates.length} exact stat-block matches in the viewer.`
+          : `No exact stat block was found for ${resolution.query}.`;
+      return {
+        content: [{ type: "text", text: summary }],
+        structuredContent: resolution,
+        _meta: {
+          interactEnabled: true,
+          writable: false,
+          ...(statBlock ? { statBlock } : {}),
+        },
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Stat block viewer failed.";
+      return { content: [{ type: "text", text: `Failed to view stat block: ${msg}` }], isError: true };
+    }
+  }
+);
+
+registerAppTool(
+  server,
+  "read_stat_block_for_app",
+  {
+    title: "Read Stat Block for Viewer",
+    description: "Retrieve one rendered stat block for the Mysterium viewer. The model should not call this tool directly.",
+    inputSchema: {
+      creature_id: z.string().regex(/^\d+$/),
+      creature_url: z.string().url().optional(),
+    },
+    outputSchema: statBlockSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  async ({ creature_id, creature_url }) => {
+    try {
+      const context = await getContextForTool();
+      const result = await extractStatBlock(context, creature_id, creature_url);
+      return {
+        content: [{ type: "text", text: `Loaded ${result.creature.name} for the stat-block viewer.` }],
+        structuredContent: result,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unable to load the stat block.";
+      return { content: [{ type: "text", text: msg }], isError: true };
+    }
+  }
+);
+
+registerAppResource(
+  server,
+  STAT_BLOCK_RESOURCE_URI,
+  STAT_BLOCK_RESOURCE_URI,
+  { mimeType: RESOURCE_MIME_TYPE },
+  async () => ({
+    contents: [{
+      uri: STAT_BLOCK_RESOURCE_URI,
+      mimeType: RESOURCE_MIME_TYPE,
+      text: await readFile(statBlockViewerPath, "utf8"),
+      _meta: { ui: { permissions: { clipboardWrite: {} } } },
+    }],
+  })
+);
+
+// ─── mysterium_get_campaign ─────────────────────────────────────────────────────────
 server.tool(
-  "ddb_get_campaign",
+  "mysterium_get_campaign",
   "Fetch campaign information including player characters, notes, and description from a D&D Beyond campaign page.",
   {
     campaign_id: z.string().describe("The D&D Beyond campaign ID (found in the campaign URL)"),
   },
   async ({ campaign_id }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const data = await getCampaign(context, campaign_id);
       return { content: [{ type: "text", text: data }] };
     } catch (err) {
@@ -131,14 +407,14 @@ server.tool(
   }
 );
 
-// ─── ddb_list_campaigns ───────────────────────────────────────────────────────
+// ─── mysterium_list_campaigns ───────────────────────────────────────────────────────
 server.tool(
-  "ddb_list_campaigns",
+  "mysterium_list_campaigns",
   "List all D&D Beyond campaigns you are part of (as DM or player).",
   {},
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const data = await listMyCampaigns(context);
       return { content: [{ type: "text", text: data }] };
     } catch (err) {
@@ -148,9 +424,9 @@ server.tool(
   }
 );
 
-// ─── ddb_navigate ─────────────────────────────────────────────────────────────
+// ─── mysterium_navigate ─────────────────────────────────────────────────────────────
 server.tool(
-  "ddb_navigate",
+  "mysterium_navigate",
   "Navigate to any D&D Beyond URL and return the page's text content. Only dndbeyond.com URLs are allowed.",
   {
     url: z
@@ -159,7 +435,7 @@ server.tool(
   },
   async ({ url }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const content = await navigate(context, url);
       return { content: [{ type: "text", text: content }] };
     } catch (err) {
@@ -169,9 +445,9 @@ server.tool(
   }
 );
 
-// ─── ddb_interact ─────────────────────────────────────────────────────────────
+// ─── mysterium_interact ─────────────────────────────────────────────────────────────
 server.tool(
-  "ddb_interact",
+  "mysterium_interact",
   "Interact with the currently loaded D&D Beyond page by clicking, filling a form field, or taking a screenshot.",
   {
     action: z
@@ -185,7 +461,7 @@ server.tool(
   },
   async ({ action, selector, value }) => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const result = await interact(context, action, selector, value);
       return { content: [{ type: "text", text: result }] };
     } catch (err) {
@@ -195,14 +471,14 @@ server.tool(
   }
 );
 
-// ─── ddb_current_page ─────────────────────────────────────────────────────────
+// ─── mysterium_current_page ─────────────────────────────────────────────────────────
 server.tool(
-  "ddb_current_page",
+  "mysterium_current_page",
   "Return the text content of the currently loaded page in the browser.",
   {},
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const content = await getCurrentPageContent(context);
       return { content: [{ type: "text", text: content }] };
     } catch (err) {
@@ -212,22 +488,30 @@ server.tool(
   }
 );
 
-// ─── ddb_search ───────────────────────────────────────────────────────────────
-server.tool(
-  "ddb_search",
-  "Search D&D Beyond for spells, monsters, magic items, races, classes, or feats.",
+// ─── mysterium_search ───────────────────────────────────────────────────────────────
+server.registerTool(
+  "mysterium_search",
   {
-    query: z.string().describe("The search query (e.g. 'Fireball', 'Beholder', 'Vorpal Sword')"),
-    category: z
-      .enum(["spells", "monsters", "items", "races", "classes", "feats", "all"])
-      .optional()
-      .describe("Category to search within (defaults to 'all')"),
+    description: "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, sourcebooks, or general results. Results include normalized source attribution when D&D Beyond exposes it. Sourcebook searches default to accessible books.",
+    inputSchema: {
+      query: z.string().describe("The search query (e.g. 'Fireball', 'Beholder', 'Vorpal Sword')"),
+      category: z
+        .enum(["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"])
+        .optional()
+        .describe("Category to search within (defaults to 'all'). Use 'sourcebooks' to search the rendered D&D Beyond library by title."),
+      source_scope: z
+        .enum(["accessible", "all"])
+        .optional()
+        .describe("Sourcebook availability scope. Defaults to 'accessible'; 'all' also returns unavailable catalog/store results. Valid only with category 'sourcebooks'."),
+    },
+    outputSchema: searchEnvelopeSchema,
   },
-  async ({ query, category }) => {
+  async ({ query, category, source_scope }) => {
     try {
-      const context = await getSharedContext();
-      const results = await search(context, query, category ?? "all");
-      return { content: [{ type: "text", text: results }] };
+      validateSearchRequest(category ?? "all", source_scope);
+      const context = await getContextForTool();
+      const results = await search(context, query, category ?? "all", source_scope);
+      return jsonToolResult(results);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: `Search failed: ${msg}` }], isError: true };
@@ -235,16 +519,19 @@ server.tool(
   }
 );
 
-// ─── ddb_list_library ─────────────────────────────────────────────────────────
-server.tool(
-  "ddb_list_library",
-  "List all books and sourcebooks you own in your D&D Beyond library.",
-  {},
+// ─── mysterium_list_library ─────────────────────────────────────────────────────────
+server.registerTool(
+  "mysterium_list_library",
+  {
+    description: "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with mysterium_read_book.",
+    inputSchema: {},
+    outputSchema: libraryEnvelopeSchema,
+  },
   async () => {
     try {
-      const context = await getSharedContext();
+      const context = await getContextForTool();
       const books = await listLibrary(context);
-      return { content: [{ type: "text", text: books }] };
+      return jsonToolResult(books);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: `Failed to list library: ${msg}` }], isError: true };
@@ -252,26 +539,59 @@ server.tool(
   }
 );
 
-// ─── ddb_read_book ────────────────────────────────────────────────────────────
-server.tool(
-  "ddb_read_book",
-  "Read content from an owned D&D Beyond sourcebook. Provide the book slug (e.g. 'players-handbook') and optionally a chapter slug.",
+// ─── mysterium_read_book ────────────────────────────────────────────────────────────
+server.registerTool(
+  "mysterium_read_book",
   {
-    book_slug: z
-      .string()
-      .describe("The book slug from the D&D Beyond URL (e.g. 'players-handbook', 'dungeon-masters-guide')"),
-    chapter_slug: z
-      .string()
-      .optional()
-      .describe(
-        "Optional chapter or section slug (e.g. 'classes/ranger'). If omitted, returns the book's table of contents."
-      ),
+    description: "Discover an accessible D&D Beyond sourcebook's table of contents or chapter headings, or read bounded chapter or section Markdown with cursor pagination. Returns a JSON envelope with nextCursor and done.",
+    inputSchema: {
+      book_slug: z
+        .string()
+        .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
+        .describe("Required sourcebook path after /sources/ (for example, 'dnd/phb-2024')."),
+      chapter_slug: z
+        .string()
+        .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
+        .optional()
+        .describe("Optional chapter path returned by a book outline. With no mode it selects content; omit it to retrieve the book outline."),
+      mode: z
+        .enum(["outline", "content"])
+        .optional()
+        .describe("Optional operation. Defaults to 'outline' without chapter_slug and 'content' with chapter_slug."),
+      section: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Optional stable section ID from a chapter outline, or an exact unique heading. Valid only for chapter content."),
+      cursor: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Opaque nextCursor from the preceding content response. Reuse the same book_slug, chapter_slug, section, and character limit."),
+      max_chars: z
+        .number()
+        .int()
+        .positive()
+        .max(SERVER_MAX_CHARS)
+        .optional()
+        .describe(`Maximum Markdown characters in a content chunk. Defaults to 10000 and cannot exceed ${SERVER_MAX_CHARS}.`),
+    },
+    outputSchema: readBookResultSchema,
   },
-  async ({ book_slug, chapter_slug }) => {
+  async ({ book_slug, chapter_slug, mode, section, cursor, max_chars }) => {
     try {
-      const context = await getSharedContext();
-      const content = await readBook(context, book_slug, chapter_slug);
-      return { content: [{ type: "text", text: content }] };
+      const request = {
+        bookSlug: book_slug,
+        chapterSlug: chapter_slug,
+        mode,
+        section,
+        cursor,
+        maxChars: max_chars,
+      };
+      validateReadBookRequest(request);
+      const context = await getContextForTool();
+      const content = await readBook(context, request);
+      return jsonToolResult(content);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: `Failed to read book: ${msg}` }], isError: true };
@@ -279,14 +599,33 @@ server.tool(
   }
 );
 
-// ─── Start server ─────────────────────────────────────────────────────────────
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  process.stderr.write("D&D Beyond MCP server running on stdio\n");
+  return server;
 }
 
-main().catch((err) => {
-  process.stderr.write(`Fatal error: ${err}\n`);
-  process.exit(1);
-});
+// ─── Start server ─────────────────────────────────────────────────────────────
+async function main() {
+  const server = createServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  let closing: Promise<void> | undefined;
+  const cleanup = () => (closing ??= closeBrowser());
+  const serverOnClose = transport.onclose;
+  transport.onclose = () => {
+    serverOnClose?.();
+    void cleanup();
+  };
+  const terminate = () => {
+    void cleanup().finally(() => process.exit(0));
+  };
+  process.once("SIGINT", terminate);
+  process.once("SIGTERM", terminate);
+  process.stdin.once("end", () => void cleanup());
+  process.stderr.write("Mysterium server running on stdio\n");
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    process.stderr.write(`Fatal error: ${err}\n`);
+    process.exit(1);
+  });
+}
