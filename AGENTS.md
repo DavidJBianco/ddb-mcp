@@ -62,9 +62,10 @@ release requires all of the following before merge:
    the release workflow compares the release commit with its first parent.
 
 After the release PR merges, automation may tag that exact `main` commit as
-`vX.Y.Z`, create the GitHub Release, attach the npm package archive, and publish
-`ghcr.io/davidjbianco/mysterium:vX.Y.Z` plus `latest`. Release automation must not
-create a version-bump commit or otherwise modify `main`.
+`vX.Y.Z`, create the GitHub Release, attach the version-pinned Docker MCP
+catalog and host authentication helper archives, and publish
+`ghcr.io/davidjbianco/mysterium:vX.Y.Z` plus `latest`. Release automation must
+not create a version-bump commit or otherwise modify `main`.
 
 ## Repository map
 

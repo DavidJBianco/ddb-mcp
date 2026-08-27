@@ -73,16 +73,26 @@ async function callResult(client, diagnostics, name, args = {}) {
   try {
     result = await client.callTool({ name, arguments: args });
   } catch (error) {
-    throw new Error(`${name} transport failed; ${summarizeLiveFailure(error, { stderr: diagnostics() })}`);
+    throw new Error(
+      `${name} transport failed; ${summarizeLiveFailure(error, { stderr: await settledDiagnostics(diagnostics) })}`
+    );
   }
 
   if (result.isError) {
     const responseText = result.content?.map((block) => (block.type === "text" ? block.text : "")).join("\n") ?? "";
     throw new Error(
-      `${name} returned a tool error; ${summarizeLiveFailure(responseText, { stderr: diagnostics() })}`
+      `${name} returned a tool error; ${summarizeLiveFailure(responseText, { stderr: await settledDiagnostics(diagnostics) })}`
     );
   }
   return result;
+}
+
+async function settledDiagnostics(diagnostics) {
+  // MCP stdout and the sibling stderr pipe are independent streams. Give a
+  // failure-only diagnostic write one bounded turn to reach the parent before
+  // sampling it, so Linux scheduling cannot drop the safe stderr-line count.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  return diagnostics();
 }
 
 async function callText(client, diagnostics, name, args = {}) {

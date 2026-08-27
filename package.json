@@ -1,6 +1,7 @@
 {
   "name": "mysterium",
   "version": "1.0.2",
+  "license": "MIT",
   "description": "Docker-first MCP server for authenticated D&D Beyond content",
   "type": "module",
   "main": "dist/index.js",

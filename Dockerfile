@@ -43,6 +43,7 @@ RUN npx playwright install --with-deps chromium \
 # after the expensive Playwright layer so normal source edits retain the cache.
 COPY --from=build /app/dist ./dist
 COPY third_party ./third_party
+COPY LICENSE ./LICENSE
 
 USER mcp
 
