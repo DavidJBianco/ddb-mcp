@@ -25,3 +25,15 @@ test("offline safeguard: CI installs the locked Playwright version before its br
     assert.ok(lockedDependencies >= 0, `${file} must install locked dependencies before Playwright browsers`);
   }
 });
+
+test("release assets exclude the unsupported npm archive", async () => {
+  const workflow = await readFile(
+    new URL("../.github/workflows/release.yml", import.meta.url),
+    "utf8"
+  );
+  assert.doesNotMatch(workflow, /npm pack|\.tgz\b/);
+  assert.match(workflow, /mysterium-auth_\*\.tar\.gz/);
+  assert.match(workflow, /make release-catalog/);
+  assert.match(workflow, /cp LICENSE release\/LICENSE/);
+  assert.match(workflow, /mysterium-auth\$3" LICENSE/);
+});

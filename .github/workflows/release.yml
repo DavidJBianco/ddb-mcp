@@ -99,13 +99,6 @@ jobs:
           git diff --exit-code -- dist/
           test -z "$(gofmt -l cmd/mysterium-auth)"
 
-      - name: Pack npm artifact
-        id: package
-        run: |
-          mkdir -p release
-          PACKAGE_NAME=$(npm pack --pack-destination release | tail -n 1)
-          echo "path=release/${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
-
       - name: Generate version-pinned Docker MCP catalog
         env:
           TAG: ${{ steps.version.outputs.tag }}
@@ -120,12 +113,13 @@ jobs:
         run: |
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:${TAG}"
           LDFLAGS="-s -w -X main.version=${VERSION} -X main.defaultImage=${IMAGE}"
+          cp LICENSE release/LICENSE
           build_helper() {
             (cd cmd/mysterium-auth && GOOS="$1" GOARCH="$2" CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "../../release/mysterium-auth$3" .)
             if [ "$1" = windows ]; then
-              (cd release && zip "mysterium-auth_${1}_${2}.zip" "mysterium-auth$3")
+              (cd release && zip "mysterium-auth_${1}_${2}.zip" "mysterium-auth$3" LICENSE)
             else
-              tar -C release -czf "release/mysterium-auth_${1}_${2}.tar.gz" "mysterium-auth$3"
+              tar -C release -czf "release/mysterium-auth_${1}_${2}.tar.gz" "mysterium-auth$3" LICENSE
             fi
             rm "release/mysterium-auth$3"
           }

@@ -68,6 +68,16 @@ test("production image contains no test or session material", () => {
     "clean"
   );
   assert.equal(
+    dockerRun("project-license", [
+      "--entrypoint",
+      "sh",
+      image,
+      "-c",
+      "test -s /app/LICENSE && grep -Fq 'MIT License' /app/LICENSE && echo licensed",
+    ]),
+    "licensed"
+  );
+  assert.equal(
     dockerRun("pdf-viewer", [
       "--entrypoint",
       "sh",

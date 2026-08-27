@@ -8,12 +8,27 @@ test("the MCP server version comes from package.json", async () => {
   const packageJson = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8")
   );
+  const packageLock = JSON.parse(
+    await readFile(new URL("../package-lock.json", import.meta.url), "utf8")
+  );
 
   assert.equal(PACKAGE_VERSION, packageJson.version);
+  assert.equal(packageJson.license, "MIT");
+  assert.equal(packageLock.packages[""].license, "MIT");
   assert.match(
     PACKAGE_VERSION,
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/
   );
+});
+
+test("the repository includes the canonical MIT license terms", async () => {
+  const license = await readFile(new URL("../LICENSE", import.meta.url), "utf8");
+  assert.match(license, /^MIT License\n/);
+  assert.match(license, /Copyright \(c\) 2026 ddb-mcp contributors/);
+  assert.match(license, /Copyright \(c\) 2026 DavidJBianco and Mysterium contributors/);
+  assert.match(license, /Permission is hereby granted, free of charge/);
+  assert.match(license, /THE SOFTWARE IS PROVIDED "AS IS"/);
+  assert.doesNotMatch(license, /<year>|<copyright holders>/);
 });
 
 test("the generated read-only PDF viewer is self-contained and licensed", async () => {
