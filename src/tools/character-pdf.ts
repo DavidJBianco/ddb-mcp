@@ -3,6 +3,7 @@ import type { APIResponse, BrowserContext } from "playwright";
 
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { openDomReadyPage } from "./page-readiness.js";
 
 export const PDF_ACQUISITION_TIMEOUT_MS = 90_000;
 export const PDF_MAX_BYTES = 25 * 1024 * 1024;
@@ -105,10 +106,7 @@ export async function acquireCharacterPdf(
   if (!(await isLoggedIn(page))) throw new AuthenticationRequiredError();
 
   try {
-    await page.goto(`${DDB_ORIGIN}/characters/${characterId}`, {
-      waitUntil: "domcontentloaded",
-      timeout: remaining(),
-    });
+    await openDomReadyPage(page, `${DDB_ORIGIN}/characters/${characterId}`, remaining());
     throwIfAuthenticationRedirect(page);
   } catch (error) {
     if (error instanceof AuthenticationRequiredError) throw error;

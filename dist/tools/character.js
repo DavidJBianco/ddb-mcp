@@ -1,5 +1,6 @@
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 export async function getCharacter(context, characterId) {
     const page = await getPage(context);
     // Verify session
@@ -36,11 +37,9 @@ export async function listCharacters(context) {
     if (!(await isLoggedIn(page))) {
         throw new AuthenticationRequiredError();
     }
-    await page.goto("https://www.dndbeyond.com/characters", {
-        waitUntil: "networkidle",
-        timeout: 30000,
-    });
+    await openDomReadyPage(page, "https://www.dndbeyond.com/characters", 30_000);
     throwIfAuthenticationRedirect(page);
+    await waitForRenderedContent(page, "li.ddb-campaigns-character-card-wrapper, main", 15_000);
     await page.waitForTimeout(2000);
     const characters = await page.evaluate(() => {
         const list = [];
@@ -68,11 +67,9 @@ export async function scrapeCharacterSheet(context, characterId) {
     if (!(await isLoggedIn(page))) {
         throw new AuthenticationRequiredError();
     }
-    await page.goto(`https://www.dndbeyond.com/characters/${characterId}`, {
-        waitUntil: "networkidle",
-        timeout: 30000,
-    });
+    await openDomReadyPage(page, `https://www.dndbeyond.com/characters/${characterId}`, 30_000);
     throwIfAuthenticationRedirect(page);
+    await waitForRenderedContent(page, ".character-name, .ddbc-character-name, .ddbc-character-sheet, main", 15_000);
     await page.waitForTimeout(2000);
     const content = await page.evaluate(() => {
         // Extract key sections from the character sheet
