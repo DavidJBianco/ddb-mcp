@@ -24,9 +24,9 @@ function contextFor(finalValue) {
 }
 
 test("character detail handles synthetic API data", async () => {
-  const characterContext = contextFor((argument) => ({
-    success: true,
-    data: { id: Number(argument), name: "Synthetic Hero", decorations: null },
+  const characterContext = contextFor(() => ({
+    kind: "success",
+    body: { success: true, data: { id: 4242, name: "Synthetic Hero", decorations: null } },
   }));
   assert.equal((await getCharacter(characterContext, "4242")).character.id, 4242);
 });
@@ -71,9 +71,12 @@ test("authenticated tools reject a logged-out synthetic page", async () => {
   await assert.rejects(getCurrentPageContent(context), /mysterium-auth login/);
 });
 
-test("character-service authorization failures use the shared authentication error", async () => {
-  const context = contextFor(() => {
-    throw new Error("API returned 403: Forbidden");
-  });
+test("character-service access denials are not misreported as expired authentication", async () => {
+  const context = contextFor(() => ({ kind: "service-http-error", status: 403 }));
+  await assert.rejects(getCharacter(context, "4242"), /denied the authenticated service request/);
+});
+
+test("character-service 401 responses use the shared authentication error", async () => {
+  const context = contextFor(() => ({ kind: "service-http-error", status: 401 }));
   await assert.rejects(getCharacter(context, "4242"), /mysterium-auth login/);
 });

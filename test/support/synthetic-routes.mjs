@@ -223,6 +223,13 @@ export async function installSyntheticRoutes(context, options = {}) {
       return;
     }
 
+    if (url.origin === "https://auth-service.dndbeyond.com" && url.pathname === "/v1/cobalt-token") {
+      await route.fulfill(authenticated
+        ? json({ token: "synthetic-short-term-token", ttl: 900 })
+        : json({ message: "synthetic authentication required" }, 401));
+      return;
+    }
+
     if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/my-campaigns") {
       await route.fulfill(html(campaignsPage));
       return;
@@ -317,6 +324,10 @@ export async function installSyntheticRoutes(context, options = {}) {
       url.origin === "https://character-service.dndbeyond.com" &&
       url.pathname === "/character/v5/character/4242"
     ) {
+      if (await request.headerValue("authorization") !== "Bearer synthetic-short-term-token") {
+        await route.fulfill(json({ message: "synthetic authorization required" }, 401));
+        return;
+      }
       await route.fulfill(
         json({
           id: 0,
