@@ -48,7 +48,9 @@ release plan or pull request.
   recording private character content in assertions or logs.
 - [x] Make live tests fail clearly on missing or expired sessions, while never
   initiating an unexpected login or weakening the offline suite.
-- [ ] Record the live command, commit SHA, result, and skips in each release PR.
+- [x] Record the live command, commit SHA, result, and skips in each release PR.
+  The first governed release established this practice in release PR #22;
+  retain it as a required checklist item for every later release.
 
 ## Sourcebook discovery and pagination
 
@@ -265,16 +267,20 @@ release plan or pull request.
 
 ## Packaging and releases
 
-- [ ] Complete the first governed `dev` to `main` release, including the local
+- [x] Complete the first governed `dev` to `main` release, including the local
   live suite, SemVer update, release approval, tag, GitHub Release, and GHCR
-  publication.
-- [ ] Pull and smoke-test the published immutable GHCR tag on both supported
-  architectures where runners or hardware are available.
-- [ ] Verify the published image's provenance, SBOM, OCI labels, non-root user,
-  entrypoint, and absence of session or credential material.
-- [ ] Configure GitHub branch protection/rulesets so required offline checks
+  publication. Mysterium v1.1.0 was published from release PR #22; the release
+  and post-publication verification record is in `LIVE_TESTING.md`.
+- [x] Pull and smoke-test the published immutable GHCR tag on both supported
+  architectures where runners or hardware are available. The v1.1.0 arm64
+  image passed natively and its amd64 image passed under Docker emulation.
+- [x] Verify the published image's provenance, SBOM, OCI labels, non-root user,
+  entrypoint, and absence of session or credential material for v1.1.0.
+- [x] Configure GitHub branch protection/rulesets so required offline checks
   and the `dev` to `main` release flow are enforced by the repository host as
-  well as documented in `AGENTS.md`.
+  well as documented in `AGENTS.md`. Active `dev` and `main` rulesets require
+  the offline CI jobs and pull requests, restrict merge methods, prevent
+  deletion and force pushes, and retain the repository-admin PR bypass.
 - [x] Evaluate a configurable external session path or documented import helper
   for non-default host sessions without ever copying session data into the
   repository or image.
