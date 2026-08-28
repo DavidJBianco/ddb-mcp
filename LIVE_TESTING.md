@@ -60,7 +60,8 @@ into a fixture, container layer, log, CI secret, or artifact.
 The suite reuses one MCP server/browser context and runs sequentially. It
 checks session restoration, normalized character list/API retrieval, bounded
 portrait image delivery when configured, rendered character-sheet PDF export
-and bounded byte reconstruction, campaign list/detail, safe navigation and
+and bounded byte reconstruction, normalized campaign list/detail envelopes and
+permission-safe availability states, safe navigation and
 current-page retrieval, search, one public catalog monster lookup and rendered
 stat-block shape, library listing, sourcebook book/chapter
 outlines, bounded chapter content, deterministic chapter and section cursor
@@ -78,6 +79,10 @@ deleted unconditionally. The Docker session mount is read-only. Account-dependen
 are explicitly skipped when the account has no character, campaign, or
 sourcebook; a release remains blocked unless those required skips are accepted
 and recorded as an exception.
+
+Campaign live assertions never request invite or administration links. The
+detail call exercises the default private-note policy but inspects only the
+availability variant; it never logs or snapshots note content.
 
 Fresh interactive login remains a manual release check. Do not automate live
 click or fill operations until a disposable, verifiably safe account state is

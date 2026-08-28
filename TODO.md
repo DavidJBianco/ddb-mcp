@@ -86,8 +86,7 @@ release plan or pull request.
   and `mysterium_get_stat_block` response families. Validate MCP App results
   through exact schemas while retaining concise App summaries rather than
   duplicating PDF bytes or full renderer payloads.
-- [ ] When reviewing the remaining deferred `mysterium_list_campaigns`,
-  `mysterium_get_campaign`, `mysterium_navigate`, `mysterium_current_page`, and
+- [ ] When reviewing the remaining deferred `mysterium_navigate`, `mysterium_current_page`, and
   `mysterium_interact` designs, define each stable success envelope, empty and
   partial result semantics, exact output schema, `structuredContent`, JSON-text
   behavior, and contract tests before considering the tool release-ready.
@@ -153,7 +152,7 @@ release plan or pull request.
   content and promote a nullable `portraitUrl` into the normalized character
   envelope. Treat portrait URL parameters as opaque, persist no image data,
   and do not substitute frames, backdrops, or placeholders.
-- [ ] **`mysterium_list_campaigns` contract:** Review campaign-list retrieval
+- [x] **`mysterium_list_campaigns` contract:** Review campaign-list retrieval
   alongside the campaign detail design. Define a stable normalized envelope,
   empty-list behavior, exact output schema, structured/JSON-text parity, and
   changed-upstream-shape tests without exposing administrative links or invite
@@ -197,18 +196,18 @@ release plan or pull request.
   Desktop delivery. Offline, Docker, audit, live acquisition, inline rendering,
   viewer controls, download, and downloaded-file opening were verified; Codex
   and Toolkit Apps forwarding remain follow-ups.
-- [ ] **`mysterium_get_campaign` enrichment:** Use the observed read-only campaign
+- [x] **`mysterium_get_campaign` enrichment:** Use the observed read-only campaign
   details and short-character data plus permission-aware rendered extraction.
   Return a stable JSON envelope containing campaign ID/name/status/creation
   date, DM and viewer role, content- and item-sharing status, active player and
   character summaries with stable IDs, description, public notes, and
-  DM-private notes only when visible and explicitly requested. Label every
-  notes field by visibility and provenance. Deliberately exclude invite codes,
-  reset/remove/deactivate links, and other administrative secrets or mutation
-  controls.
-- [ ] Define `mysterium_get_campaign` options and permissions before implementation.
-  Private DM notes should default to excluded and require an explicit
-  `include_private_notes` request; public notes and description may be included
+  DM-private notes only when visible and requested by the input policy. Label
+  every notes field by visibility and provenance. Invite and navigation-only
+  administration links require separate false-by-default opt-ins; deliberately
+  exclude standalone invite codes, reset/remove/deactivate/delete links, and mutation controls.
+- [x] Define `mysterium_get_campaign` options and permissions before implementation.
+  Private DM notes default to requested and can be disabled with
+  `include_private_notes: false`; public notes and description are included
   by default when visible. Represent missing, empty, hidden, and inaccessible
   fields distinctly without revealing that hidden content exists to an
   unauthorized viewer. Test DM and player views, campaigns with no characters
@@ -216,6 +215,13 @@ release plan or pull request.
   upstream-detail failure with safe rendered fallback, exact output schema,
   `structuredContent`, JSON-text parity, and contract validation. Keep game-log
   retrieval and all mutations out of scope.
+
+- [x] Add campaign-list filters and deterministic sorting for fields available
+  without opening campaign detail pages: name, ID, viewer role, creation date,
+  player count, and content-sharing state. The sanitized live structural probe
+  confirmed these list fields and the page-issued campaign-details and
+  short-character response shapes without retaining account values, note text,
+  invite codes, IDs, cookies, or session material.
 
 ## Future Maps and Journals exploration
 

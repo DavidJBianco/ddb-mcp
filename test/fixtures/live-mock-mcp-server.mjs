@@ -114,11 +114,30 @@ server.registerTool(
   }
 );
 server.tool("mysterium_list_campaigns", "mock", {}, async () =>
-  text(JSON.stringify([{ id: "7", name: sensitive }]))
+  text(JSON.stringify({
+    count: 1,
+    total: 1,
+    filters: { names: [], campaignIds: [], roles: [], createdOnOrAfter: null, createdOnOrBefore: null, minPlayers: null, maxPlayers: null, contentSharingEnabled: null },
+    sort: { field: "name", direction: "asc" },
+    campaigns: [{ id: "7", name: sensitive, role: "dungeon_master", createdOn: "2025-01-02", playerCount: 1, contentSharingEnabled: true, url: "https://www.dndbeyond.com/campaigns/7" }],
+  }))
 );
-server.tool("mysterium_get_campaign", "mock", { campaign_id: z.string() }, async () =>
-  text(JSON.stringify({ name: sensitive }))
-);
+server.tool("mysterium_get_campaign", "mock", { campaign_id: z.string() }, async ({ campaign_id }) => {
+  const unavailable = { state: "unavailable", value: null, provenance: null };
+  return text(JSON.stringify({
+    source: "dndbeyond-campaign",
+    schemaVersion: "v1",
+    partial: true,
+    campaign: {
+      id: campaign_id, name: sensitive, url: `https://www.dndbeyond.com/campaigns/${campaign_id}`,
+      viewerRole: "unknown", identityProvenance: "rendered-dom",
+      status: unavailable, createdAt: unavailable, dungeonMaster: unavailable, sharing: unavailable,
+      players: unavailable, characters: { state: "empty", value: [], provenance: "rendered-dom" },
+      description: unavailable, notes: { public: unavailable, private: unavailable },
+      links: { canonical: `https://www.dndbeyond.com/campaigns/${campaign_id}`, invite: unavailable, administration: unavailable },
+    },
+  }));
+});
 server.tool("mysterium_navigate", "mock", { url: z.string() }, async ({ url }) => text(`URL: ${url}\n\n${sensitive}`));
 server.tool(
   "mysterium_interact",

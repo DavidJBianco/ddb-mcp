@@ -134,10 +134,10 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.deepEqual(Buffer.from(rangeResult.structuredContent.bytes, "base64"), pdfBytes);
 
     assert.equal(
-      JSON.parse(await callSuccessfully("mysterium_get_campaign", { campaign_id: "7" })).name,
+      JSON.parse(await callSuccessfully("mysterium_get_campaign", { campaign_id: "7" })).campaign.name,
       "Synthetic Campaign"
     );
-    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_campaigns")).length, 1);
+    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_campaigns")).campaigns.length, 1);
 
     await callSuccessfully("mysterium_navigate", {
       url: "https://www.dndbeyond.com/synthetic-page",
@@ -272,7 +272,7 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
 
     const failureResult = await client.callTool({
       name: "mysterium_get_campaign",
-      arguments: { campaign_id: "network-error" },
+      arguments: { campaign_id: "999" },
     });
     assert.equal(failureResult.isError, true);
     assert.match(failureResult.content[0].text, /Failed to get campaign/);

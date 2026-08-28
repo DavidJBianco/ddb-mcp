@@ -79,21 +79,38 @@ const campaignsPage = `<!doctype html><html><body><main><ul>
   <li class="ddb-campaigns-list-item-wrapper">
     <div class="ddb-campaigns-list-item-body-title">Synthetic Campaign</div>
     <div class="ddb-campaigns-list-item-body-role">Role: Dungeon Master</div>
+    <div class="ddb-campaigns-list-item-body-date">Created: 1/2/2025</div>
+    <div class="ddb-campaigns-list-item-body-players"><span class="player-count">1 Player</span></div>
+    <div class="ddb-campaigns-list-item-body-sharing">Content Sharing Enabled</div>
     <a class="ddb-campaigns-list-item-footer-buttons-item" href="/campaigns/7">View</a>
+    <a class="ddb-campaigns-list-item-footer-buttons-item-deactivate" data-confirm-message="Confirm" href="/campaigns/7/deactivate">Deactivate</a>
   </li>
 </ul></main></body></html>`;
 
 const campaignPage = `<!doctype html><html><body><main>
+  <div class="user-role-registered-users" data-userid="10"></div>
   <h1 class="page-title">Synthetic Campaign</h1>
   <span class="user-interactions-profile-nickname">Synthetic DM</span>
-  <div class="ddb-campaigns-detail"><p>This entirely synthetic campaign description is deliberately long enough for extraction tests and contains no account data.</p></div>
+  <div class="ddb-campaigns-detail">
+    <p class="ddb-campaigns-detail-header-secondary-description">This entirely synthetic campaign description contains no account data.</p>
+    <div class="ddb-campaigns-detail-body-dm-notes-public">Synthetic public note.</div>
+    <div class="ddb-campaigns-detail-body-dm-notes-private">Synthetic private note.</div>
+    <div class="ddb-campaigns-invite-wrapper"><button data-clipboard-text="https://www.dndbeyond.com/campaigns/join/synthetic-secret">Copy Invite</button></div>
+    <a href="/campaigns/7/edit">Edit Campaign</a>
+    <a data-confirm-message="Confirm" href="/campaigns/7/delete">Delete Campaign</a>
+  </div>
+  <div class="ddb-campaigns-detail-body-listing">
   <li class="ddb-campaigns-character-card-wrapper">
     <div class="ddb-campaigns-character-card-header-upper-character-info-primary">Synthetic Hero</div>
     <div class="ddb-campaigns-character-card-header-upper-character-info-secondary">Level 3</div>
     <div class="ddb-campaigns-character-card-header-upper-character-info-secondary">Player: Synthetic Player</div>
     <a class="ddb-campaigns-character-card-header-upper-details-link" href="/characters/4242">View</a>
   </li>
-</main></body></html>`;
+  </div>
+</main><script>
+fetch("https://api.dndbeyond.com/campaigns/v1/details/7", { credentials: "include" }).then((response) => response.json());
+fetch("https://www.dndbeyond.com/api/campaign/stt/active-short-characters/7", { credentials: "include" }).then((response) => response.json());
+</script></body></html>`;
 
 const accessibleLibraryPage = `<!doctype html><html><body><main>
   <input placeholder="Filter by title" />
@@ -233,6 +250,30 @@ export async function installSyntheticRoutes(context, options = {}) {
       return;
     }
 
+    if (url.origin === "https://api.dndbeyond.com" && url.pathname === "/campaigns/v1/details/7") {
+      await route.fulfill(json({ data: {
+        id: 7,
+        name: "Synthetic Campaign",
+        status: 1,
+        dateCreated: "2025-01-02T03:04:05Z",
+        dmId: 10,
+        dmDisplayName: "Synthetic DM",
+        contentSharingEnabled: true,
+        itemSharingEnabled: false,
+        activePlayers: [{ id: 20, displayName: "Synthetic Player" }],
+        activeCharacters: [{ id: 4242, name: "Synthetic Hero", userId: 20, isPrivate: false }],
+      } }));
+      return;
+    }
+
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/api/campaign/stt/active-short-characters/7") {
+      await route.fulfill(json({
+        status: "success",
+        data: [{ id: 4242, name: "Synthetic Hero", userId: 20, userName: "Synthetic Player", characterStatus: 1, isAssigned: true }],
+      }));
+      return;
+    }
+
     if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/en/library") {
       await route.fulfill(html(url.searchParams.get("ownership") === "owned-shared" ? accessibleLibraryPage : catalogLibraryPage));
       return;
@@ -344,7 +385,7 @@ export async function installSyntheticRoutes(context, options = {}) {
 
     if (
       url.origin === "https://www.dndbeyond.com" &&
-      url.pathname === "/campaigns/network-error"
+      url.pathname === "/campaigns/999"
     ) {
       await route.abort("failed");
       return;

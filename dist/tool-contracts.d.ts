@@ -85,6 +85,426 @@ export declare const characterPortraitMetadataSchema: z.ZodObject<{
     }>>;
     byteCount: z.ZodNumber;
 }, z.core.$strict>;
+export declare const campaignRoleSchema: z.ZodEnum<{
+    unknown: "unknown";
+    dungeon_master: "dungeon_master";
+    player: "player";
+}>;
+export declare const campaignSortFieldSchema: z.ZodEnum<{
+    name: "name";
+    created: "created";
+    role: "role";
+    players: "players";
+    content_sharing: "content_sharing";
+}>;
+export declare const campaignSummarySchema: z.ZodObject<{
+    id: z.ZodString;
+    name: z.ZodString;
+    role: z.ZodEnum<{
+        unknown: "unknown";
+        dungeon_master: "dungeon_master";
+        player: "player";
+    }>;
+    createdOn: z.ZodString;
+    playerCount: z.ZodNumber;
+    contentSharingEnabled: z.ZodBoolean;
+    url: z.ZodURL;
+}, z.core.$strict>;
+export declare const campaignListEnvelopeSchema: z.ZodObject<{
+    count: z.ZodNumber;
+    total: z.ZodNumber;
+    filters: z.ZodObject<{
+        names: z.ZodArray<z.ZodString>;
+        campaignIds: z.ZodArray<z.ZodString>;
+        roles: z.ZodArray<z.ZodEnum<{
+            unknown: "unknown";
+            dungeon_master: "dungeon_master";
+            player: "player";
+        }>>;
+        createdOnOrAfter: z.ZodNullable<z.ZodString>;
+        createdOnOrBefore: z.ZodNullable<z.ZodString>;
+        minPlayers: z.ZodNullable<z.ZodNumber>;
+        maxPlayers: z.ZodNullable<z.ZodNumber>;
+        contentSharingEnabled: z.ZodNullable<z.ZodBoolean>;
+    }, z.core.$strict>;
+    sort: z.ZodObject<{
+        field: z.ZodEnum<{
+            name: "name";
+            created: "created";
+            role: "role";
+            players: "players";
+            content_sharing: "content_sharing";
+        }>;
+        direction: z.ZodEnum<{
+            desc: "desc";
+            asc: "asc";
+        }>;
+    }, z.core.$strict>;
+    campaigns: z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+        role: z.ZodEnum<{
+            unknown: "unknown";
+            dungeon_master: "dungeon_master";
+            player: "player";
+        }>;
+        createdOn: z.ZodString;
+        playerCount: z.ZodNumber;
+        contentSharingEnabled: z.ZodBoolean;
+        url: z.ZodURL;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+export declare const campaignDetailEnvelopeSchema: z.ZodObject<{
+    source: z.ZodLiteral<"dndbeyond-campaign">;
+    schemaVersion: z.ZodLiteral<"v1">;
+    partial: z.ZodBoolean;
+    campaign: z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+        url: z.ZodURL;
+        viewerRole: z.ZodEnum<{
+            unknown: "unknown";
+            dungeon_master: "dungeon_master";
+            player: "player";
+        }>;
+        identityProvenance: z.ZodEnum<{
+            "campaign-details-v1": "campaign-details-v1";
+            "active-short-characters": "active-short-characters";
+            "rendered-dom": "rendered-dom";
+            derived: "derived";
+        }>;
+        status: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            state: z.ZodLiteral<"available">;
+            value: z.ZodNumber;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"empty">;
+            value: z.ZodNumber;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"unavailable">;
+            value: z.ZodNull;
+            provenance: z.ZodNull;
+        }, z.core.$strict>], "state">;
+        createdAt: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            state: z.ZodLiteral<"available">;
+            value: z.ZodISODateTime;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"empty">;
+            value: z.ZodISODateTime;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"unavailable">;
+            value: z.ZodNull;
+            provenance: z.ZodNull;
+        }, z.core.$strict>], "state">;
+        dungeonMaster: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            state: z.ZodLiteral<"available">;
+            value: z.ZodObject<{
+                id: z.ZodString;
+                displayName: z.ZodString;
+            }, z.core.$strict>;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"empty">;
+            value: z.ZodObject<{
+                id: z.ZodString;
+                displayName: z.ZodString;
+            }, z.core.$strict>;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"unavailable">;
+            value: z.ZodNull;
+            provenance: z.ZodNull;
+        }, z.core.$strict>], "state">;
+        sharing: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            state: z.ZodLiteral<"available">;
+            value: z.ZodObject<{
+                contentEnabled: z.ZodBoolean;
+                itemEnabled: z.ZodBoolean;
+            }, z.core.$strict>;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"empty">;
+            value: z.ZodObject<{
+                contentEnabled: z.ZodBoolean;
+                itemEnabled: z.ZodBoolean;
+            }, z.core.$strict>;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"unavailable">;
+            value: z.ZodNull;
+            provenance: z.ZodNull;
+        }, z.core.$strict>], "state">;
+        players: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            state: z.ZodLiteral<"available">;
+            value: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                displayName: z.ZodString;
+            }, z.core.$strict>>;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"empty">;
+            value: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                displayName: z.ZodString;
+            }, z.core.$strict>>;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"unavailable">;
+            value: z.ZodNull;
+            provenance: z.ZodNull;
+        }, z.core.$strict>], "state">;
+        characters: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            state: z.ZodLiteral<"available">;
+            value: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                name: z.ZodString;
+                playerId: z.ZodNullable<z.ZodString>;
+                playerName: z.ZodNullable<z.ZodString>;
+                isPrivate: z.ZodNullable<z.ZodBoolean>;
+                status: z.ZodNullable<z.ZodNumber>;
+                isAssigned: z.ZodNullable<z.ZodBoolean>;
+                url: z.ZodURL;
+            }, z.core.$strict>>;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"empty">;
+            value: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                name: z.ZodString;
+                playerId: z.ZodNullable<z.ZodString>;
+                playerName: z.ZodNullable<z.ZodString>;
+                isPrivate: z.ZodNullable<z.ZodBoolean>;
+                status: z.ZodNullable<z.ZodNumber>;
+                isAssigned: z.ZodNullable<z.ZodBoolean>;
+                url: z.ZodURL;
+            }, z.core.$strict>>;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"unavailable">;
+            value: z.ZodNull;
+            provenance: z.ZodNull;
+        }, z.core.$strict>], "state">;
+        description: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            state: z.ZodLiteral<"available">;
+            value: z.ZodString;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"empty">;
+            value: z.ZodString;
+            provenance: z.ZodEnum<{
+                "campaign-details-v1": "campaign-details-v1";
+                "active-short-characters": "active-short-characters";
+                "rendered-dom": "rendered-dom";
+                derived: "derived";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            state: z.ZodLiteral<"unavailable">;
+            value: z.ZodNull;
+            provenance: z.ZodNull;
+        }, z.core.$strict>], "state">;
+        notes: z.ZodObject<{
+            public: z.ZodDiscriminatedUnion<[z.ZodObject<{
+                state: z.ZodLiteral<"available">;
+                value: z.ZodString;
+                provenance: z.ZodEnum<{
+                    "campaign-details-v1": "campaign-details-v1";
+                    "active-short-characters": "active-short-characters";
+                    "rendered-dom": "rendered-dom";
+                    derived: "derived";
+                }>;
+            }, z.core.$strict>, z.ZodObject<{
+                state: z.ZodLiteral<"empty">;
+                value: z.ZodString;
+                provenance: z.ZodEnum<{
+                    "campaign-details-v1": "campaign-details-v1";
+                    "active-short-characters": "active-short-characters";
+                    "rendered-dom": "rendered-dom";
+                    derived: "derived";
+                }>;
+            }, z.core.$strict>, z.ZodObject<{
+                state: z.ZodLiteral<"unavailable">;
+                value: z.ZodNull;
+                provenance: z.ZodNull;
+            }, z.core.$strict>], "state">;
+            private: z.ZodDiscriminatedUnion<[z.ZodObject<{
+                state: z.ZodLiteral<"available">;
+                value: z.ZodString;
+                provenance: z.ZodEnum<{
+                    "campaign-details-v1": "campaign-details-v1";
+                    "active-short-characters": "active-short-characters";
+                    "rendered-dom": "rendered-dom";
+                    derived: "derived";
+                }>;
+            }, z.core.$strict>, z.ZodObject<{
+                state: z.ZodLiteral<"empty">;
+                value: z.ZodString;
+                provenance: z.ZodEnum<{
+                    "campaign-details-v1": "campaign-details-v1";
+                    "active-short-characters": "active-short-characters";
+                    "rendered-dom": "rendered-dom";
+                    derived: "derived";
+                }>;
+            }, z.core.$strict>, z.ZodObject<{
+                state: z.ZodLiteral<"unavailable">;
+                value: z.ZodNull;
+                provenance: z.ZodNull;
+            }, z.core.$strict>], "state">;
+        }, z.core.$strict>;
+        links: z.ZodObject<{
+            canonical: z.ZodURL;
+            invite: z.ZodDiscriminatedUnion<[z.ZodObject<{
+                state: z.ZodLiteral<"available">;
+                value: z.ZodObject<{
+                    kind: z.ZodEnum<{
+                        invite: "invite";
+                        edit: "edit";
+                        manage: "manage";
+                        settings: "settings";
+                        other: "other";
+                    }>;
+                    url: z.ZodURL;
+                }, z.core.$strict>;
+                provenance: z.ZodEnum<{
+                    "campaign-details-v1": "campaign-details-v1";
+                    "active-short-characters": "active-short-characters";
+                    "rendered-dom": "rendered-dom";
+                    derived: "derived";
+                }>;
+            }, z.core.$strict>, z.ZodObject<{
+                state: z.ZodLiteral<"empty">;
+                value: z.ZodObject<{
+                    kind: z.ZodEnum<{
+                        invite: "invite";
+                        edit: "edit";
+                        manage: "manage";
+                        settings: "settings";
+                        other: "other";
+                    }>;
+                    url: z.ZodURL;
+                }, z.core.$strict>;
+                provenance: z.ZodEnum<{
+                    "campaign-details-v1": "campaign-details-v1";
+                    "active-short-characters": "active-short-characters";
+                    "rendered-dom": "rendered-dom";
+                    derived: "derived";
+                }>;
+            }, z.core.$strict>, z.ZodObject<{
+                state: z.ZodLiteral<"unavailable">;
+                value: z.ZodNull;
+                provenance: z.ZodNull;
+            }, z.core.$strict>], "state">;
+            administration: z.ZodDiscriminatedUnion<[z.ZodObject<{
+                state: z.ZodLiteral<"available">;
+                value: z.ZodArray<z.ZodObject<{
+                    kind: z.ZodEnum<{
+                        invite: "invite";
+                        edit: "edit";
+                        manage: "manage";
+                        settings: "settings";
+                        other: "other";
+                    }>;
+                    url: z.ZodURL;
+                }, z.core.$strict>>;
+                provenance: z.ZodEnum<{
+                    "campaign-details-v1": "campaign-details-v1";
+                    "active-short-characters": "active-short-characters";
+                    "rendered-dom": "rendered-dom";
+                    derived: "derived";
+                }>;
+            }, z.core.$strict>, z.ZodObject<{
+                state: z.ZodLiteral<"empty">;
+                value: z.ZodArray<z.ZodObject<{
+                    kind: z.ZodEnum<{
+                        invite: "invite";
+                        edit: "edit";
+                        manage: "manage";
+                        settings: "settings";
+                        other: "other";
+                    }>;
+                    url: z.ZodURL;
+                }, z.core.$strict>>;
+                provenance: z.ZodEnum<{
+                    "campaign-details-v1": "campaign-details-v1";
+                    "active-short-characters": "active-short-characters";
+                    "rendered-dom": "rendered-dom";
+                    derived: "derived";
+                }>;
+            }, z.core.$strict>, z.ZodObject<{
+                state: z.ZodLiteral<"unavailable">;
+                value: z.ZodNull;
+                provenance: z.ZodNull;
+            }, z.core.$strict>], "state">;
+        }, z.core.$strict>;
+    }, z.core.$strict>;
+}, z.core.$strict>;
 export declare const searchEnvelopeSchema: z.ZodObject<{
     query: z.ZodString;
     category: z.ZodEnum<{
