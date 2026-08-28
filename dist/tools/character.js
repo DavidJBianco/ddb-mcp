@@ -25,7 +25,9 @@ const upstreamCharacterSummarySchema = z.object({
 }).passthrough();
 const upstreamListEnvelopeSchema = z.object({
     success: z.literal(true),
-    data: z.array(z.unknown()),
+    data: z.object({
+        characters: z.array(z.unknown()),
+    }).passthrough(),
     pagination: z.unknown().nullable(),
 }).passthrough();
 const upstreamDetailEnvelopeSchema = z.object({
@@ -96,7 +98,7 @@ export function normalizeCharacterList(upstreamPages, request = {}) {
         const parsedEnvelope = upstreamListEnvelopeSchema.safeParse(page);
         if (!parsedEnvelope.success)
             throw new Error("D&D Beyond returned an unexpected character-list response shape.");
-        for (const item of parsedEnvelope.data.data) {
+        for (const item of parsedEnvelope.data.data.characters) {
             const parsedItem = upstreamCharacterSummarySchema.safeParse(item);
             if (!parsedItem.success)
                 throw new Error("D&D Beyond returned an unexpected character summary shape.");

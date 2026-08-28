@@ -26,7 +26,17 @@ function summary(overrides = {}) {
 }
 
 function page(data, pagination = null) {
-  return { id: 0, success: true, message: null, data, pagination };
+  return {
+    id: 0,
+    success: true,
+    message: null,
+    data: {
+      characters: data,
+      characterSlotLimit: 6,
+      canUnlockCharacters: false,
+    },
+    pagination,
+  };
 }
 
 test("normalizes multiple character-list pages and deterministic defaults", () => {
@@ -82,7 +92,7 @@ test("rejects contradictory requests and malformed upstream pages atomically", (
   assert.throws(() => validateCharacterListRequest({ campaignIds: ["not-an-id"] }), /decimal/);
   assert.throws(() => normalizeCharacterList([page([summary()]), page([{ id: 2 }])]), /summary shape/);
   assert.throws(() => normalizeCharacterList([page([summary()]), page([summary()])]), /duplicate/);
-  assert.throws(() => normalizeCharacterList([{ success: true, data: [] }]), /response shape/);
+  assert.throws(() => normalizeCharacterList([{ success: true, data: [], pagination: null }]), /response shape/);
   assert.throws(() => normalizeCharacterList([page([summary({ lastModifiedDate: "invalid" })])]), /modification date/);
 });
 
