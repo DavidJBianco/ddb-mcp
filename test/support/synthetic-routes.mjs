@@ -62,15 +62,11 @@ const charactersPage = `<!doctype html><html><body><main><ul>
     </div>
     <div class="ddb-campaigns-character-card-footer-links"><a href="/characters/4242">View</a></div>
   </li>
-</ul></main></body></html>`;
-
-const characterSheetPage = `<!doctype html><html><body><main>
-  <h1 class="character-name">Synthetic Fallback Hero</h1>
-  <div class="character-level">Level 2</div>
-  <div class="character-race">Construct</div>
-  <div class="character-class">Rogue</div>
-  <div class="hp-current">12</div>
-</main></body></html>`;
+</ul></main><script>
+fetch("https://character-service.dndbeyond.com/character/v5/characters/list?userId=123", { credentials: "include" })
+  .then((response) => response.json())
+  .then(() => document.body.dataset.charactersLoaded = "true");
+</script></body></html>`;
 
 const characterExportPage = `<!doctype html><html><body><main>
   <h1 class="character-name">Synthetic Hero</h1>
@@ -222,11 +218,6 @@ export async function installSyntheticRoutes(context, options = {}) {
       return;
     }
 
-    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/characters/999") {
-      await route.fulfill(html(characterSheetPage));
-      return;
-    }
-
     if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/characters/4242") {
       await route.fulfill(html(characterExportPage));
       return;
@@ -295,10 +286,50 @@ export async function installSyntheticRoutes(context, options = {}) {
 
     if (
       url.origin === "https://character-service.dndbeyond.com" &&
+      url.pathname === "/character/v5/characters/list"
+    ) {
+      await route.fulfill(json({
+        id: 0,
+        success: true,
+        message: null,
+        data: {
+          characters: [{
+            id: 4242,
+            name: "Synthetic Hero",
+            level: 3,
+            classDescription: "Wizard 3",
+            raceName: "Construct",
+            campaignId: 7,
+            campaignName: "Synthetic Campaign",
+            status: 1,
+            createdDate: Date.parse("2025-01-02T03:04:05Z"),
+            lastModifiedDate: Date.parse("2025-03-04T05:06:07Z"),
+          }],
+          characterSlotLimit: 6,
+          canUnlockCharacters: false,
+        },
+        pagination: null,
+      }));
+      return;
+    }
+
+    if (
+      url.origin === "https://character-service.dndbeyond.com" &&
       url.pathname === "/character/v5/character/4242"
     ) {
       await route.fulfill(
-        json({ data: { id: 4242, name: "Synthetic Hero", classes: [{ level: 3 }] } })
+        json({
+          id: 0,
+          success: true,
+          message: null,
+          data: {
+            id: 4242,
+            name: "Synthetic Hero",
+            classes: [{ level: 3 }],
+            decorations: { avatarUrl: "https://www.dndbeyond.com/avatars/synthetic-hero.jpeg?width=150&height=150" },
+          },
+          pagination: null,
+        })
       );
       return;
     }

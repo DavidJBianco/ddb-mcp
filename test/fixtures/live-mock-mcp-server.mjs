@@ -25,14 +25,45 @@ server.tool("mysterium_list_characters", "mock", {}, async () => {
       }],
     };
   }
-  return text(JSON.stringify([{ id: "4242", name: sensitive }]));
+  return text(JSON.stringify({
+    count: 1,
+    total: 1,
+    filters: { names: [], classes: [], species: [], campaignIds: [], level: null, minLevel: null, maxLevel: null },
+    sort: { field: "name", direction: "asc" },
+    characters: [{ id: "4242", name: sensitive }],
+  }));
 });
 server.tool(
   "mysterium_get_character",
   "mock",
-  { character_id: z.string(), fallback_scrape: z.boolean().optional() },
-  async ({ character_id, fallback_scrape }) =>
-    text(JSON.stringify(fallback_scrape ? { Name: sensitive } : { data: { id: character_id, name: sensitive } }))
+  { character_id: z.string() },
+  async ({ character_id }) => text(JSON.stringify({
+    source: "dndbeyond-character-service",
+    schemaVersion: "v5",
+    portraitUrl: "https://www.dndbeyond.com/avatars/synthetic.jpeg",
+    character: { id: character_id, name: sensitive },
+  }))
+);
+server.tool(
+  "mysterium_get_character_portrait",
+  "mock",
+  { character_id: z.string() },
+  async ({ character_id }) => {
+    const metadata = {
+      characterId: character_id,
+      available: true,
+      portraitUrl: "https://www.dndbeyond.com/avatars/synthetic.jpeg",
+      mimeType: "image/jpeg",
+      byteCount: 4,
+    };
+    return {
+      content: [
+        { type: "text", text: JSON.stringify(metadata) },
+        { type: "image", data: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString("base64"), mimeType: "image/jpeg" },
+      ],
+      structuredContent: metadata,
+    };
+  }
 );
 server.registerTool(
   "mysterium_export_character_pdf",

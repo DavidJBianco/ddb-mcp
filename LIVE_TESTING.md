@@ -58,8 +58,9 @@ into a fixture, container layer, log, CI secret, or artifact.
 ## Coverage and privacy
 
 The suite reuses one MCP server/browser context and runs sequentially. It
-checks session restoration, character list/API retrieval/rendered fallback,
-rendered character-sheet PDF export and bounded byte reconstruction, campaign list/detail, safe navigation and
+checks session restoration, normalized character list/API retrieval, bounded
+portrait image delivery when configured, rendered character-sheet PDF export
+and bounded byte reconstruction, campaign list/detail, safe navigation and
 current-page retrieval, search, one public catalog monster lookup and rendered
 stat-block shape, library listing, sourcebook book/chapter
 outlines, bounded chapter content, deterministic chapter and section cursor

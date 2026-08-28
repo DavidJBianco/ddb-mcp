@@ -14,14 +14,85 @@ export declare const libraryEnvelopeSchema: z.ZodObject<{
         url: z.ZodString;
     }, z.core.$strict>>;
 }, z.core.$strict>;
+export declare const characterSummarySchema: z.ZodObject<{
+    id: z.ZodString;
+    name: z.ZodString;
+    level: z.ZodNumber;
+    classDescription: z.ZodString;
+    species: z.ZodString;
+    campaign: z.ZodNullable<z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+    }, z.core.$strict>>;
+    status: z.ZodNumber;
+    createdAt: z.ZodISODateTime;
+    modifiedAt: z.ZodISODateTime;
+}, z.core.$strict>;
+export declare const characterListEnvelopeSchema: z.ZodObject<{
+    count: z.ZodNumber;
+    total: z.ZodNumber;
+    filters: z.ZodObject<{
+        names: z.ZodArray<z.ZodString>;
+        classes: z.ZodArray<z.ZodString>;
+        species: z.ZodArray<z.ZodString>;
+        campaignIds: z.ZodArray<z.ZodString>;
+        level: z.ZodNullable<z.ZodNumber>;
+        minLevel: z.ZodNullable<z.ZodNumber>;
+        maxLevel: z.ZodNullable<z.ZodNumber>;
+    }, z.core.$strict>;
+    sort: z.ZodObject<{
+        field: z.ZodEnum<{
+            name: "name";
+            level: "level";
+            created: "created";
+            modified: "modified";
+        }>;
+        direction: z.ZodEnum<{
+            desc: "desc";
+            asc: "asc";
+        }>;
+    }, z.core.$strict>;
+    characters: z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+        level: z.ZodNumber;
+        classDescription: z.ZodString;
+        species: z.ZodString;
+        campaign: z.ZodNullable<z.ZodObject<{
+            id: z.ZodString;
+            name: z.ZodString;
+        }, z.core.$strict>>;
+        status: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        modifiedAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+export declare const characterDetailSchema: z.ZodObject<{
+    source: z.ZodLiteral<"dndbeyond-character-service">;
+    schemaVersion: z.ZodLiteral<"v5">;
+    portraitUrl: z.ZodNullable<z.ZodURL>;
+    character: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+}, z.core.$strict>;
+export declare const characterPortraitMetadataSchema: z.ZodObject<{
+    characterId: z.ZodString;
+    available: z.ZodBoolean;
+    portraitUrl: z.ZodNullable<z.ZodURL>;
+    mimeType: z.ZodNullable<z.ZodEnum<{
+        "image/jpeg": "image/jpeg";
+        "image/png": "image/png";
+        "image/webp": "image/webp";
+        "image/gif": "image/gif";
+    }>>;
+    byteCount: z.ZodNumber;
+}, z.core.$strict>;
 export declare const searchEnvelopeSchema: z.ZodObject<{
     query: z.ZodString;
     category: z.ZodEnum<{
+        classes: "classes";
         spells: "spells";
         monsters: "monsters";
         items: "items";
         races: "races";
-        classes: "classes";
         feats: "feats";
         sourcebooks: "sourcebooks";
         all: "all";

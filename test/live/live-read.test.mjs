@@ -193,14 +193,24 @@ test(
     });
 
     let characters = [];
+    let characterListingSucceeded = false;
     await t.test("restores the external session and lists characters", async () => {
-      characters = parseJson(await callText(client, diagnostics, "mysterium_list_characters"), "mysterium_list_characters");
-      requireStructure(Array.isArray(characters), "character listing must be an array");
+      const listing = parseJson(await callText(client, diagnostics, "mysterium_list_characters"), "mysterium_list_characters");
+      requireStructure(listing && typeof listing === "object", "character listing must be an object");
+      requireStructure(Array.isArray(listing.characters), "character listing omitted its characters array");
+      requireStructure(listing.count === listing.characters.length, "character listing count changed");
+      characters = listing.characters;
+      characterListingSucceeded = true;
     });
+
+    const characterPrerequisiteSkip = () => {
+      if (!characterListingSucceeded) return "character list prerequisite failed";
+      return characters.length === 0 ? "account has no character available" : false;
+    };
 
     await t.test(
       "retrieves a character through the authenticated API",
-      { skip: characters.length === 0 ? "account has no character available" : false },
+      { skip: characterPrerequisiteSkip() },
       async () => {
         const character = characters[0];
         requireStructure(typeof character?.id === "string" && character.id.length > 0, "character listing omitted an ID");
@@ -208,13 +218,34 @@ test(
           await callText(client, diagnostics, "mysterium_get_character", { character_id: character.id }),
           "mysterium_get_character"
         );
-        requireStructure(result && typeof result === "object" && result.data && typeof result.data === "object", "character API shape changed");
+        requireStructure(result && typeof result === "object" && result.character && typeof result.character === "object", "character API shape changed");
+        requireStructure(result.source === "dndbeyond-character-service" && result.schemaVersion === "v5", "character provenance changed");
+        requireStructure(result.portraitUrl === null || typeof result.portraitUrl === "string", "character portrait URL shape changed");
+      }
+    );
+
+    await t.test(
+      "retrieves a configured character portrait as bounded image content",
+      { skip: characterPrerequisiteSkip() },
+      async () => {
+        const characterId = characters[0]?.id;
+        const result = await callResult(client, diagnostics, "mysterium_get_character_portrait", { character_id: characterId });
+        const metadata = result.structuredContent;
+        requireStructure(metadata?.available === true || metadata?.available === false, "character portrait availability changed");
+        if (metadata.available) {
+          requireStructure(Number.isInteger(metadata.byteCount) && metadata.byteCount > 0 && metadata.byteCount <= 5 * 1024 * 1024, "character portrait size changed");
+          const image = result.content.find(({ type }) => type === "image");
+          requireStructure(image && image.mimeType === metadata.mimeType, "character portrait image content changed");
+          requireStructure(Buffer.from(image.data, "base64").length === metadata.byteCount, "character portrait byte count changed");
+        } else {
+          requireStructure(!result.content.some(({ type }) => type === "image"), "missing portrait unexpectedly returned image content");
+        }
       }
     );
 
     await t.test(
       "exports and validates a character PDF only in the external temporary directory",
-      { skip: characters.length === 0 ? "account has no character available" : false },
+      { skip: characterPrerequisiteSkip() },
       async () => {
         const characterId = characters[0]?.id;
         requireStructure(typeof characterId === "string" && characterId.length > 0, "character listing omitted an ID");
@@ -266,17 +297,6 @@ test(
         }
       }
     );
-
-    await t.test("exercises rendered character fallback with a nonexistent ID", async () => {
-      const fallback = parseJson(
-        await callText(client, diagnostics, "mysterium_get_character", {
-          character_id: "999999999999999999",
-          fallback_scrape: true,
-        }),
-        "mysterium_get_character fallback"
-      );
-      requireStructure(fallback && typeof fallback === "object", "character fallback did not return an object");
-    });
 
     let campaigns = [];
     await t.test("lists campaigns without exposing campaign data", async () => {

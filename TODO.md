@@ -86,8 +86,7 @@ release plan or pull request.
   and `mysterium_get_stat_block` response families. Validate MCP App results
   through exact schemas while retaining concise App summaries rather than
   duplicating PDF bytes or full renderer payloads.
-- [ ] When reviewing the deferred `mysterium_list_characters`,
-  `mysterium_get_character`, `mysterium_list_campaigns`,
+- [ ] When reviewing the remaining deferred `mysterium_list_campaigns`,
   `mysterium_get_campaign`, `mysterium_navigate`, `mysterium_current_page`, and
   `mysterium_interact` designs, define each stable success envelope, empty and
   partial result semantics, exact output schema, `structuredContent`, JSON-text
@@ -95,7 +94,7 @@ release plan or pull request.
 
 ## Character and campaign retrieval
 
-- [ ] **`mysterium_list_characters` filtering and sorting:** Replace DOM-card parsing
+- [x] **`mysterium_list_characters` filtering and sorting:** Replace DOM-card parsing
   with normalized summaries from the read-only character-list request while
   preserving authentication checks and explicit upstream-failure handling.
   Return a stable JSON envelope such as `{ count, total, filters, sort,
@@ -104,7 +103,7 @@ release plan or pull request.
   species/race name, campaign ID/name when present, status, and created/modified
   dates. Do not expose image URLs or other fields unless a use case requires
   them.
-- [ ] Add optional composable `mysterium_list_characters` filters. At
+- [x] Add optional composable `mysterium_list_characters` filters. At
   minimum, support name, class (including multiclass characters), species or
   race, minimum/maximum or exact level, and one or more campaign IDs. Apply
   filters to the normalized list inside the MCP server with documented
@@ -112,7 +111,7 @@ release plan or pull request.
   so requests such as “Bards of level 3 or higher who are elves” are
   deterministic. Support the upstream sort modes where useful: created, name,
   level, and modified date in ascending or descending order.
-- [ ] Define and test the character-list filter contract before implementation:
+- [x] Define and test the character-list filter contract before implementation:
   case-insensitive matching; exact campaign IDs; documented exact-versus-
   substring behavior for name/class/species; all supplied filter categories
   combined with AND; multiple values within one category combined with OR;
@@ -129,16 +128,16 @@ release plan or pull request.
   stable `id`, `name`, numeric `level`, `classDescription`, `raceName`,
   `campaignId`, `campaignName`, status, and created/modified dates. Therefore
   campaign filtering does not require fetching campaign pages or issuing N+1
-  full-character requests. Preserve a rendered-page fallback for the list only
-  if needed for resilience, and test pagination rather than assuming every
-  account fits one response.
-- [ ] **`mysterium_get_character` contract cleanup:** Remove the public
+  full-character requests. The implemented service-backed contract fails
+  atomically instead of returning a rendered fallback that cannot populate the
+  normalized fields.
+- [x] **`mysterium_get_character` contract cleanup:** Remove the public
   `fallback_scrape` argument, the rendered-sheet scraper, its tests, and its
   documentation. The fallback's partial schema is not compatible with the full
   character response and should not be returned silently. Continue using the
   authenticated read-only character-detail request and return an explicit MCP
   error on failure.
-- [ ] Normalize `mysterium_get_character` into a documented JSON envelope rather than
+- [x] Normalize `mysterium_get_character` into a documented JSON envelope rather than
   exposing the upstream wrapper as the tool contract. Preserve the full useful
   character payload initially to avoid accidental data loss, but identify
   provenance/schema version and keep upstream transport fields such as request
@@ -150,6 +149,10 @@ release plan or pull request.
   scraper provides only name, level, race, class, HP, abilities, and skills. A
   separately named partial-summary tool can be reconsidered only if a concrete
   use case emerges.
+- [x] Add `mysterium_get_character_portrait` for validated, bounded MCP image
+  content and promote a nullable `portraitUrl` into the normalized character
+  envelope. Treat portrait URL parameters as opaque, persist no image data,
+  and do not substitute frames, backdrops, or placeholders.
 - [ ] **`mysterium_list_campaigns` contract:** Review campaign-list retrieval
   alongside the campaign detail design. Define a stable normalized envelope,
   empty-list behavior, exact output schema, structured/JSON-text parity, and

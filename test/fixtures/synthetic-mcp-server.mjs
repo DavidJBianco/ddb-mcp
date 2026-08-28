@@ -12,6 +12,7 @@ const browser = await chromium.launch({
 const context = await browser.newContext();
 const routeState = await installSyntheticRoutes(context);
 const syntheticPdf = await readFile(new URL("synthetic-character-sheet.pdf", import.meta.url));
+const syntheticPortrait = Buffer.from([0xff, 0xd8, 0xff, 0x00]);
 const server = createServer(async () => context, {
   characterPdfDependencies: {
     createHandle: () => "docker-synthetic",
@@ -23,6 +24,17 @@ const server = createServer(async () => context, {
         "content-length": String(syntheticPdf.length),
       }),
       body: async () => syntheticPdf,
+    }),
+  },
+  characterPortraitDependencies: {
+    fetchPortraitResponse: async () => ({
+      ok: () => true,
+      status: () => 200,
+      headers: () => ({
+        "content-type": "image/jpeg",
+        "content-length": String(syntheticPortrait.length),
+      }),
+      body: async () => syntheticPortrait,
     }),
   },
 });

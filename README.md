@@ -20,8 +20,9 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 
 | Tool | Description |
 | --- | --- |
-| `mysterium_list_characters` | List the characters available to the authenticated account. |
-| `mysterium_get_character` | Retrieve full character data. |
+| `mysterium_list_characters` | List normalized character summaries with composable filters and deterministic sorting. |
+| `mysterium_get_character` | Retrieve complete character data with provenance and a normalized nullable portrait URL. |
+| `mysterium_get_character_portrait` | Return a configured character portrait as validated, display-ready MCP image content. |
 | `mysterium_export_character_pdf` | Export an owned character sheet through D&D Beyond's rendered workflow and display it in a read-only MCP App PDF viewer. |
 | `mysterium_list_campaigns` | List campaigns in which the account participates. |
 | `mysterium_get_campaign` | Retrieve campaign details and active characters. |
@@ -43,6 +44,10 @@ The mature model-facing JSON tools publish MCP output schemas and return the
 same result in both `structuredContent` and the JSON text content block:
 
 - `mysterium_list_library` returns `{ count, books }`.
+- `mysterium_list_characters` returns `{ count, total, filters, sort, characters }`.
+- `mysterium_get_character` returns `{ source, schemaVersion, portraitUrl, character }`.
+- `mysterium_get_character_portrait` returns portrait metadata as structured
+  content and adds an MCP image block when a portrait is configured.
 - `mysterium_search` returns `{ query, category, url, count, results }` with
   ordinary, monster, or sourcebook result details appropriate to the category.
 - `mysterium_read_book` returns a `kind: "outline"` discovery result or a
@@ -154,6 +159,41 @@ docker run --rm --interactive \
 The server needs outbound HTTPS access to D&D Beyond. The session volume is mounted read-only during normal operation.
 
 See [DOCKER.md](DOCKER.md) for local image builds, Docker MCP Toolkit details, and container verification.
+
+## Listing characters and retrieving portraits
+
+`mysterium_list_characters` returns every character summary after exhausting
+the account's read-only list response. Filters in different categories combine
+with AND; values within `names`, `classes`, `species`, or `campaign_ids`
+combine with OR. Name matching is case-insensitive substring matching, class
+matching uses exact multiclass components, and species and campaign matching
+are exact after normalization:
+
+```json
+{
+  "classes": ["Bard"],
+  "species": ["Elf"],
+  "min_level": 3,
+  "sort_by": "modified",
+  "sort_direction": "desc"
+}
+```
+
+Use an ID from `characters` with `mysterium_get_character`. The response keeps
+the complete character-service `data` object under `character`, identifies its
+source/schema version, and promotes `character.decorations.avatarUrl` to the
+nullable `portraitUrl` field. There is no rendered-sheet fallback: service,
+authentication, or schema failures are explicit MCP errors.
+
+Call `mysterium_get_character_portrait` with the same ID when the client should
+receive the configured portrait as image content. The tool validates the
+remote response, derives the display MIME type from its recognized image
+signature when D&D Beyond's supported image header is inaccurate, and limits
+it to 5 MiB. A character without a portrait returns
+`available: false` successfully and does not substitute a frame, backdrop, or
+placeholder. Portrait URL query parameters are treated as opaque and are not
+rewritten. Portraits are held only for the current call and are never cached or
+written to disk.
 
 ## Exporting a character sheet PDF
 

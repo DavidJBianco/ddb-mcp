@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  characterDetailSchema,
+  characterListEnvelopeSchema,
+  characterPortraitMetadataSchema,
   libraryEnvelopeSchema,
   readBookResultSchema,
   searchEnvelopeSchema,
@@ -45,6 +48,26 @@ const statBlock = {
 };
 
 test("mature output schemas accept each stable result family", () => {
+  assert.equal(characterListEnvelopeSchema.safeParse({
+    count: 0,
+    total: 0,
+    filters: { names: [], classes: [], species: [], campaignIds: [], level: null, minLevel: null, maxLevel: null },
+    sort: { field: "name", direction: "asc" },
+    characters: [],
+  }).success, true);
+  assert.equal(characterDetailSchema.safeParse({
+    source: "dndbeyond-character-service",
+    schemaVersion: "v5",
+    portraitUrl: null,
+    character: { id: 4242 },
+  }).success, true);
+  assert.equal(characterPortraitMetadataSchema.safeParse({
+    characterId: "4242",
+    available: false,
+    portraitUrl: null,
+    mimeType: null,
+    byteCount: 0,
+  }).success, true);
   assert.equal(libraryEnvelopeSchema.safeParse({ count: 0, books: [] }).success, true);
   assert.equal(searchEnvelopeSchema.safeParse({
     query: "missing",
@@ -88,6 +111,11 @@ test("mature output schemas accept each stable result family", () => {
 });
 
 test("mature output schemas reject undocumented and incomplete shapes", () => {
+  assert.equal(characterListEnvelopeSchema.safeParse({ count: 0, total: 0, filters: {}, sort: {}, characters: [] }).success, false);
+  assert.equal(characterDetailSchema.safeParse({ source: "dndbeyond-character-service", schemaVersion: "v5", portraitUrl: null }).success, false);
+  assert.equal(characterPortraitMetadataSchema.safeParse({
+    characterId: "4242", available: false, portraitUrl: "https://www.dndbeyond.com/avatar.jpg", mimeType: null, byteCount: 0,
+  }).success, false);
   assert.equal(libraryEnvelopeSchema.safeParse({ count: 0, books: [], undocumented: true }).success, false);
   assert.equal(searchEnvelopeSchema.safeParse({ query: "x", category: "spells", url: "x", results: [] }).success, false);
   assert.equal(readBookResultSchema.safeParse({

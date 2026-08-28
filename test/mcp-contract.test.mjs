@@ -42,6 +42,7 @@ test("every tool converts a browser dependency failure into an MCP tool error", 
   const cases = [
     ["mysterium_list_characters", {}],
     ["mysterium_get_character", { character_id: "4242" }],
+    ["mysterium_get_character_portrait", { character_id: "4242" }],
     ["mysterium_export_character_pdf", { character_id: "4242" }],
     ["mysterium_get_stat_block", { query: "Synthetic Watcher" }],
     ["mysterium_view_stat_block", { query: "Synthetic Watcher" }],
@@ -78,6 +79,9 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
   });
   const cases = [
     ["mysterium_get_character", {}],
+    ["mysterium_get_character", { character_id: "not-a-number" }],
+    ["mysterium_get_character_portrait", {}],
+    ["mysterium_get_character_portrait", { character_id: "not-a-number" }],
     ["mysterium_export_character_pdf", {}],
     ["mysterium_export_character_pdf", { character_id: "not-a-number" }],
     ["mysterium_get_stat_block", { creature_id: "not-a-number" }],
@@ -99,6 +103,63 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
     assert.match(result.content[0].text, /Invalid arguments/);
   }
   assert.equal(contextRequested, false);
+});
+
+test("character-list cross-field validation rejects before browser access", async (t) => {
+  let contextRequested = false;
+  const client = await connect(t, async () => {
+    contextRequested = true;
+    throw new Error("browser must not be requested");
+  });
+  for (const arguments_ of [
+    { level: 3, min_level: 2 },
+    { min_level: 8, max_level: 2 },
+  ]) {
+    const result = await client.callTool({ name: "mysterium_list_characters", arguments: arguments_ });
+    assert.equal(result.isError, true);
+  }
+  assert.equal(contextRequested, false);
+});
+
+test("character tools publish exact stable contracts", async (t) => {
+  const client = await connect(t, async () => {
+    throw new Error("contract inspection must not request a browser");
+  });
+  const listed = await client.listTools();
+  const listTool = listed.tools.find(({ name }) => name === "mysterium_list_characters");
+  assert.deepEqual(listTool.inputSchema.properties.sort_by.enum, ["created", "name", "level", "modified"]);
+  assert.equal(listTool.outputSchema.additionalProperties, false);
+  assert.deepEqual(listTool.outputSchema.required.sort(), ["characters", "count", "filters", "sort", "total"].sort());
+
+  const detailTool = listed.tools.find(({ name }) => name === "mysterium_get_character");
+  assert.deepEqual(detailTool.inputSchema.required, ["character_id"]);
+  assert.equal(detailTool.inputSchema.properties.fallback_scrape, undefined);
+  assert.equal(detailTool.outputSchema.properties.source.const, "dndbeyond-character-service");
+
+  const portraitTool = listed.tools.find(({ name }) => name === "mysterium_get_character_portrait");
+  assert.deepEqual(portraitTool.inputSchema.required, ["character_id"]);
+  assert.equal(portraitTool.outputSchema.additionalProperties, false);
+  assert.equal(portraitTool.annotations.readOnlyHint, true);
+});
+
+test("a character without a portrait returns metadata without image content", async (t) => {
+  const page = {
+    goto: async () => {},
+    waitForTimeout: async () => {},
+    url: () => "https://www.dndbeyond.com",
+    evaluate: async (_callback, argument) => argument === undefined
+      ? true
+      : { success: true, data: { id: Number(argument), decorations: null } },
+  };
+  const client = await connect(t, async () => ({ pages: () => [page] }));
+  const result = await client.callTool({
+    name: "mysterium_get_character_portrait",
+    arguments: { character_id: "4242" },
+  });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
+  assert.equal(result.structuredContent.available, false);
+  assert.equal(result.content.some(({ type }) => type === "image"), false);
 });
 
 test("character PDF export rejects a client without MCP Apps before browser access", async (t) => {
