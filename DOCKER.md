@@ -35,7 +35,8 @@ to build and run only the container bundle while iterating.
 
 The suite exercises MCP initialization through the normal image entrypoint and
 uses a read-only mounted synthetic Playwright backend for browser-backed tool
-calls, including character PDF export and byte reconstruction, normalized
+calls, including normalized character listing/detail, bounded portrait image
+delivery, character PDF export and byte reconstruction, normalized
 search attribution, stat-block resolution and rendered extraction, and both
 accessible and catalog sourcebook-search scopes.
 Container networking is disabled, and test fixtures are not copied into the

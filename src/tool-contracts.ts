@@ -17,6 +17,60 @@ export const libraryEnvelopeSchema = z.object({
   books: z.array(libraryBookSchema),
 }).strict();
 
+export const characterSummarySchema = z.object({
+  id: z.string().regex(/^\d+$/),
+  name: z.string(),
+  level: z.number().int().nonnegative(),
+  classDescription: z.string(),
+  species: z.string(),
+  campaign: z.object({
+    id: z.string().regex(/^\d+$/),
+    name: z.string(),
+  }).strict().nullable(),
+  status: z.number().int(),
+  createdAt: z.iso.datetime(),
+  modifiedAt: z.iso.datetime(),
+}).strict();
+
+export const characterListEnvelopeSchema = z.object({
+  count: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  filters: z.object({
+    names: z.array(z.string()),
+    classes: z.array(z.string()),
+    species: z.array(z.string()),
+    campaignIds: z.array(z.string().regex(/^\d+$/)),
+    level: z.number().int().nonnegative().nullable(),
+    minLevel: z.number().int().nonnegative().nullable(),
+    maxLevel: z.number().int().nonnegative().nullable(),
+  }).strict(),
+  sort: z.object({
+    field: z.enum(["created", "name", "level", "modified"]),
+    direction: z.enum(["asc", "desc"]),
+  }).strict(),
+  characters: z.array(characterSummarySchema),
+}).strict();
+
+export const characterDetailSchema = z.object({
+  source: z.literal("dndbeyond-character-service"),
+  schemaVersion: z.literal("v5"),
+  portraitUrl: z.url().nullable(),
+  character: z.record(z.string(), z.unknown()),
+}).strict();
+
+export const characterPortraitMetadataSchema = z.object({
+  characterId: z.string().regex(/^\d+$/),
+  available: z.boolean(),
+  portraitUrl: z.url().nullable(),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]).nullable(),
+  byteCount: z.number().int().nonnegative(),
+}).strict().superRefine((value, context) => {
+  const complete = value.available
+    ? value.portraitUrl !== null && value.mimeType !== null && value.byteCount > 0
+    : value.portraitUrl === null && value.mimeType === null && value.byteCount === 0;
+  if (!complete) context.addIssue({ code: "custom", message: "Invalid character portrait metadata variant." });
+});
+
 const sourceAttributionSchema = z.object({
   title: nullableString,
   url: nullableString,

@@ -23,13 +23,12 @@ function contextFor(finalValue) {
   return { pages: () => [page] };
 }
 
-test("character tools handle synthetic API data and empty listings", async () => {
+test("character detail handles synthetic API data", async () => {
   const characterContext = contextFor((argument) => ({
-    data: { id: Number(argument), name: "Synthetic Hero" },
+    success: true,
+    data: { id: Number(argument), name: "Synthetic Hero", decorations: null },
   }));
-  assert.equal(JSON.parse(await getCharacter(characterContext, "4242")).data.id, 4242);
-
-  assert.deepEqual(JSON.parse(await listCharacters(contextFor([]))), []);
+  assert.equal((await getCharacter(characterContext, "4242")).character.id, 4242);
 });
 
 test("campaign tools return deterministic empty and detail shapes", async () => {

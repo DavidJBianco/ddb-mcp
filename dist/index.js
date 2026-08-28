@@ -6,14 +6,14 @@ import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 import { z } from "zod";
 import { closeBrowser, getAuthenticatedContext } from "./browser.js";
-import { getCharacter, scrapeCharacterSheet, listCharacters } from "./tools/character.js";
+import { getCharacter, getCharacterPortrait, listCharacters, validateCharacterListRequest, } from "./tools/character.js";
 import { acquireCharacterPdf, CharacterPdfStore, PDF_CHUNK_BYTES, } from "./tools/character-pdf.js";
 import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
 import { search, validateSearchRequest } from "./tools/search.js";
 import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
 import { extractStatBlock, getStatBlock, resolveStatBlock, validateStatBlockRequest, } from "./tools/stat-block.js";
-import { libraryEnvelopeSchema, readBookResultSchema, searchEnvelopeSchema, statBlockResolutionSchema, statBlockResultSchema, statBlockSchema, } from "./tool-contracts.js";
+import { characterDetailSchema, characterListEnvelopeSchema, characterPortraitMetadataSchema, libraryEnvelopeSchema, readBookResultSchema, searchEnvelopeSchema, statBlockResolutionSchema, statBlockResultSchema, statBlockSchema, } from "./tool-contracts.js";
 import { jsonToolResult } from "./tool-result.js";
 import { PACKAGE_VERSION } from "./version.js";
 // Lazy-initialized shared browser context
@@ -41,11 +41,42 @@ export function createServer(getContextForTool = getSharedContext, options = {})
     });
     const characterPdfStore = new CharacterPdfStore(options.characterPdfDependencies);
     // ─── mysterium_list_characters ──────────────────────────────────────────────────────
-    server.tool("mysterium_list_characters", "List all characters in your D&D Beyond account, including their ID, level, race, and class.", {}, async () => {
+    server.registerTool("mysterium_list_characters", {
+        description: "List normalized D&D Beyond character summaries with composable filters and deterministic sorting.",
+        inputSchema: {
+            names: z.array(z.string().min(1).max(100)).max(25).optional().describe("Character-name substrings. Values use OR and matching is case-insensitive."),
+            classes: z.array(z.string().min(1).max(100)).max(25).optional().describe("Exact normalized class components. Values use OR and multiclass descriptions are split into components."),
+            species: z.array(z.string().min(1).max(100)).max(25).optional().describe("Exact normalized species or race names. Values use OR."),
+            campaign_ids: z.array(z.string().regex(/^\d+$/)).max(25).optional().describe("Exact numeric campaign IDs. Values use OR."),
+            level: z.number().int().min(0).max(20).optional().describe("Exact character level. Cannot be combined with minimum or maximum level."),
+            min_level: z.number().int().min(0).max(20).optional().describe("Inclusive minimum character level."),
+            max_level: z.number().int().min(0).max(20).optional().describe("Inclusive maximum character level."),
+            sort_by: z.enum(["created", "name", "level", "modified"]).optional().describe("Sort field. Defaults to name."),
+            sort_direction: z.enum(["asc", "desc"]).optional().describe("Sort direction. Defaults to ascending."),
+        },
+        outputSchema: characterListEnvelopeSchema,
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: true,
+        },
+    }, async ({ names, classes, species, campaign_ids, level, min_level, max_level, sort_by, sort_direction }) => {
         try {
+            const request = {
+                names,
+                classes,
+                species,
+                campaignIds: campaign_ids,
+                level,
+                minLevel: min_level,
+                maxLevel: max_level,
+                sortBy: sort_by,
+                sortDirection: sort_direction,
+            };
+            validateCharacterListRequest(request);
             const context = await getContextForTool();
-            const result = await listCharacters(context);
-            return { content: [{ type: "text", text: result }] };
+            return jsonToolResult(await listCharacters(context, request));
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -53,32 +84,60 @@ export function createServer(getContextForTool = getSharedContext, options = {})
         }
     });
     // ─── mysterium_get_character ────────────────────────────────────────────────────────
-    server.tool("mysterium_get_character", "Fetch full character data JSON from the D&D Beyond character service API. Requires character ID (the number in the character URL).", {
-        character_id: z.string().describe("The D&D Beyond character ID (e.g. '12345678')"),
-        fallback_scrape: z
-            .boolean()
-            .optional()
-            .describe("If true, fall back to scraping the rendered character sheet HTML if the API fails"),
-    }, async ({ character_id, fallback_scrape }) => {
+    server.registerTool("mysterium_get_character", {
+        description: "Fetch complete character data from D&D Beyond in a stable envelope with a normalized nullable portrait URL.",
+        inputSchema: {
+            character_id: z.string().regex(/^\d+$/).describe("The numeric D&D Beyond character ID from the character URL."),
+        },
+        outputSchema: characterDetailSchema,
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: true,
+        },
+    }, async ({ character_id }) => {
         try {
             const context = await getContextForTool();
-            const data = await getCharacter(context, character_id);
-            return { content: [{ type: "text", text: data }] };
+            return jsonToolResult(await getCharacter(context, character_id));
         }
         catch (err) {
-            if (fallback_scrape) {
-                try {
-                    const context = await getContextForTool();
-                    const scraped = await scrapeCharacterSheet(context, character_id);
-                    return { content: [{ type: "text", text: scraped }] };
-                }
-                catch (scrapeErr) {
-                    const msg = scrapeErr instanceof Error ? scrapeErr.message : String(scrapeErr);
-                    return { content: [{ type: "text", text: `API and scrape both failed: ${msg}` }], isError: true };
-                }
-            }
             const msg = err instanceof Error ? err.message : String(err);
             return { content: [{ type: "text", text: `Failed to get character: ${msg}` }], isError: true };
+        }
+    });
+    // ─── mysterium_get_character_portrait ───────────────────────────────────────────────
+    server.registerTool("mysterium_get_character_portrait", {
+        description: "Fetch an owned D&D Beyond character's configured portrait as validated, display-ready MCP image content.",
+        inputSchema: {
+            character_id: z.string().regex(/^\d+$/).describe("The numeric D&D Beyond character ID from the character URL."),
+        },
+        outputSchema: characterPortraitMetadataSchema,
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: true,
+        },
+    }, async ({ character_id }) => {
+        try {
+            const context = await getContextForTool();
+            const portrait = await getCharacterPortrait(context, character_id, options.characterPortraitDependencies);
+            const text = JSON.stringify(portrait.metadata, null, 2);
+            if (portrait.bytes === null || portrait.metadata.mimeType === null) {
+                return { content: [{ type: "text", text }], structuredContent: portrait.metadata };
+            }
+            return {
+                content: [
+                    { type: "text", text },
+                    { type: "image", data: portrait.bytes.toString("base64"), mimeType: portrait.metadata.mimeType },
+                ],
+                structuredContent: portrait.metadata,
+            };
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return { content: [{ type: "text", text: `Failed to get character portrait: ${msg}` }], isError: true };
         }
     });
     // ─── mysterium_export_character_pdf ─────────────────────────────────────────────────
