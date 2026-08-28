@@ -58,8 +58,8 @@ const upstreamCharacterSummarySchema = z.object({
   campaignId: z.union([z.string().regex(/^\d+$/), z.number().int().nonnegative()]).nullable(),
   campaignName: z.string().nullable(),
   status: z.number().int(),
-  createdDate: z.string(),
-  lastModifiedDate: z.string(),
+  createdDate: z.union([z.string(), z.number().finite().nonnegative()]),
+  lastModifiedDate: z.union([z.string(), z.number().finite().nonnegative()]),
 }).passthrough();
 
 const upstreamListEnvelopeSchema = z.object({
@@ -88,8 +88,8 @@ function canonicalValues(values: string[] | undefined, label: string): string[] 
   });
 }
 
-function normalizeDate(value: string, label: string): string {
-  const timestamp = Date.parse(value);
+function normalizeDate(value: string | number, label: string): string {
+  const timestamp = typeof value === "number" ? value : Date.parse(value);
   if (!Number.isFinite(timestamp)) throw new Error(`Character list contained an invalid ${label}.`);
   return new Date(timestamp).toISOString();
 }

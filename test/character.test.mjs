@@ -19,8 +19,8 @@ function summary(overrides = {}) {
     campaignId: 7,
     campaignName: "Synthetic Campaign",
     status: 1,
-    createdDate: "2025-01-02T03:04:05Z",
-    lastModifiedDate: "2025-03-04T05:06:07Z",
+    createdDate: Date.parse("2025-01-02T03:04:05Z"),
+    lastModifiedDate: Date.parse("2025-03-04T05:06:07Z"),
     ...overrides,
   };
 }
@@ -53,6 +53,20 @@ test("normalizes multiple character-list pages and deterministic defaults", () =
     names: [], classes: [], species: [], campaignIds: [], level: null, minLevel: null, maxLevel: null,
   });
   assert.deepEqual(result.sort, { field: "name", direction: "asc" });
+});
+
+test("normalizes both current numeric and compatible string character timestamps", () => {
+  const result = normalizeCharacterList([page([
+    summary({ id: 1 }),
+    summary({
+      id: 2,
+      createdDate: "2024-01-02T03:04:05Z",
+      lastModifiedDate: "2024-03-04T05:06:07Z",
+    }),
+  ])]);
+
+  assert.equal(result.characters.find(({ id }) => id === "1").createdAt, "2025-01-02T03:04:05.000Z");
+  assert.equal(result.characters.find(({ id }) => id === "2").modifiedAt, "2024-03-04T05:06:07.000Z");
 });
 
 test("applies field-aware filters with OR inside categories and AND across them", () => {

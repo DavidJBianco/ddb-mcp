@@ -193,17 +193,24 @@ test(
     });
 
     let characters = [];
+    let characterListingSucceeded = false;
     await t.test("restores the external session and lists characters", async () => {
       const listing = parseJson(await callText(client, diagnostics, "mysterium_list_characters"), "mysterium_list_characters");
       requireStructure(listing && typeof listing === "object", "character listing must be an object");
       requireStructure(Array.isArray(listing.characters), "character listing omitted its characters array");
       requireStructure(listing.count === listing.characters.length, "character listing count changed");
       characters = listing.characters;
+      characterListingSucceeded = true;
     });
+
+    const characterPrerequisiteSkip = () => {
+      if (!characterListingSucceeded) return "character list prerequisite failed";
+      return characters.length === 0 ? "account has no character available" : false;
+    };
 
     await t.test(
       "retrieves a character through the authenticated API",
-      { skip: characters.length === 0 ? "account has no character available" : false },
+      { skip: characterPrerequisiteSkip() },
       async () => {
         const character = characters[0];
         requireStructure(typeof character?.id === "string" && character.id.length > 0, "character listing omitted an ID");
@@ -219,7 +226,7 @@ test(
 
     await t.test(
       "retrieves a configured character portrait as bounded image content",
-      { skip: characters.length === 0 ? "account has no character available" : false },
+      { skip: characterPrerequisiteSkip() },
       async () => {
         const characterId = characters[0]?.id;
         const result = await callResult(client, diagnostics, "mysterium_get_character_portrait", { character_id: characterId });
@@ -238,7 +245,7 @@ test(
 
     await t.test(
       "exports and validates a character PDF only in the external temporary directory",
-      { skip: characters.length === 0 ? "account has no character available" : false },
+      { skip: characterPrerequisiteSkip() },
       async () => {
         const characterId = characters[0]?.id;
         requireStructure(typeof characterId === "string" && characterId.length > 0, "character listing omitted an ID");

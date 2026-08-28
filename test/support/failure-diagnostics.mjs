@@ -58,7 +58,7 @@ export function summarizeLiveFailure(value, { stderr = "" } = {}) {
     ["stat-block layout", /(?:stat-block.*(?:layout|incomplete)|Armor Class\/AC|Hit Points\/HP)/i],
     ["browser closed", /\b(?:browser|page|context).*(?:closed|crashed|disconnected)\b/i],
     ["filesystem", /\b(?:ENOENT|EACCES|EPERM|read-only file system)\b/i],
-    ["JSON or response shape", /\b(?:malformed JSON|JSON parse|response shape)\b/i],
+    ["JSON or response shape", /\b(?:malformed JSON|JSON parse|(?:response|summary|wrapper) shape)\b/i],
   ];
   for (const [label, pattern] of categoryPatterns) {
     if (pattern.test(raw)) categories.push(label);
