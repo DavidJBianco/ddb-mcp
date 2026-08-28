@@ -3,6 +3,7 @@ import type { APIResponse, BrowserContext, Page, Response } from "playwright";
 import { z } from "zod";
 
 import { getPage, isLoggedIn } from "../browser.js";
+import { fetchAuthenticatedDdbJson } from "../service-auth.js";
 import {
   characterDetailSchema,
   characterListEnvelopeSchema,
@@ -267,17 +268,7 @@ export async function listCharacters(
 }
 
 async function fetchCharacterEnvelope(page: Page, characterId: string): Promise<unknown> {
-  try {
-    return await page.evaluate(async (id: string) => {
-      const url = `https://character-service.dndbeyond.com/character/v5/character/${id}`;
-      const response = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
-      if (!response.ok) throw new Error(`API returned ${response.status}: ${response.statusText}`);
-      return response.json();
-    }, characterId);
-  } catch (error) {
-    if (error instanceof Error && /API returned (401|403)\b/.test(error.message)) throw new AuthenticationRequiredError();
-    throw error;
-  }
+  return fetchAuthenticatedDdbJson(page, `${CHARACTER_SERVICE_ORIGIN}/character/v5/character/${characterId}`);
 }
 
 function portraitUrlFromCharacter(character: Record<string, unknown>): string | null {

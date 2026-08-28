@@ -147,7 +147,16 @@ function portraitContext({ avatarUrl, bytes, mimeType = "image/jpeg", status = 2
     url: () => "https://www.dndbeyond.com",
     evaluate: async (_callback, argument) => argument === undefined
       ? true
-      : { success: true, data: { id: Number(argument), decorations: { avatarUrl } } },
+      : {
+          kind: "success",
+          body: {
+            success: true,
+            data: {
+              id: Number(new URL(argument.url).pathname.split("/").at(-1)),
+              decorations: { avatarUrl },
+            },
+          },
+        },
   };
   return {
     pages: () => [pageObject],

@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { z } from "zod";
 import { getPage, isLoggedIn } from "../browser.js";
+import { fetchAuthenticatedDdbJson } from "../service-auth.js";
 import { characterDetailSchema, characterListEnvelopeSchema, characterPortraitMetadataSchema, } from "../tool-contracts.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
 import { openDomReadyPage } from "./page-readiness.js";
@@ -228,20 +229,7 @@ export async function listCharacters(context, request = {}) {
     return normalizeCharacterList([envelope], request);
 }
 async function fetchCharacterEnvelope(page, characterId) {
-    try {
-        return await page.evaluate(async (id) => {
-            const url = `https://character-service.dndbeyond.com/character/v5/character/${id}`;
-            const response = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
-            if (!response.ok)
-                throw new Error(`API returned ${response.status}: ${response.statusText}`);
-            return response.json();
-        }, characterId);
-    }
-    catch (error) {
-        if (error instanceof Error && /API returned (401|403)\b/.test(error.message))
-            throw new AuthenticationRequiredError();
-        throw error;
-    }
+    return fetchAuthenticatedDdbJson(page, `${CHARACTER_SERVICE_ORIGIN}/character/v5/character/${characterId}`);
 }
 function portraitUrlFromCharacter(character) {
     const decorations = character.decorations;
