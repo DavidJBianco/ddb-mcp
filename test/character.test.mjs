@@ -183,6 +183,18 @@ test("returns validated JPEG, PNG, WebP, and GIF portrait bytes", async () => {
   }
 });
 
+test("normalizes a supported but incorrect upstream MIME declaration from the image signature", async () => {
+  const png = Buffer.from("89504e470d0a1a0a0000000d", "hex");
+  const result = await getCharacterPortrait(portraitContext({
+    avatarUrl: "https://www.dndbeyond.com/avatar.png",
+    bytes: png,
+    mimeType: "image/jpeg",
+  }), "4242");
+
+  assert.equal(result.metadata.mimeType, "image/png");
+  assert.deepEqual(result.bytes, png);
+});
+
 test("returns valid absence without fetching an image", async () => {
   let fetched = false;
   const context = portraitContext({ avatarUrl: null });
@@ -200,7 +212,7 @@ test("rejects unsafe and invalid portrait responses", async () => {
   await assert.rejects(getCharacterPortrait(portraitContext({ avatarUrl: "https://example.test/avatar.jpg", bytes: jpeg }), "4242"), /unapproved host/);
   await assert.rejects(getCharacterPortrait(portraitContext({ avatarUrl: "https://www.dndbeyond.com/avatar.jpg", bytes: jpeg, status: 500 }), "4242"), /HTTP 500/);
   await assert.rejects(getCharacterPortrait(portraitContext({ avatarUrl: "https://www.dndbeyond.com/avatar.jpg", bytes: jpeg, mimeType: "text/html" }), "4242"), /non-image/);
-  await assert.rejects(getCharacterPortrait(portraitContext({ avatarUrl: "https://www.dndbeyond.com/avatar.jpg", bytes: Buffer.from("wrong") }), "4242"), /declared image type/);
+  await assert.rejects(getCharacterPortrait(portraitContext({ avatarUrl: "https://www.dndbeyond.com/avatar.jpg", bytes: Buffer.from("wrong") }), "4242"), /recognized image signature/);
   await assert.rejects(getCharacterPortrait(portraitContext({
     avatarUrl: "https://www.dndbeyond.com/avatar.jpg",
     bytes: jpeg,

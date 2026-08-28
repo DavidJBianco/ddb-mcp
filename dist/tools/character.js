@@ -301,14 +301,18 @@ function portraitMimeType(headers) {
     }
     return mimeType;
 }
-function hasImageSignature(bytes, mimeType) {
-    if (mimeType === "image/jpeg")
-        return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-    if (mimeType === "image/png")
-        return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    if (mimeType === "image/gif")
-        return bytes.length >= 6 && ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString("ascii"));
-    return bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
+function imageSignatureMimeType(bytes) {
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+        return "image/jpeg";
+    if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+        return "image/png";
+    }
+    if (bytes.length >= 6 && ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString("ascii")))
+        return "image/gif";
+    if (bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP") {
+        return "image/webp";
+    }
+    return null;
 }
 async function fetchPortraitResponse(context, sourceUrl) {
     let current = validatePortraitUrl(sourceUrl);
@@ -356,7 +360,7 @@ export async function getCharacterPortrait(context, characterId, dependencies = 
     if (declaredLength !== null && declaredLength > MAX_PORTRAIT_BYTES) {
         throw new Error("The character portrait exceeds the 5 MiB limit.");
     }
-    const mimeType = portraitMimeType(headers);
+    portraitMimeType(headers);
     const bytes = await response.body();
     if (bytes.length === 0)
         throw new Error("D&D Beyond returned an empty character portrait.");
@@ -365,9 +369,9 @@ export async function getCharacterPortrait(context, characterId, dependencies = 
     if (declaredLength !== null && bytes.length !== declaredLength) {
         throw new Error("The character portrait length did not match its response metadata.");
     }
-    if (!hasImageSignature(bytes, mimeType)) {
-        throw new Error("The character portrait did not match its declared image type.");
-    }
+    const mimeType = imageSignatureMimeType(bytes);
+    if (mimeType === null)
+        throw new Error("The character portrait did not have a recognized image signature.");
     return {
         metadata: characterPortraitMetadataSchema.parse({
             characterId,

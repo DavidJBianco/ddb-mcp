@@ -187,7 +187,9 @@ authentication, or schema failures are explicit MCP errors.
 
 Call `mysterium_get_character_portrait` with the same ID when the client should
 receive the configured portrait as image content. The tool validates the
-remote response and limits it to 5 MiB. A character without a portrait returns
+remote response, derives the display MIME type from its recognized image
+signature when D&D Beyond's supported image header is inaccurate, and limits
+it to 5 MiB. A character without a portrait returns
 `available: false` successfully and does not substitute a frame, backdrop, or
 placeholder. Portrait URL query parameters are treated as opaque and are not
 rewritten. Portraits are held only for the current call and are never cached or

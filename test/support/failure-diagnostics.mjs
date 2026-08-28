@@ -56,6 +56,7 @@ export function summarizeLiveFailure(value, { stderr = "" } = {}) {
     ["selector or DOM", /\b(?:selector|locator|element|DOM)\b/i],
     ["inaccessible content", /\b(?:not accessible|unavailable|view in store|marketplace)\b/i],
     ["stat-block layout", /(?:stat-block.*(?:layout|incomplete)|Armor Class\/AC|Hit Points\/HP)/i],
+    ["portrait delivery", /(?:character portrait|portrait URL|portrait redirect|5 MiB limit)/i],
     ["browser closed", /\b(?:browser|page|context).*(?:closed|crashed|disconnected)\b/i],
     ["filesystem", /\b(?:ENOENT|EACCES|EPERM|read-only file system)\b/i],
     ["JSON or response shape", /\b(?:malformed JSON|JSON parse|(?:response|summary|wrapper) shape)\b/i],
