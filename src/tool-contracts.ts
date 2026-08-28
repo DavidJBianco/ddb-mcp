@@ -71,6 +71,125 @@ export const characterPortraitMetadataSchema = z.object({
   if (!complete) context.addIssue({ code: "custom", message: "Invalid character portrait metadata variant." });
 });
 
+export const campaignRoleSchema = z.enum(["dungeon_master", "player", "unknown"]);
+export const campaignSortFieldSchema = z.enum(["name", "role", "created", "players", "content_sharing"]);
+const campaignProvenanceSchema = z.enum([
+  "campaign-details-v1",
+  "active-short-characters",
+  "rendered-dom",
+  "derived",
+]);
+
+function campaignAvailabilitySchema<T extends z.ZodType>(valueSchema: T) {
+  return z.discriminatedUnion("state", [
+    z.object({
+      state: z.literal("available"),
+      value: valueSchema,
+      provenance: campaignProvenanceSchema,
+    }).strict(),
+    z.object({
+      state: z.literal("empty"),
+      value: valueSchema,
+      provenance: campaignProvenanceSchema,
+    }).strict(),
+    z.object({
+      state: z.literal("unavailable"),
+      value: z.null(),
+      provenance: z.null(),
+    }).strict(),
+  ]);
+}
+
+export const campaignSummarySchema = z.object({
+  id: z.string().regex(/^\d+$/),
+  name: z.string(),
+  role: campaignRoleSchema,
+  createdOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  playerCount: z.number().int().nonnegative(),
+  contentSharingEnabled: z.boolean(),
+  url: z.url(),
+}).strict();
+
+export const campaignListEnvelopeSchema = z.object({
+  count: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  filters: z.object({
+    names: z.array(z.string()),
+    campaignIds: z.array(z.string().regex(/^\d+$/)),
+    roles: z.array(campaignRoleSchema),
+    createdOnOrAfter: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    createdOnOrBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    minPlayers: z.number().int().nonnegative().nullable(),
+    maxPlayers: z.number().int().nonnegative().nullable(),
+    contentSharingEnabled: z.boolean().nullable(),
+  }).strict(),
+  sort: z.object({
+    field: campaignSortFieldSchema,
+    direction: z.enum(["asc", "desc"]),
+  }).strict(),
+  campaigns: z.array(campaignSummarySchema),
+}).strict();
+
+const campaignDungeonMasterSchema = z.object({
+  id: z.string().regex(/^\d+$/),
+  displayName: z.string(),
+}).strict();
+
+const campaignSharingSchema = z.object({
+  contentEnabled: z.boolean(),
+  itemEnabled: z.boolean(),
+}).strict();
+
+const campaignPlayerSchema = z.object({
+  id: z.string().regex(/^\d+$/),
+  displayName: z.string(),
+}).strict();
+
+const campaignCharacterSchema = z.object({
+  id: z.string().regex(/^\d+$/),
+  name: z.string(),
+  playerId: z.string().regex(/^\d+$/).nullable(),
+  playerName: z.string().nullable(),
+  isPrivate: z.boolean().nullable(),
+  status: z.number().int().nullable(),
+  isAssigned: z.boolean().nullable(),
+  url: z.url(),
+}).strict();
+
+const campaignLinkSchema = z.object({
+  kind: z.enum(["invite", "edit", "manage", "settings", "other"]),
+  url: z.url(),
+}).strict();
+
+export const campaignDetailEnvelopeSchema = z.object({
+  source: z.literal("dndbeyond-campaign"),
+  schemaVersion: z.literal("v1"),
+  partial: z.boolean(),
+  campaign: z.object({
+    id: z.string().regex(/^\d+$/),
+    name: z.string(),
+    url: z.url(),
+    viewerRole: campaignRoleSchema,
+    identityProvenance: campaignProvenanceSchema,
+    status: campaignAvailabilitySchema(z.number().int()),
+    createdAt: campaignAvailabilitySchema(z.iso.datetime()),
+    dungeonMaster: campaignAvailabilitySchema(campaignDungeonMasterSchema),
+    sharing: campaignAvailabilitySchema(campaignSharingSchema),
+    players: campaignAvailabilitySchema(z.array(campaignPlayerSchema)),
+    characters: campaignAvailabilitySchema(z.array(campaignCharacterSchema)),
+    description: campaignAvailabilitySchema(z.string()),
+    notes: z.object({
+      public: campaignAvailabilitySchema(z.string()),
+      private: campaignAvailabilitySchema(z.string()),
+    }).strict(),
+    links: z.object({
+      canonical: z.url(),
+      invite: campaignAvailabilitySchema(campaignLinkSchema),
+      administration: campaignAvailabilitySchema(z.array(campaignLinkSchema)),
+    }).strict(),
+  }).strict(),
+}).strict();
+
 const sourceAttributionSchema = z.object({
   title: nullableString,
   url: nullableString,

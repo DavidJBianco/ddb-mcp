@@ -24,8 +24,8 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 | `mysterium_get_character` | Retrieve complete character data with provenance and a normalized nullable portrait URL. |
 | `mysterium_get_character_portrait` | Return a configured character portrait as validated, display-ready MCP image content. |
 | `mysterium_export_character_pdf` | Export an owned character sheet through D&D Beyond's rendered workflow and display it in a read-only MCP App PDF viewer. |
-| `mysterium_list_campaigns` | List campaigns in which the account participates. |
-| `mysterium_get_campaign` | Retrieve campaign details and active characters. |
+| `mysterium_list_campaigns` | List normalized campaign summaries with composable filters and deterministic sorting. |
+| `mysterium_get_campaign` | Retrieve permission-aware campaign metadata, participants, notes, and explicitly requested safe links. |
 | `mysterium_list_library` | List accessible sourcebooks and their slugs. |
 | `mysterium_read_book` | Discover outlines or read bounded chapter and section content with cursor pagination. |
 | `mysterium_search` | Search rendered D&D Beyond indexes and sourcebook listings. |
@@ -48,6 +48,9 @@ same result in both `structuredContent` and the JSON text content block:
 - `mysterium_get_character` returns `{ source, schemaVersion, portraitUrl, character }`.
 - `mysterium_get_character_portrait` returns portrait metadata as structured
   content and adds an MCP image block when a portrait is configured.
+- `mysterium_list_campaigns` returns `{ count, total, filters, sort, campaigns }`.
+- `mysterium_get_campaign` returns a versioned `{ source, schemaVersion,
+  partial, campaign }` envelope with explicit availability and provenance.
 - `mysterium_search` returns `{ query, category, url, count, results }` with
   ordinary, monster, or sourcebook result details appropriate to the category.
 - `mysterium_read_book` returns a `kind: "outline"` discovery result or a
@@ -194,6 +197,43 @@ it to 5 MiB. A character without a portrait returns
 placeholder. Portrait URL query parameters are treated as opaque and are not
 rewritten. Portraits are held only for the current call and are never cached or
 written to disk.
+
+## Listing and retrieving campaigns
+
+`mysterium_list_campaigns` normalizes the fields already rendered on the
+account's campaign-list page without opening each campaign. It supports
+case-insensitive name substrings, exact campaign IDs and viewer roles,
+inclusive creation-date and player-count bounds, and exact content-sharing
+state. Filter categories combine with AND; multiple names, IDs, or roles use
+OR. Results can be sorted by `name`, `role`, `created`, `players`, or
+`content_sharing` in either direction:
+
+```json
+{
+  "roles": ["dungeon_master"],
+  "created_on_or_after": "2025-01-01",
+  "min_players": 2,
+  "content_sharing_enabled": true,
+  "sort_by": "players",
+  "sort_direction": "desc"
+}
+```
+
+Pass a returned ID to `mysterium_get_campaign`. Normal page navigation loads
+read-only campaign metadata and short-character responses; Mysterium validates
+those page-issued responses and combines them with permission-aware rendered
+content. Optional sections use `available`, `empty`, or `unavailable` states
+and identify their provenance. A safe rendered fallback retains the same
+schema with `partial: true` when structured metadata is unavailable.
+
+Visible private DM notes are requested by default; set
+`include_private_notes` to `false` to prevent their extraction. An unavailable
+result never distinguishes unrequested, unauthorized, hidden, or unrendered
+content. Invite and administration links default to excluded. Request them
+individually with `include_invite_link` or
+`include_administration_links`; invite URLs are sensitive, and administration
+results contain only validated navigation destinations. Delete, deactivate,
+remove, reset, leave, and other state-changing controls are always omitted.
 
 ## Exporting a character sheet PDF
 

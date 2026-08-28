@@ -300,8 +300,10 @@ test(
 
     let campaigns = [];
     await t.test("lists campaigns without exposing campaign data", async () => {
-      campaigns = parseJson(await callText(client, diagnostics, "mysterium_list_campaigns"), "mysterium_list_campaigns");
-      requireStructure(Array.isArray(campaigns), "campaign listing must be an array");
+      const listing = parseJson(await callText(client, diagnostics, "mysterium_list_campaigns"), "mysterium_list_campaigns");
+      requireStructure(Array.isArray(listing?.campaigns), "campaign listing omitted its campaigns array");
+      requireStructure(listing.count === listing.campaigns.length, "campaign listing count changed");
+      campaigns = listing.campaigns;
     });
 
     await t.test(
@@ -314,7 +316,10 @@ test(
           await callText(client, diagnostics, "mysterium_get_campaign", { campaign_id: campaignId }),
           "mysterium_get_campaign"
         );
-        requireStructure(campaign && typeof campaign === "object", "campaign detail must be an object");
+        requireStructure(campaign?.source === "dndbeyond-campaign" && campaign?.schemaVersion === "v1", "campaign detail provenance changed");
+        requireStructure(campaign?.campaign?.id === campaignId, "campaign detail identity changed");
+        requireStructure(typeof campaign?.partial === "boolean", "campaign detail partial state changed");
+        requireStructure(["available", "empty", "unavailable"].includes(campaign?.campaign?.notes?.private?.state), "campaign private-note availability changed");
       }
     );
 
