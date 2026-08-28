@@ -5,6 +5,8 @@ import {
   characterDetailSchema,
   characterListEnvelopeSchema,
   characterPortraitMetadataSchema,
+  campaignDetailEnvelopeSchema,
+  campaignListEnvelopeSchema,
   libraryEnvelopeSchema,
   readBookResultSchema,
   searchEnvelopeSchema,
@@ -68,6 +70,27 @@ test("mature output schemas accept each stable result family", () => {
     mimeType: null,
     byteCount: 0,
   }).success, true);
+  assert.equal(campaignListEnvelopeSchema.safeParse({
+    count: 0,
+    total: 0,
+    filters: { names: [], campaignIds: [], roles: [], createdOnOrAfter: null, createdOnOrBefore: null, minPlayers: null, maxPlayers: null, contentSharingEnabled: null },
+    sort: { field: "name", direction: "asc" },
+    campaigns: [],
+  }).success, true);
+  const unavailable = { state: "unavailable", value: null, provenance: null };
+  assert.equal(campaignDetailEnvelopeSchema.safeParse({
+    source: "dndbeyond-campaign",
+    schemaVersion: "v1",
+    partial: true,
+    campaign: {
+      id: "7", name: "Synthetic Campaign", url: "https://www.dndbeyond.com/campaigns/7",
+      viewerRole: "unknown", identityProvenance: "rendered-dom",
+      status: unavailable, createdAt: unavailable, dungeonMaster: unavailable, sharing: unavailable,
+      players: unavailable, characters: { state: "empty", value: [], provenance: "rendered-dom" },
+      description: unavailable, notes: { public: unavailable, private: unavailable },
+      links: { canonical: "https://www.dndbeyond.com/campaigns/7", invite: unavailable, administration: unavailable },
+    },
+  }).success, true);
   assert.equal(libraryEnvelopeSchema.safeParse({ count: 0, books: [] }).success, true);
   assert.equal(searchEnvelopeSchema.safeParse({
     query: "missing",
@@ -116,6 +139,8 @@ test("mature output schemas reject undocumented and incomplete shapes", () => {
   assert.equal(characterPortraitMetadataSchema.safeParse({
     characterId: "4242", available: false, portraitUrl: "https://www.dndbeyond.com/avatar.jpg", mimeType: null, byteCount: 0,
   }).success, false);
+  assert.equal(campaignListEnvelopeSchema.safeParse({ count: 0, total: 0, campaigns: [] }).success, false);
+  assert.equal(campaignDetailEnvelopeSchema.safeParse({ source: "dndbeyond-campaign", schemaVersion: "v1" }).success, false);
   assert.equal(libraryEnvelopeSchema.safeParse({ count: 0, books: [], undocumented: true }).success, false);
   assert.equal(searchEnvelopeSchema.safeParse({ query: "x", category: "spells", url: "x", results: [] }).success, false);
   assert.equal(readBookResultSchema.safeParse({

@@ -32,11 +32,29 @@ test("character detail handles synthetic API data", async () => {
 });
 
 test("campaign tools return deterministic empty and detail shapes", async () => {
-  assert.deepEqual(JSON.parse(await listMyCampaigns(contextFor([]))), []);
-  assert.deepEqual(
-    JSON.parse(await getCampaign(contextFor({ name: "Synthetic Campaign", characters: [] }), "7")),
-    { name: "Synthetic Campaign", characters: [] }
-  );
+  const listing = await listMyCampaigns(contextFor({ recognized: true, items: [] }));
+  assert.deepEqual(listing, {
+    count: 0,
+    total: 0,
+    filters: { names: [], campaignIds: [], roles: [], createdOnOrAfter: null, createdOnOrBefore: null, minPlayers: null, maxPlayers: null, contentSharingEnabled: null },
+    sort: { field: "name", direction: "asc" },
+    campaigns: [],
+  });
+  const campaign = await getCampaign(contextFor({
+    name: "Synthetic Campaign",
+    currentUserId: null,
+    dmControlsVisible: false,
+    description: { present: false, text: "" },
+    publicNotes: { present: false, text: "" },
+    privateNotes: { present: false, text: "" },
+    characterSectionPresent: true,
+    characters: [],
+    inviteUrl: null,
+    administrationLinks: [],
+  }), "7");
+  assert.equal(campaign.partial, true);
+  assert.equal(campaign.campaign.name, "Synthetic Campaign");
+  assert.equal(campaign.campaign.characters.state, "empty");
 });
 
 test("library tools handle empty listings and structured short content", async () => {

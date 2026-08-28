@@ -26,7 +26,7 @@ import {
   PDF_CHUNK_BYTES,
   type CharacterPdfDependencies,
 } from "./tools/character-pdf.js";
-import { getCampaign, listMyCampaigns } from "./tools/campaign.js";
+import { getCampaign, listMyCampaigns, validateCampaignListRequest } from "./tools/campaign.js";
 import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
 import { search, validateSearchRequest } from "./tools/search.js";
 import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
@@ -41,6 +41,8 @@ import {
   characterDetailSchema,
   characterListEnvelopeSchema,
   characterPortraitMetadataSchema,
+  campaignDetailEnvelopeSchema,
+  campaignListEnvelopeSchema,
   libraryEnvelopeSchema,
   readBookResultSchema,
   searchEnvelopeSchema,
@@ -86,7 +88,7 @@ export function createServer(
     name: "mysterium",
     version: PACKAGE_VERSION,
   }, {
-    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
+    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. Use mysterium_list_campaigns to filter normalized campaign summaries before mysterium_get_campaign; private notes default to requested but remain permission-gated, while sensitive invite and administration links require explicit opt-ins. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
   });
   const characterPdfStore = new CharacterPdfStore(options.characterPdfDependencies);
 
@@ -461,17 +463,32 @@ registerAppResource(
 );
 
 // ─── mysterium_get_campaign ─────────────────────────────────────────────────────────
-server.tool(
+server.registerTool(
   "mysterium_get_campaign",
-  "Fetch campaign information including player characters, notes, and description from a D&D Beyond campaign page.",
   {
-    campaign_id: z.string().describe("The D&D Beyond campaign ID (found in the campaign URL)"),
+    description: "Retrieve normalized, permission-aware D&D Beyond campaign metadata, participants, notes, and explicitly requested safe links.",
+    inputSchema: {
+      campaign_id: z.string().regex(/^\d+$/).describe("The numeric D&D Beyond campaign ID."),
+      include_private_notes: z.boolean().optional().describe("Include visible private DM notes. Defaults to true; unavailable notes never reveal whether hidden content exists."),
+      include_invite_link: z.boolean().optional().describe("Include a visible, validated campaign invite link. Defaults to false because the URL is sensitive."),
+      include_administration_links: z.boolean().optional().describe("Include visible, validated navigation-only campaign administration links. Defaults to false; destructive actions are always excluded."),
+    },
+    outputSchema: campaignDetailEnvelopeSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
   },
-  async ({ campaign_id }) => {
+  async ({ campaign_id, include_private_notes, include_invite_link, include_administration_links }) => {
     try {
       const context = await getContextForTool();
-      const data = await getCampaign(context, campaign_id);
-      return { content: [{ type: "text", text: data }] };
+      return jsonToolResult(await getCampaign(context, campaign_id, {
+        includePrivateNotes: include_private_notes,
+        includeInviteLink: include_invite_link,
+        includeAdministrationLinks: include_administration_links,
+      }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: `Failed to get campaign: ${msg}` }], isError: true };
@@ -480,15 +497,47 @@ server.tool(
 );
 
 // ─── mysterium_list_campaigns ───────────────────────────────────────────────────────
-server.tool(
+server.registerTool(
   "mysterium_list_campaigns",
-  "List all D&D Beyond campaigns you are part of (as DM or player).",
-  {},
-  async () => {
+  {
+    description: "List normalized D&D Beyond campaign summaries with composable filters and deterministic sorting.",
+    inputSchema: {
+      names: z.array(z.string().min(1).max(100)).max(25).optional().describe("Campaign-name substrings. Values use OR and matching is case-insensitive."),
+      campaign_ids: z.array(z.string().regex(/^\d+$/)).max(25).optional().describe("Exact numeric campaign IDs. Values use OR."),
+      roles: z.array(z.enum(["dungeon_master", "player", "unknown"])).max(3).optional().describe("Exact normalized viewer roles. Values use OR."),
+      created_on_or_after: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Inclusive campaign creation date in YYYY-MM-DD format."),
+      created_on_or_before: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Inclusive campaign creation date in YYYY-MM-DD format."),
+      min_players: z.number().int().nonnegative().optional().describe("Inclusive minimum player count."),
+      max_players: z.number().int().nonnegative().optional().describe("Inclusive maximum player count."),
+      content_sharing_enabled: z.boolean().optional().describe("Exact content-sharing state."),
+      sort_by: z.enum(["name", "role", "created", "players", "content_sharing"]).optional().describe("Sort field. Defaults to name."),
+      sort_direction: z.enum(["asc", "desc"]).optional().describe("Sort direction. Defaults to ascending."),
+    },
+    outputSchema: campaignListEnvelopeSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async ({ names, campaign_ids, roles, created_on_or_after, created_on_or_before, min_players, max_players, content_sharing_enabled, sort_by, sort_direction }) => {
     try {
+      const request = {
+        names,
+        campaignIds: campaign_ids,
+        roles,
+        createdOnOrAfter: created_on_or_after,
+        createdOnOrBefore: created_on_or_before,
+        minPlayers: min_players,
+        maxPlayers: max_players,
+        contentSharingEnabled: content_sharing_enabled,
+        sortBy: sort_by,
+        sortDirection: sort_direction,
+      };
+      validateCampaignListRequest(request);
       const context = await getContextForTool();
-      const data = await listMyCampaigns(context);
-      return { content: [{ type: "text", text: data }] };
+      return jsonToolResult(await listMyCampaigns(context, request));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return { content: [{ type: "text", text: `Failed to list campaigns: ${msg}` }], isError: true };

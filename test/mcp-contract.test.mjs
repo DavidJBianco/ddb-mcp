@@ -89,6 +89,7 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
     ["read_stat_block_for_app", { creature_id: "not-a-number" }],
     ["read_pdf_bytes", { url: "mysterium://character-pdf/missing/file.pdf", offset: -1 }],
     ["mysterium_get_campaign", {}],
+    ["mysterium_get_campaign", { campaign_id: "not-a-number" }],
     ["mysterium_navigate", {}],
     ["mysterium_interact", { action: "destroy", selector: "body" }],
     ["mysterium_search", { query: "shield", category: "invalid" }],
@@ -121,6 +122,23 @@ test("character-list cross-field validation rejects before browser access", asyn
   assert.equal(contextRequested, false);
 });
 
+test("campaign-list cross-field validation rejects before browser access", async (t) => {
+  let contextRequested = false;
+  const client = await connect(t, async () => {
+    contextRequested = true;
+    throw new Error("browser must not be requested");
+  });
+  for (const arguments_ of [
+    { created_on_or_after: "2025-03-01", created_on_or_before: "2025-02-01" },
+    { min_players: 4, max_players: 2 },
+    { created_on_or_after: "2025-02-30" },
+  ]) {
+    const result = await client.callTool({ name: "mysterium_list_campaigns", arguments: arguments_ });
+    assert.equal(result.isError, true);
+  }
+  assert.equal(contextRequested, false);
+});
+
 test("character tools publish exact stable contracts", async (t) => {
   const client = await connect(t, async () => {
     throw new Error("contract inspection must not request a browser");
@@ -140,6 +158,77 @@ test("character tools publish exact stable contracts", async (t) => {
   assert.deepEqual(portraitTool.inputSchema.required, ["character_id"]);
   assert.equal(portraitTool.outputSchema.additionalProperties, false);
   assert.equal(portraitTool.annotations.readOnlyHint, true);
+});
+
+test("campaign tools publish exact stable contracts", async (t) => {
+  const client = await connect(t, async () => {
+    throw new Error("contract inspection must not request a browser");
+  });
+  const listed = await client.listTools();
+  const listTool = listed.tools.find(({ name }) => name === "mysterium_list_campaigns");
+  assert.deepEqual(listTool.inputSchema.properties.sort_by.enum, ["name", "role", "created", "players", "content_sharing"]);
+  assert.equal(listTool.outputSchema.additionalProperties, false);
+  assert.deepEqual(listTool.outputSchema.required.sort(), ["campaigns", "count", "filters", "sort", "total"].sort());
+  assert.equal(listTool.annotations.readOnlyHint, true);
+
+  const detailTool = listed.tools.find(({ name }) => name === "mysterium_get_campaign");
+  assert.deepEqual(detailTool.inputSchema.required, ["campaign_id"]);
+  assert.equal(detailTool.inputSchema.properties.include_private_notes.type, "boolean");
+  assert.equal(detailTool.outputSchema.properties.schemaVersion.const, "v1");
+  assert.equal(detailTool.outputSchema.additionalProperties, false);
+  assert.equal(detailTool.annotations.readOnlyHint, true);
+});
+
+test("campaign tools return schema-validated structured and JSON-text parity", async (t) => {
+  let currentUrl = "about:blank";
+  const responses = [
+    {
+      url: () => "https://api.dndbeyond.com/campaigns/v1/details/7",
+      status: () => 200,
+      ok: () => true,
+      json: async () => ({ data: {
+        id: 7, name: "Synthetic Campaign", status: 1, dateCreated: "2025-01-02T03:04:05Z",
+        dmId: 10, dmDisplayName: "Synthetic DM", contentSharingEnabled: true, itemSharingEnabled: false,
+        activePlayers: [], activeCharacters: [],
+      } }),
+    },
+    {
+      url: () => "https://www.dndbeyond.com/api/campaign/stt/active-short-characters/7",
+      status: () => 200,
+      ok: () => true,
+      json: async () => ({ status: "success", data: [] }),
+    },
+  ];
+  const page = {
+    goto: async (url) => { currentUrl = url; },
+    url: () => currentUrl,
+    waitForTimeout: async () => {},
+    waitForSelector: async () => {},
+    waitForResponse: async (predicate) => responses.find(predicate) ?? Promise.reject(new Error("missing response")),
+    evaluate: async (_callback, argument) => {
+      if (currentUrl === "https://www.dndbeyond.com" && argument === undefined) return true;
+      if (currentUrl.endsWith("/my-campaigns")) return {
+        recognized: true,
+        items: [{ id: "7", name: "Synthetic Campaign", roleText: "Role: Dungeon Master", createdText: "1/2/2025", playerCountText: "0 Players", sharingText: "Sharing Enabled" }],
+      };
+      return {
+        name: "Synthetic Campaign", currentUserId: "10", dmControlsVisible: true,
+        description: { present: false, text: "" }, publicNotes: { present: true, text: "" }, privateNotes: { present: true, text: "" },
+        characterSectionPresent: true, characters: [], inviteUrl: null, administrationLinks: [],
+      };
+    },
+  };
+  const client = await connect(t, async () => ({ pages: () => [page] }));
+
+  const listing = await client.callTool({ name: "mysterium_list_campaigns", arguments: {} });
+  assert.equal(listing.isError, undefined);
+  assert.deepEqual(JSON.parse(listing.content[0].text), listing.structuredContent);
+  assert.equal(listing.structuredContent.campaigns[0].id, "7");
+
+  const detail = await client.callTool({ name: "mysterium_get_campaign", arguments: { campaign_id: "7" } });
+  assert.equal(detail.isError, undefined);
+  assert.deepEqual(JSON.parse(detail.content[0].text), detail.structuredContent);
+  assert.equal(detail.structuredContent.campaign.notes.private.state, "empty");
 });
 
 test("a character without a portrait returns metadata without image content", async (t) => {
