@@ -190,9 +190,10 @@ test("an MCP client can discover and call tools through the real server", async 
     url: () => "https://www.dndbeyond.com/synthetic-current-page",
     goto: async (url, options) => visits.push({ url, options }),
     waitForTimeout: async () => {},
-    evaluate: async (_extractor, argument) => {
+    evaluate: async (extractor, argument) => {
       if (argument === "spells") return visits.at(-1)?.url.includes("missing") ? [] : syntheticResults;
-      return "Synthetic current page content";
+      if (String(extractor).includes("sign in")) return true;
+      return { title: "Synthetic Current Page", text: "Synthetic current page content" };
     },
   };
   const context = { pages: () => [page] };
@@ -204,10 +205,10 @@ test("an MCP client can discover and call tools through the real server", async 
   const listed = await client.listTools();
   assert.equal(
     client.getInstructions(),
-    "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. Use mysterium_list_campaigns to filter normalized campaign summaries before mysterium_get_campaign; private notes default to requested but remain permission-gated, while sensitive invite and administration links require explicit opt-ins. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes."
+    "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. Use mysterium_list_campaigns to filter normalized campaign summaries before mysterium_get_campaign; private notes default to requested but remain permission-gated, while sensitive invite and administration links require explicit opt-ins. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue sourcebook content using nextCursor until done is true. Use mysterium_read_page with url to navigate and read generic bounded page text, then continue its nextCursor with the same tool while the shared page remains unchanged. Use mysterium_capture_page only for an explicit visual inspection request because authenticated screenshots may contain private or copyrighted content. Sourcebook responses include image metadata, not image bytes."
   );
   const toolNames = listed.tools.map(({ name }) => name);
-  assert.ok(toolNames.includes("mysterium_current_page"));
+  assert.ok(toolNames.includes("mysterium_read_page"));
   assert.ok(toolNames.includes("mysterium_search"));
   assert.ok(toolNames.includes("mysterium_read_book"));
   const searchTool = listed.tools.find(({ name }) => name === "mysterium_search");
@@ -247,12 +248,12 @@ test("an MCP client can discover and call tools through the real server", async 
   assert.match(readTool.inputSchema.properties.cursor.description, /same book_slug/);
   assert.match(readTool.inputSchema.properties.max_chars.description, /25000/);
 
-  const pageResult = await client.callTool({ name: "mysterium_current_page", arguments: {} });
+  const pageResult = await client.callTool({ name: "mysterium_read_page", arguments: {} });
   assert.equal(pageResult.isError, undefined);
-  assert.equal(
-    pageResult.content[0].text,
-    "Current URL: https://www.dndbeyond.com/synthetic-current-page\n\nSynthetic current page content"
-  );
+  assert.deepEqual(JSON.parse(pageResult.content[0].text), pageResult.structuredContent);
+  assert.equal(pageResult.structuredContent.operation, "current_page");
+  assert.equal(pageResult.structuredContent.page.url, "https://www.dndbeyond.com/synthetic-current-page");
+  assert.equal(pageResult.structuredContent.text, "Synthetic current page content");
 
   const searchResult = await client.callTool({
     name: "mysterium_search",
@@ -369,10 +370,10 @@ test("MCP tool failures are returned as tool errors", async (t) => {
     throw new Error("synthetic browser failure");
   });
 
-  const result = await client.callTool({ name: "mysterium_current_page", arguments: {} });
+  const result = await client.callTool({ name: "mysterium_read_page", arguments: {} });
 
   assert.equal(result.isError, true);
-  assert.equal(result.content[0].text, "Failed to get page content: synthetic browser failure");
+  assert.equal(result.content[0].text, "Failed to read page: synthetic browser failure");
 });
 
 test("a separate process serves MCP tools over stdio", async (t) => {
@@ -392,14 +393,14 @@ test("a separate process serves MCP tools over stdio", async (t) => {
     await client.connect(transport);
 
     const listed = await client.listTools();
-    assert.ok(listed.tools.some(({ name }) => name === "mysterium_current_page"));
+    assert.ok(listed.tools.some(({ name }) => name === "mysterium_read_page"));
 
-    const result = await client.callTool({ name: "mysterium_current_page", arguments: {} });
+    const result = await client.callTool({ name: "mysterium_read_page", arguments: {} });
     assert.equal(result.isError, undefined);
-    assert.equal(
-      result.content[0].text,
-      "Current URL: https://www.dndbeyond.com/synthetic-stdio-page\n\nSynthetic stdio page content"
-    );
+    assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
+    assert.equal(result.structuredContent.operation, "current_page");
+    assert.equal(result.structuredContent.page.url, "https://www.dndbeyond.com/synthetic-stdio-page");
+    assert.equal(result.structuredContent.text, "Synthetic stdio page content");
   });
 });
 

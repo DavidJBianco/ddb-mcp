@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
 import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
+import { decodeOpaqueCursorObject, encodeOpaqueCursor, paginateSegments } from "./pagination.js";
 export const DEFAULT_MAX_CHARS = 10_000;
 export const SERVER_MAX_CHARS = 25_000;
 const SLUG_PATTERN = /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/;
@@ -11,32 +12,15 @@ function assertSlug(value, field) {
         throw new Error(`${field} must be a relative D&D Beyond source path without queries, fragments, or traversal segments.`);
     }
 }
-function codePoints(value) {
-    return Array.from(value);
-}
 function stableFingerprint(blocks, images) {
     const stableImages = images.map(({ id, alt, caption }) => ({ id, alt, caption }));
     return createHash("sha256").update(JSON.stringify({ blocks, images: stableImages })).digest("hex");
 }
 export function encodeCursor(payload) {
-    return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+    return encodeOpaqueCursor(payload);
 }
 export function decodeCursor(cursor) {
-    let parsed;
-    try {
-        const decoded = Buffer.from(cursor, "base64url").toString("utf8");
-        if (!decoded || Buffer.from(decoded, "utf8").toString("base64url") !== cursor) {
-            throw new Error("non-canonical encoding");
-        }
-        parsed = JSON.parse(decoded);
-    }
-    catch {
-        throw new Error("Invalid cursor: expected an opaque cursor returned by mysterium_read_book.");
-    }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("Invalid cursor: cursor payload must be an object.");
-    }
-    const value = parsed;
+    const value = decodeOpaqueCursorObject(cursor, "Invalid cursor: expected an opaque cursor returned by mysterium_read_book.", "Invalid cursor: cursor payload must be an object.");
     if (value.version !== 1)
         throw new Error("Invalid cursor: unsupported cursor version; restart without a cursor.");
     if (typeof value.bookSlug !== "string")
@@ -95,52 +79,20 @@ export function validateReadBookRequest(request) {
     return { ...request, mode, maxChars };
 }
 export function paginateBlocks(blocks, maxChars, start = { blockIndex: 0, offset: 0 }) {
-    if (!Number.isInteger(maxChars) || maxChars < 1 || maxChars > SERVER_MAX_CHARS) {
-        throw new Error(`max_chars must be between 1 and ${SERVER_MAX_CHARS}.`);
-    }
-    if (!Number.isInteger(start.blockIndex) || !Number.isInteger(start.offset) || start.blockIndex < 0 || start.offset < 0) {
-        throw new Error("Invalid cursor: invalid pagination position.");
-    }
-    if (start.blockIndex > blocks.length || (start.blockIndex === blocks.length && start.offset !== 0)) {
-        throw new Error("Invalid cursor: pagination position is outside the selected content.");
-    }
-    if (blocks.length === 0 || start.blockIndex === blocks.length) {
-        return { text: "", next: null, imageIds: [] };
-    }
-    const segments = blocks.map((block, index) => `${block.text}${index < blocks.length - 1 ? "\n\n" : ""}`);
-    const selectedImages = new Set();
-    let remaining = maxChars;
-    let blockIndex = start.blockIndex;
-    let offset = start.offset;
-    let text = "";
-    while (blockIndex < segments.length && remaining > 0) {
-        const segmentPoints = codePoints(segments[blockIndex]);
-        if (offset > segmentPoints.length) {
-            throw new Error("Invalid cursor: block offset is outside the selected content.");
-        }
-        const available = segmentPoints.length - offset;
-        if (available === 0) {
-            blockIndex += 1;
-            offset = 0;
-            continue;
-        }
-        if (available <= remaining) {
-            text += segmentPoints.slice(offset).join("");
-            remaining -= available;
-            blocks[blockIndex].imageIds.forEach((id) => selectedImages.add(id));
-            blockIndex += 1;
-            offset = 0;
-            continue;
-        }
-        if (text.length === 0) {
-            text = segmentPoints.slice(offset, offset + remaining).join("");
-            blocks[blockIndex].imageIds.forEach((id) => selectedImages.add(id));
-            offset += remaining;
-        }
-        break;
-    }
-    const next = blockIndex >= segments.length ? null : { blockIndex, offset };
-    return { text, next, imageIds: [...selectedImages] };
+    const page = paginateSegments(blocks.map((block, index) => ({
+        text: `${block.text}${index < blocks.length - 1 ? "\n\n" : ""}`,
+        values: block.imageIds,
+    })), maxChars, SERVER_MAX_CHARS, { segmentIndex: start.blockIndex, offset: start.offset }, {
+        limit: `max_chars must be between 1 and ${SERVER_MAX_CHARS}.`,
+        position: "Invalid cursor: invalid pagination position.",
+        outside: "Invalid cursor: pagination position is outside the selected content.",
+        offset: "Invalid cursor: block offset is outside the selected content.",
+    });
+    return {
+        text: page.text,
+        next: page.next ? { blockIndex: page.next.segmentIndex, offset: page.next.offset } : null,
+        imageIds: page.values,
+    };
 }
 function selectSection(extracted, selector) {
     if (!selector)

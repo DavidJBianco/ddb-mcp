@@ -164,10 +164,22 @@ const changedChapterPage = `<!doctype html><html><body><main>
   <section data-testid="unexpected-source-layout"><h1>Changed Layout</h1><p>This must not be silently scraped from body.</p></section>
 </main></body></html>`;
 
-const genericPage = `<!doctype html><html><body><main>
-  <h1>Synthetic Page</h1><p>Deterministic navigation content.</p>
-  <button id="synthetic-button">Safe Button</button><input id="synthetic-input" />
-</main></body></html>`;
+const genericPage = `<!doctype html><html><head><title>Synthetic Page</title></head><body>
+<script>
+setTimeout(() => {
+  const main = document.createElement("main");
+  main.innerHTML = '<nav id="preserved-navigation">Navigation excluded from extracted text.</nav>' +
+    '<h1>Synthetic Page</h1>' +
+    '<p>Deterministic navigation content with a Unicode glyph: 😀.</p>' +
+    '<p>Second synthetic paragraph for bounded cursor pagination.</p>' +
+    '<p>Third synthetic paragraph completes the rendered page.</p>' +
+    '<section id="visual-target" style="width: 240px; height: 80px; background: rgb(10, 20, 30); color: white">Visible screenshot target</section>' +
+    '<p hidden>Hidden content must not be extracted.</p>';
+  document.body.append(main);
+}, 25);
+</script></body></html>`;
+
+const emptyGenericPage = `<!doctype html><html><head><title>Empty Synthetic Page</title></head><body></body></html>`;
 
 function html(body, status = 200, headers = {}) {
   return {
@@ -329,6 +341,11 @@ export async function installSyntheticRoutes(context, options = {}) {
 
     if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/synthetic-page") {
       await route.fulfill(html(genericPage));
+      return;
+    }
+
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/synthetic-empty-page") {
+      await route.fulfill(html(emptyGenericPage));
       return;
     }
 
