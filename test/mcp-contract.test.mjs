@@ -246,7 +246,13 @@ test("a character without a portrait returns metadata without image content", as
     url: () => "https://www.dndbeyond.com",
     evaluate: async (_callback, argument) => argument === undefined
       ? true
-      : { success: true, data: { id: Number(argument), decorations: null } },
+      : {
+          kind: "success",
+          body: {
+            success: true,
+            data: { id: Number(new URL(argument.url).pathname.split("/").at(-1)), decorations: null },
+          },
+        },
   };
   const client = await connect(t, async () => ({ pages: () => [page] }));
   const result = await client.callTool({
