@@ -61,12 +61,13 @@ The suite reuses one MCP server/browser context and runs sequentially. It
 checks session restoration, normalized character list/API retrieval, bounded
 portrait image delivery when configured, rendered character-sheet PDF export
 and bounded byte reconstruction, normalized campaign list/detail envelopes and
-permission-safe availability states, safe navigation and
-current-page retrieval, search, one public catalog monster lookup and rendered
+permission-safe availability states, generic page navigation and cursor
+retrieval, bounded MCP image screenshot capture, search, one public catalog
+monster lookup and rendered
 stat-block shape, library listing, sourcebook book/chapter
 outlines, bounded chapter content, deterministic chapter and section cursor
 continuation, section retrieval by ID and unique heading, image metadata shape,
-and a screenshot-only generic interaction.
+and viewport screenshot delivery without filesystem persistence.
 
 Assertions inspect shapes only. Test output must not contain names, IDs,
 private URLs, character JSON or PDF contents, stat-block prose, campaign or sourcebook text, cookies, or the
@@ -84,9 +85,9 @@ Campaign live assertions never request invite or administration links. The
 detail call exercises the default private-note policy but inspects only the
 availability variant; it never logs or snapshots note content.
 
-Fresh interactive login remains a manual release check. Do not automate live
-click or fill operations until a disposable, verifiably safe account state is
-available.
+Fresh interactive login remains a manual release check. Mysterium exposes no
+generic click or fill tool; any future mutation workflow requires separately
+authorized write-only coverage and disposable, verifiably safe account state.
 
 For releases that include the host authentication helper, also run
 `mysterium-auth validate --live`

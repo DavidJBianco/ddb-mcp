@@ -505,6 +505,39 @@ export declare const campaignDetailEnvelopeSchema: z.ZodObject<{
         }, z.core.$strict>;
     }, z.core.$strict>;
 }, z.core.$strict>;
+export declare const pageContentEnvelopeSchema: z.ZodObject<{
+    source: z.ZodLiteral<"dndbeyond-rendered-page">;
+    schemaVersion: z.ZodLiteral<"v1">;
+    operation: z.ZodEnum<{
+        navigate: "navigate";
+        current_page: "current_page";
+    }>;
+    requestedUrl: z.ZodNullable<z.ZodURL>;
+    page: z.ZodObject<{
+        url: z.ZodURL;
+        title: z.ZodString;
+    }, z.core.$strict>;
+    text: z.ZodString;
+    totalCharacters: z.ZodNumber;
+    maxChars: z.ZodNumber;
+    nextCursor: z.ZodNullable<z.ZodString>;
+    done: z.ZodBoolean;
+}, z.core.$strict>;
+export declare const pageScreenshotMetadataSchema: z.ZodObject<{
+    source: z.ZodLiteral<"dndbeyond-page-screenshot">;
+    schemaVersion: z.ZodLiteral<"v1">;
+    url: z.ZodURL;
+    title: z.ZodString;
+    scope: z.ZodEnum<{
+        viewport: "viewport";
+        element: "element";
+    }>;
+    selector: z.ZodNullable<z.ZodString>;
+    width: z.ZodNumber;
+    height: z.ZodNumber;
+    mimeType: z.ZodLiteral<"image/png">;
+    byteCount: z.ZodNumber;
+}, z.core.$strict>;
 export declare const searchEnvelopeSchema: z.ZodObject<{
     query: z.ZodString;
     category: z.ZodEnum<{

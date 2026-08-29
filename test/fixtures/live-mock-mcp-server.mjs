@@ -1,8 +1,5 @@
-import { writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -138,20 +135,49 @@ server.tool("mysterium_get_campaign", "mock", { campaign_id: z.string() }, async
     },
   }));
 });
-server.tool("mysterium_navigate", "mock", { url: z.string() }, async ({ url }) => text(`URL: ${url}\n\n${sensitive}`));
-server.tool(
-  "mysterium_interact",
-  "mock",
-  { action: z.enum(["click", "fill", "screenshot"]), selector: z.string(), value: z.string().optional() },
-  async () => {
-    const path = join(tmpdir(), "mysterium-screenshot-live-mock.png");
-    writeFileSync(path, "synthetic screenshot");
-    return text(`Screenshot saved to: ${path}`);
-  }
+function mockPageEnvelope(operation, requestedUrl, url) {
+  return {
+    source: "dndbeyond-rendered-page",
+    schemaVersion: "v1",
+    operation,
+    requestedUrl,
+    page: { url, title: "Synthetic Page" },
+    text: sensitive,
+    totalCharacters: sensitive.length,
+    maxChars: 8000,
+    nextCursor: null,
+    done: true,
+  };
+}
+server.tool("mysterium_read_page", "mock", { url: z.string().optional(), cursor: z.string().optional() }, async ({ url }) =>
+  text(JSON.stringify(mockPageEnvelope(url ? "navigate" : "current_page", url ?? null, url ?? "https://www.dndbeyond.com/characters")))
 );
-server.tool("mysterium_current_page", "mock", {}, async () =>
-  text(`Current URL: https://www.dndbeyond.com/characters\n\n${sensitive}`)
-);
+server.tool("mysterium_capture_page", "mock", {}, async () => {
+  const bytes = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes);
+  bytes.write("IHDR", 12, "ascii");
+  bytes.writeUInt32BE(1, 16);
+  bytes.writeUInt32BE(1, 20);
+  const metadata = {
+    source: "dndbeyond-page-screenshot",
+    schemaVersion: "v1",
+    url: "https://www.dndbeyond.com/characters",
+    title: "Synthetic Page",
+    scope: "viewport",
+    selector: null,
+    width: 1,
+    height: 1,
+    mimeType: "image/png",
+    byteCount: bytes.length,
+  };
+  return {
+    content: [
+      { type: "text", text: JSON.stringify(metadata) },
+      { type: "image", data: bytes.toString("base64"), mimeType: "image/png" },
+    ],
+    structuredContent: metadata,
+  };
+});
 server.tool(
   "mysterium_search",
   "mock",

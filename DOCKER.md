@@ -38,7 +38,9 @@ uses a read-only mounted synthetic Playwright backend for browser-backed tool
 calls, including normalized character listing/detail, bounded portrait image
 delivery, character PDF export and byte reconstruction, normalized
 search attribution, stat-block resolution and rendered extraction, and both
-accessible and catalog sourcebook-search scopes.
+accessible and catalog sourcebook-search scopes. It also verifies bounded
+shared-page cursor continuation and in-memory MCP PNG screenshot delivery; no
+screenshot path is written inside the container.
 Container networking is disabled, and test fixtures are not copied into the
 production image. It also checks the non-root runtime and session mounts.
 CI runs the complete browser suite natively on AMD64. The ARM64 image runs the

@@ -190,6 +190,49 @@ export const campaignDetailEnvelopeSchema = z.object({
   }).strict(),
 }).strict();
 
+export const pageContentEnvelopeSchema = z.object({
+  source: z.literal("dndbeyond-rendered-page"),
+  schemaVersion: z.literal("v1"),
+  operation: z.enum(["navigate", "current_page"]),
+  requestedUrl: z.url().nullable(),
+  page: z.object({
+    url: z.url(),
+    title: z.string(),
+  }).strict(),
+  text: z.string(),
+  totalCharacters: z.number().int().nonnegative(),
+  maxChars: z.number().int().positive().max(25_000),
+  nextCursor: nullableString,
+  done: z.boolean(),
+}).strict().superRefine((value, context) => {
+  if ((value.operation === "navigate") !== (value.requestedUrl !== null)) {
+    context.addIssue({ code: "custom", message: "Invalid rendered-page operation and requested URL combination." });
+  }
+  if (value.done !== (value.nextCursor === null)) {
+    context.addIssue({ code: "custom", message: "Invalid rendered-page cursor completion state." });
+  }
+});
+
+export const pageScreenshotMetadataSchema = z.object({
+  source: z.literal("dndbeyond-page-screenshot"),
+  schemaVersion: z.literal("v1"),
+  url: z.url(),
+  title: z.string(),
+  scope: z.enum(["viewport", "element"]),
+  selector: nullableString,
+  width: z.number().int().positive().max(4_096),
+  height: z.number().int().positive().max(4_096),
+  mimeType: z.literal("image/png"),
+  byteCount: z.number().int().positive().max(5 * 1024 * 1024),
+}).strict().superRefine((value, context) => {
+  if ((value.scope === "viewport") !== (value.selector === null)) {
+    context.addIssue({ code: "custom", message: "Invalid page screenshot scope and selector combination." });
+  }
+  if (value.width * value.height > 16_777_216) {
+    context.addIssue({ code: "custom", message: "Page screenshot exceeds the maximum pixel count." });
+  }
+});
+
 const sourceAttributionSchema = z.object({
   title: nullableString,
   url: nullableString,

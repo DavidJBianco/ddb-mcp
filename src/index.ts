@@ -27,7 +27,14 @@ import {
   type CharacterPdfDependencies,
 } from "./tools/character-pdf.js";
 import { getCampaign, listMyCampaigns, validateCampaignListRequest } from "./tools/campaign.js";
-import { navigate, interact, getCurrentPageContent } from "./tools/navigate.js";
+import {
+  capturePageScreenshot,
+  MAX_SCREENSHOT_SELECTOR_CHARS,
+  readPage,
+  SERVER_PAGE_MAX_CHARS,
+  validatePageContentRequest,
+  validatePageScreenshotRequest,
+} from "./tools/navigate.js";
 import { search, validateSearchRequest } from "./tools/search.js";
 import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
 import {
@@ -44,6 +51,8 @@ import {
   campaignDetailEnvelopeSchema,
   campaignListEnvelopeSchema,
   libraryEnvelopeSchema,
+  pageContentEnvelopeSchema,
+  pageScreenshotMetadataSchema,
   readBookResultSchema,
   searchEnvelopeSchema,
   statBlockResolutionSchema,
@@ -88,7 +97,7 @@ export function createServer(
     name: "mysterium",
     version: PACKAGE_VERSION,
   }, {
-    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. Use mysterium_list_campaigns to filter normalized campaign summaries before mysterium_get_campaign; private notes default to requested but remain permission-gated, while sensitive invite and administration links require explicit opt-ins. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue content using nextCursor until done is true. Sourcebook responses include image metadata, not image bytes.",
+    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. Use mysterium_list_campaigns to filter normalized campaign summaries before mysterium_get_campaign; private notes default to requested but remain permission-gated, while sensitive invite and administration links require explicit opt-ins. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue sourcebook content using nextCursor until done is true. Use mysterium_read_page with url to navigate and read generic bounded page text, then continue its nextCursor with the same tool while the shared page remains unchanged. Use mysterium_capture_page only for an explicit visual inspection request because authenticated screenshots may contain private or copyrighted content. Sourcebook responses include image metadata, not image bytes.",
   });
   const characterPdfStore = new CharacterPdfStore(options.characterPdfDependencies);
 
@@ -545,66 +554,72 @@ server.registerTool(
   }
 );
 
-// ─── mysterium_navigate ─────────────────────────────────────────────────────────────
-server.tool(
-  "mysterium_navigate",
-  "Navigate to any D&D Beyond URL and return the page's text content. Only dndbeyond.com URLs are allowed.",
+// ─── Generic read-only page tools ───────────────────────────────────────────────────
+server.registerTool(
+  "mysterium_read_page",
   {
-    url: z
-      .string()
-      .describe("Full D&D Beyond URL to navigate to (must start with https://www.dndbeyond.com/)"),
+    description: "Navigate to and read a canonical D&D Beyond page, read the current shared page, or continue bounded rendered text with an opaque cursor.",
+    inputSchema: {
+      url: z.url().optional().describe("Optional canonical HTTPS D&D Beyond URL. Omit it to read or continue the unchanged current page."),
+      cursor: z.string().min(1).optional()
+        .describe("Opaque nextCursor returned by mysterium_read_page. Cannot be combined with url and remains valid only while the shared page is unchanged."),
+      max_chars: z.number().int().positive().max(SERVER_PAGE_MAX_CHARS).optional()
+        .describe(`Maximum Unicode characters in the returned text chunk. Defaults to 8000 and cannot exceed ${SERVER_PAGE_MAX_CHARS}.`),
+    },
+    outputSchema: pageContentEnvelopeSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
   },
-  async ({ url }) => {
+  async ({ url, cursor, max_chars }) => {
     try {
+      const request = { url, cursor, maxChars: max_chars };
+      validatePageContentRequest(request);
       const context = await getContextForTool();
-      const content = await navigate(context, url);
-      return { content: [{ type: "text", text: content }] };
+      return jsonToolResult(await readPage(context, request));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return { content: [{ type: "text", text: `Navigation failed: ${msg}` }], isError: true };
+      return { content: [{ type: "text", text: `Failed to read page: ${msg}` }], isError: true };
     }
   }
 );
 
-// ─── mysterium_interact ─────────────────────────────────────────────────────────────
-server.tool(
-  "mysterium_interact",
-  "Interact with the currently loaded D&D Beyond page by clicking, filling a form field, or taking a screenshot.",
+server.registerTool(
+  "mysterium_capture_page",
   {
-    action: z
-      .enum(["click", "fill", "screenshot"])
-      .describe("The action to perform: click an element, fill a text field, or take a screenshot"),
-    selector: z.string().describe("CSS selector or text selector for the target element"),
-    value: z
-      .string()
-      .optional()
-      .describe("Value to type into the field (required for 'fill' action)"),
+    description: "Capture the current authenticated D&D Beyond viewport or one uniquely matched visible element as bounded MCP PNG image content. Screenshots may contain private account content.",
+    inputSchema: {
+      scope: z.enum(["viewport", "element"]).optional().describe("Capture the visible viewport by default, or one visible element."),
+      selector: z.string().min(1).max(MAX_SCREENSHOT_SELECTOR_CHARS).optional()
+        .describe("CSS selector required for element capture and invalid for viewport capture; it must match exactly one visible element."),
+    },
+    outputSchema: pageScreenshotMetadataSchema,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
   },
-  async ({ action, selector, value }) => {
+  async ({ scope, selector }) => {
     try {
+      const request = { scope, selector };
+      validatePageScreenshotRequest(request);
       const context = await getContextForTool();
-      const result = await interact(context, action, selector, value);
-      return { content: [{ type: "text", text: result }] };
+      const screenshot = await capturePageScreenshot(context, request);
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(screenshot.metadata, null, 2) },
+          { type: "image" as const, data: screenshot.bytes.toString("base64"), mimeType: "image/png" },
+        ],
+        structuredContent: screenshot.metadata as unknown as Record<string, unknown>,
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return { content: [{ type: "text", text: `Interaction failed: ${msg}` }], isError: true };
-    }
-  }
-);
-
-// ─── mysterium_current_page ─────────────────────────────────────────────────────────
-server.tool(
-  "mysterium_current_page",
-  "Return the text content of the currently loaded page in the browser.",
-  {},
-  async () => {
-    try {
-      const context = await getContextForTool();
-      const content = await getCurrentPageContent(context);
-      return { content: [{ type: "text", text: content }] };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { content: [{ type: "text", text: `Failed to get page content: ${msg}` }], isError: true };
+      return { content: [{ type: "text", text: `Failed to capture page: ${msg}` }], isError: true };
     }
   }
 );

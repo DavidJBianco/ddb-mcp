@@ -139,14 +139,22 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     );
     assert.equal(JSON.parse(await callSuccessfully("mysterium_list_campaigns")).campaigns.length, 1);
 
-    await callSuccessfully("mysterium_navigate", {
+    const genericPage = JSON.parse(await callSuccessfully("mysterium_read_page", {
       url: "https://www.dndbeyond.com/synthetic-page",
-    });
-    await callSuccessfully("mysterium_interact", {
-      action: "click",
-      selector: "#synthetic-button",
-    });
-    assert.match(await callSuccessfully("mysterium_current_page"), /Synthetic Page/);
+      max_chars: 55,
+    }));
+    assert.equal(genericPage.operation, "navigate");
+    assert.ok(genericPage.nextCursor);
+    const genericContinuation = JSON.parse(await callSuccessfully("mysterium_read_page", {
+      cursor: genericPage.nextCursor,
+    }));
+    assert.equal(genericContinuation.operation, "current_page");
+    const screenshot = await client.callTool({ name: "mysterium_capture_page", arguments: { scope: "element", selector: "#visual-target" } });
+    assert.equal(screenshot.isError, undefined);
+    calledTools.push("mysterium_capture_page");
+    assert.deepEqual(JSON.parse(screenshot.content[0].text), screenshot.structuredContent);
+    assert.equal(screenshot.content[1].type, "image");
+    assert.equal(screenshot.content[1].mimeType, "image/png");
 
     const searchText = await callSuccessfully("mysterium_search", {
       query: "shield",
@@ -253,7 +261,8 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.match(combinedContent, /1\. First ordered step/);
     assert.match(combinedContent, /\| Kind \| Value \|/);
     assert.deepEqual(contentPages.flatMap(({ images }) => images).map(({ alt }) => alt), ["Synthetic diagram"]);
-    assert.match(await callSuccessfully("mysterium_current_page"), /Preserved navigation marker/);
+    const currentSourcebookPage = JSON.parse(await callSuccessfully("mysterium_read_page"));
+    assert.match(currentSourcebookPage.text, /Preserved navigation marker/);
 
     const alternate = JSON.parse(await callSuccessfully("mysterium_read_book", {
       book_slug: "synthetic-handbook",

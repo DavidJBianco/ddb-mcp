@@ -8,6 +8,8 @@ import {
   campaignDetailEnvelopeSchema,
   campaignListEnvelopeSchema,
   libraryEnvelopeSchema,
+  pageContentEnvelopeSchema,
+  pageScreenshotMetadataSchema,
   readBookResultSchema,
   searchEnvelopeSchema,
   statBlockResolutionSchema,
@@ -92,6 +94,30 @@ test("mature output schemas accept each stable result family", () => {
     },
   }).success, true);
   assert.equal(libraryEnvelopeSchema.safeParse({ count: 0, books: [] }).success, true);
+  assert.equal(pageContentEnvelopeSchema.safeParse({
+    source: "dndbeyond-rendered-page",
+    schemaVersion: "v1",
+    operation: "current_page",
+    requestedUrl: null,
+    page: { url: "https://www.dndbeyond.com/characters", title: "Characters" },
+    text: "",
+    totalCharacters: 0,
+    maxChars: 8000,
+    nextCursor: null,
+    done: true,
+  }).success, true);
+  assert.equal(pageScreenshotMetadataSchema.safeParse({
+    source: "dndbeyond-page-screenshot",
+    schemaVersion: "v1",
+    url: "https://www.dndbeyond.com/characters",
+    title: "Characters",
+    scope: "viewport",
+    selector: null,
+    width: 1280,
+    height: 800,
+    mimeType: "image/png",
+    byteCount: 1024,
+  }).success, true);
   assert.equal(searchEnvelopeSchema.safeParse({
     query: "missing",
     category: "spells",
@@ -142,6 +168,19 @@ test("mature output schemas reject undocumented and incomplete shapes", () => {
   assert.equal(campaignListEnvelopeSchema.safeParse({ count: 0, total: 0, campaigns: [] }).success, false);
   assert.equal(campaignDetailEnvelopeSchema.safeParse({ source: "dndbeyond-campaign", schemaVersion: "v1" }).success, false);
   assert.equal(libraryEnvelopeSchema.safeParse({ count: 0, books: [], undocumented: true }).success, false);
+  assert.equal(pageContentEnvelopeSchema.safeParse({ source: "dndbeyond-rendered-page", schemaVersion: "v1" }).success, false);
+  assert.equal(pageScreenshotMetadataSchema.safeParse({
+    source: "dndbeyond-page-screenshot",
+    schemaVersion: "v1",
+    url: "https://www.dndbeyond.com/characters",
+    title: "Characters",
+    scope: "element",
+    selector: null,
+    width: 1,
+    height: 1,
+    mimeType: "image/png",
+    byteCount: 24,
+  }).success, false);
   assert.equal(searchEnvelopeSchema.safeParse({ query: "x", category: "spells", url: "x", results: [] }).success, false);
   assert.equal(readBookResultSchema.safeParse({
     kind: "content",

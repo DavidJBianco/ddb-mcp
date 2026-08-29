@@ -4,7 +4,7 @@ import test from "node:test";
 import { getCampaign, listMyCampaigns } from "../dist/tools/campaign.js";
 import { getCharacter, listCharacters } from "../dist/tools/character.js";
 import { listLibrary, readBook } from "../dist/tools/library.js";
-import { getCurrentPageContent, interact } from "../dist/tools/navigate.js";
+import { capturePageScreenshot, readPage } from "../dist/tools/navigate.js";
 
 function contextFor(finalValue) {
   let currentUrl = "about:blank";
@@ -85,8 +85,8 @@ test("authenticated tools reject a logged-out synthetic page", async () => {
   await assert.rejects(listMyCampaigns(context), /mysterium-auth login/);
   await assert.rejects(listLibrary(context), /mysterium-auth login/);
   await assert.rejects(readBook(context, { bookSlug: "synthetic-handbook" }), /mysterium-auth login/);
-  await assert.rejects(interact(context, "click", "button"), /mysterium-auth login/);
-  await assert.rejects(getCurrentPageContent(context), /mysterium-auth login/);
+  await assert.rejects(readPage(context), /mysterium-auth login/);
+  await assert.rejects(capturePageScreenshot(context), /mysterium-auth login/);
 });
 
 test("character-service authorization failures use the shared authentication error", async () => {

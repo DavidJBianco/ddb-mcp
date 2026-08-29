@@ -31,9 +31,8 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 | `mysterium_search` | Search rendered D&D Beyond indexes and sourcebook listings. |
 | `mysterium_get_stat_block` | Resolve a cataloged monster or NPC and return its normalized rendered stat block as JSON and Markdown. |
 | `mysterium_view_stat_block` | Resolve a cataloged monster or NPC and open its stat block in an MCP App viewer with copy and PNG export actions. |
-| `mysterium_navigate` | Navigate to a D&D Beyond URL and return its rendered text. |
-| `mysterium_interact` | Click, fill, or capture a screenshot on the current page. |
-| `mysterium_current_page` | Return text from the current browser page. |
+| `mysterium_read_page` | Navigate to and read a D&D Beyond page, read the current page, or continue bounded rendered text with a cursor. |
+| `mysterium_capture_page` | Return the current viewport or one visible element as bounded MCP PNG image content. |
 
 `read_pdf_bytes` and `read_stat_block_for_app` are app-only helpers used by the
 inline viewers. Compatible clients hide them from the model-facing tool list.
@@ -57,6 +56,10 @@ same result in both `structuredContent` and the JSON text content block:
   `kind: "content"` result with bounded text, images, and cursor state.
 - `mysterium_get_stat_block` returns `kind: "stat_block"`, `"candidates"`, or
   `"not_found"`.
+- `mysterium_read_page` returns a versioned rendered-page envelope with page
+  identity, bounded text, and cursor state.
+- `mysterium_capture_page` returns screenshot metadata as structured content and
+  adds the in-memory PNG as MCP image content.
 
 Successful results are validated before delivery; failures remain MCP tool
 errors with `isError: true`. MCP App entry points and app-private transport
@@ -309,6 +312,28 @@ Call `mysterium_list_library` to discover accessible book slugs. Calling `myster
 For content, omit `mode` or set it to `"content"`. Responses contain bounded Markdown in `text`, an opaque `nextCursor`, and a `done` flag. Return `nextCursor` as `cursor` with the same book, chapter, section, and character limit until `done` is `true`.
 
 The default limit is 10,000 Markdown characters and the maximum is 25,000. You can restrict a read to a section ID from the outline or to an exact, unique heading.
+
+## Reading and capturing the shared browser page
+
+`mysterium_read_page` is a read-only escape hatch for D&D Beyond pages that do
+not have a dedicated structured tool. Browser-backed tools reuse one page, so
+each call may leave it at a different URL. Pass `url` to navigate and return the
+first bounded text chunk, omit it to read the current page, or pass the returned
+`nextCursor` back to the same tool until `done` is true. `url` and `cursor`
+cannot be combined. The opaque cursor is bound to
+the final URL, normalized page content, and character limit; it fails closed if
+another tool navigates or the rendered content changes.
+
+Extraction operates on a cloned content subtree and does not remove elements
+from the live page. Generic click and fill interaction is intentionally not
+exposed because arbitrary selectors cannot provide reliable mutation safety.
+
+Use `mysterium_capture_page` only for an explicit visual-inspection request. It
+captures the visible viewport by default, or one uniquely matched visible
+element with `scope: "element"` and `selector`. Screenshots are returned directly
+as MCP PNG image content, are never written to disk, and are limited by image
+dimensions, pixel count, and a 5 MiB byte cap. Authenticated screenshots may
+contain private account information or copyrighted material.
 
 ## Session safety and reset
 

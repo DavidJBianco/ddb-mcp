@@ -324,12 +324,17 @@ test(
     );
 
     await t.test("navigates safely and reads the current page", async () => {
-      const navigated = await callText(client, diagnostics, "mysterium_navigate", {
-        url: "https://www.dndbeyond.com/characters",
-      });
-      requireStructure(navigated.startsWith("URL: https://www.dndbeyond.com/characters"), "navigation response shape changed");
-      const current = await callText(client, diagnostics, "mysterium_current_page");
-      requireStructure(current.startsWith("Current URL: https://www.dndbeyond.com/characters"), "current-page response shape changed");
+      const requestedUrl = "https://www.dndbeyond.com/characters";
+      const navigated = parseJson(
+        await callText(client, diagnostics, "mysterium_read_page", { url: requestedUrl }),
+        "mysterium_read_page"
+      );
+      requireStructure(navigated.source === "dndbeyond-rendered-page" && navigated.schemaVersion === "v1", "navigation provenance changed");
+      requireStructure(navigated.operation === "navigate" && navigated.requestedUrl === requestedUrl, "navigation response shape changed");
+      requireStructure(navigated.page?.url === requestedUrl, "navigation final URL changed");
+      const current = parseJson(await callText(client, diagnostics, "mysterium_read_page"), "mysterium_read_page");
+      requireStructure(current.operation === "current_page" && current.requestedUrl === null, "current-page response shape changed");
+      requireStructure(current.page?.url === requestedUrl, "current-page URL changed");
     });
 
     await t.test("performs a read-only search", async () => {
@@ -572,14 +577,16 @@ test(
       }
     );
 
-    await t.test("uses generic interaction only for a screenshot", async () => {
-      const response = await callText(client, diagnostics, "mysterium_interact", { action: "screenshot", selector: "body" });
-      requireStructure(response.startsWith("Screenshot saved to: "), "screenshot response shape changed");
-      if (process.env.MYSTERIUM_LIVE_TRANSPORT !== "docker") {
-        const screenshotPath = response.slice("Screenshot saved to: ".length);
-        requireStructure(screenshotPath.startsWith(`${tmpdir()}/mysterium-screenshot-`), "unexpected screenshot location");
-        await rm(screenshotPath, { force: true });
-      }
+    await t.test("captures the current viewport as MCP image content", async () => {
+      const result = await callResult(client, diagnostics, "mysterium_capture_page");
+      const metadata = result.structuredContent;
+      requireStructure(metadata?.source === "dndbeyond-page-screenshot" && metadata?.schemaVersion === "v1", "screenshot provenance changed");
+      requireStructure(metadata?.scope === "viewport" && metadata?.selector === null, "screenshot scope changed");
+      requireStructure(metadata?.mimeType === "image/png", "screenshot MIME type changed");
+      requireStructure(Number.isInteger(metadata?.byteCount) && metadata.byteCount > 0 && metadata.byteCount <= 5 * 1024 * 1024, "screenshot byte bound changed");
+      const image = result.content?.find((block) => block.type === "image");
+      requireStructure(image?.mimeType === "image/png" && typeof image.data === "string", "screenshot image content changed");
+      requireStructure(Buffer.from(image.data, "base64").length === metadata.byteCount, "screenshot metadata byte count changed");
     });
   }
 );

@@ -27,6 +27,15 @@ async function connect(t, contextProvider, { supportsApps = true, serverOptions 
   return client;
 }
 
+function syntheticPng(width, height) {
+  const bytes = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes);
+  bytes.write("IHDR", 12, "ascii");
+  bytes.writeUInt32BE(width, 16);
+  bytes.writeUInt32BE(height, 20);
+  return bytes;
+}
+
 test("the MCP tool manifest is exact", async (t) => {
   const client = await connect(t, async () => {
     throw new Error("tool discovery must not request a browser");
@@ -49,9 +58,8 @@ test("every tool converts a browser dependency failure into an MCP tool error", 
     ["read_stat_block_for_app", { creature_id: "42" }],
     ["mysterium_get_campaign", { campaign_id: "7" }],
     ["mysterium_list_campaigns", {}],
-    ["mysterium_navigate", { url: "https://www.dndbeyond.com/synthetic-page" }],
-    ["mysterium_interact", { action: "click", selector: "#synthetic" }],
-    ["mysterium_current_page", {}],
+    ["mysterium_read_page", { url: "https://www.dndbeyond.com/synthetic-page" }],
+    ["mysterium_capture_page", {}],
     ["mysterium_search", { query: "shield", category: "spells" }],
     ["mysterium_list_library", {}],
     ["mysterium_read_book", { book_slug: "synthetic-handbook" }],
@@ -90,8 +98,8 @@ test("argument-bearing tools reject invalid MCP input before browser access", as
     ["read_pdf_bytes", { url: "mysterium://character-pdf/missing/file.pdf", offset: -1 }],
     ["mysterium_get_campaign", {}],
     ["mysterium_get_campaign", { campaign_id: "not-a-number" }],
-    ["mysterium_navigate", {}],
-    ["mysterium_interact", { action: "destroy", selector: "body" }],
+    ["mysterium_read_page", { url: "not-a-url" }],
+    ["mysterium_capture_page", { scope: "unsupported" }],
     ["mysterium_search", { query: "shield", category: "invalid" }],
     ["mysterium_read_book", {}],
     ["mysterium_read_book", { book_slug: "../private" }],
@@ -377,6 +385,81 @@ test("mature model-facing tools publish exact output schemas", async (t) => {
   assert.deepEqual(readBook.properties.kind.enum, ["outline", "content"]);
   assert.deepEqual(readBook.required.sort(), ["book", "done", "kind", "nextCursor"]);
   assert.equal(readBook.additionalProperties, false);
+
+  const pageTool = tools.get("mysterium_read_page");
+  assert.deepEqual(pageTool.outputSchema.required.sort(), [
+    "done", "maxChars", "nextCursor", "operation", "page", "requestedUrl", "schemaVersion", "source", "text", "totalCharacters",
+  ].sort());
+  assert.equal(pageTool.outputSchema.properties.source.const, "dndbeyond-rendered-page");
+  assert.equal(pageTool.outputSchema.additionalProperties, false);
+  assert.equal(pageTool.annotations.readOnlyHint, true);
+  assert.equal(pageTool.annotations.destructiveHint, false);
+
+  const screenshot = tools.get("mysterium_capture_page");
+  assert.equal(screenshot.outputSchema.properties.mimeType.const, "image/png");
+  assert.equal(screenshot.outputSchema.additionalProperties, false);
+  assert.equal(screenshot.annotations.readOnlyHint, true);
+  assert.equal(screenshot.annotations.destructiveHint, false);
+});
+
+test("generic page tools reject cursor and screenshot cross-field errors before browser access", async (t) => {
+  let contextRequested = false;
+  const client = await connect(t, async () => {
+    contextRequested = true;
+    throw new Error("browser must not be requested");
+  });
+  const cases = [
+    ["mysterium_read_page", { cursor: "not-a-cursor" }],
+    ["mysterium_read_page", { url: "https://www.dndbeyond.com/characters", cursor: "not-a-cursor" }],
+    ["mysterium_capture_page", { scope: "element" }],
+    ["mysterium_capture_page", { scope: "viewport", selector: "main" }],
+  ];
+  for (const [name, args] of cases) {
+    const result = await client.callTool({ name, arguments: args });
+    assert.equal(result.isError, true);
+  }
+  assert.equal(contextRequested, false);
+});
+
+test("generic page tools return structured JSON parity and MCP image content", async (t) => {
+  let url = "https://www.dndbeyond.com/synthetic-page";
+  const screenshotBytes = syntheticPng(1280, 800);
+  const page = {
+    goto: async (value) => { url = value; },
+    url: () => url,
+    waitForSelector: async () => {},
+    evaluate: async (callback) => String(callback).includes("sign in")
+      ? true
+      : { title: "Synthetic Page", text: "First paragraph.\n\nSecond paragraph.\n\nThird paragraph." },
+    viewportSize: () => ({ width: 1280, height: 800 }),
+    screenshot: async () => screenshotBytes,
+    title: async () => "Synthetic Page",
+  };
+  const client = await connect(t, async () => ({ pages: () => [page] }));
+
+  const navigated = await client.callTool({
+    name: "mysterium_read_page",
+    arguments: { url, max_chars: 20 },
+  });
+  assert.equal(navigated.isError, undefined);
+  assert.deepEqual(JSON.parse(navigated.content[0].text), navigated.structuredContent);
+  assert.equal(navigated.structuredContent.operation, "navigate");
+  assert.ok(navigated.structuredContent.nextCursor);
+
+  const continued = await client.callTool({
+    name: "mysterium_read_page",
+    arguments: { cursor: navigated.structuredContent.nextCursor },
+  });
+  assert.equal(continued.isError, undefined);
+  assert.deepEqual(JSON.parse(continued.content[0].text), continued.structuredContent);
+  assert.equal(continued.structuredContent.operation, "current_page");
+
+  const screenshot = await client.callTool({ name: "mysterium_capture_page", arguments: {} });
+  assert.equal(screenshot.isError, undefined);
+  assert.deepEqual(JSON.parse(screenshot.content[0].text), screenshot.structuredContent);
+  assert.equal(screenshot.content[1].type, "image");
+  assert.equal(screenshot.content[1].mimeType, "image/png");
+  assert.equal(Buffer.from(screenshot.content[1].data, "base64").equals(screenshotBytes), true);
 });
 
 test("mysterium_read_book rejects invalid field combinations and malformed cursors before browser access", async (t) => {

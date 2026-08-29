@@ -42,8 +42,8 @@ release plan or pull request.
   path, campaign listing/retrieval, navigation/current-page retrieval, search,
   library listing, and sourcebook reading.
 - [x] Decide and document safe live coverage for the host authentication helper
-  and generic `mysterium_interact`. Interactive login requires a manual release
-  check; interaction tests must use non-destructive controls or disposable data.
+  and generic page tools. Interactive login requires a manual release check;
+  page reading and screenshot tests remain strictly read-only.
 - [x] Test both character API success and rendered-page fallback without
   recording private character content in assertions or logs.
 - [x] Make live tests fail clearly on missing or expired sessions, while never
@@ -86,10 +86,10 @@ release plan or pull request.
   and `mysterium_get_stat_block` response families. Validate MCP App results
   through exact schemas while retaining concise App summaries rather than
   duplicating PDF bytes or full renderer payloads.
-- [ ] When reviewing the remaining deferred `mysterium_navigate`, `mysterium_current_page`, and
-  `mysterium_interact` designs, define each stable success envelope, empty and
-  partial result semantics, exact output schema, `structuredContent`, JSON-text
-  behavior, and contract tests before considering the tool release-ready.
+- [x] Define a stable success envelope, cursor behavior, exact output schema,
+  `structuredContent`, JSON-text parity, and contract tests for
+  `mysterium_read_page`. Generic click/fill was withdrawn instead of being
+  represented as reliably non-mutating.
 
 ## Character and campaign retrieval
 
@@ -240,13 +240,21 @@ release plan or pull request.
 
 ## Generic browser tools
 
-- [ ] Review `mysterium_navigate`, `mysterium_current_page`, and `mysterium_interact` as a
-  separate project before extending them. Reassess their stateful shared-page
-  contract, documentation, stable JSON response envelopes, exact output
-  schemas, structured/JSON-text behavior, truncation, non-mutating DOM
-  extraction, click/fill safeguards, sensitive-value redaction, redirect
-  checks, and whether screenshots should be returned directly as MCP image
-  content instead of an inaccessible container-local `/tmp` path.
+- [x] Review the generic browser tools as a separate project.
+  `mysterium_read_page` now combines navigation, current-page reading, and
+  cursor continuation through a documented shared-page contract, versioned
+  JSON envelope, opaque content-bound cursors, non-mutating DOM extraction,
+  and an exact output schema. It shares canonical cursor encoding and
+  Unicode-safe segmented pagination primitives with `mysterium_read_book`
+  while retaining tool-specific extraction and cursor bindings. Screenshot
+  capture moved to the read-only `mysterium_capture_page` tool and returns
+  bounded in-memory MCP image content instead of a container-local path.
+- [ ] Reconsider generic click/fill only if a concrete future workflow can meet
+  the repository's validation, exact dry-run, explicit execution, before/after
+  verification, and sensitive-data safeguards. The former
+  `mysterium_interact` implementation was removed from active source because
+  CSS-selector and label heuristics cannot reliably classify account mutations;
+  Git history preserves the implementation for reference.
 
 ## Character creation and modification
 
@@ -275,6 +283,12 @@ release plan or pull request.
   as tool-specific tests make those changes safe.
 
 ## Packaging and releases
+
+- [ ] Treat the generic browser contract change as breaking in the next
+  governed release: `mysterium_navigate`, `mysterium_current_page`, and
+  `mysterium_interact` were replaced by `mysterium_read_page` and
+  `mysterium_capture_page`. Apply the major Semantic Version bump only on the
+  eventual `dev` to `main` release branch.
 
 - [x] Complete the first governed `dev` to `main` release, including the local
   live suite, SemVer update, release approval, tag, GitHub Release, and GHCR
