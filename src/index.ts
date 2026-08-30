@@ -35,7 +35,7 @@ import {
   validatePageContentRequest,
   validatePageScreenshotRequest,
 } from "./tools/navigate.js";
-import { search, validateSearchRequest } from "./tools/search.js";
+import { search, validateSearchContinuation } from "./tools/search.js";
 import { listLibrary, readBook, SERVER_MAX_CHARS, validateReadBookRequest } from "./tools/library.js";
 import {
   extractStatBlock,
@@ -97,7 +97,7 @@ export function createServer(
     name: "mysterium",
     version: PACKAGE_VERSION,
   }, {
-    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Search results include a sources array when D&D Beyond exposes attribution. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. Use mysterium_list_campaigns to filter normalized campaign summaries before mysterium_get_campaign; private notes default to requested but remain permission-gated, while sensitive invite and administration links require explicit opt-ins. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue sourcebook content using nextCursor until done is true. Use mysterium_read_page with url to navigate and read generic bounded page text, then continue its nextCursor with the same tool while the shared page remains unchanged. Use mysterium_capture_page only for an explicit visual inspection request because authenticated screenshots may contain private or copyrighted content. Sourcebook responses include image metadata, not image bytes.",
+    instructions: "Authentication is managed on the Docker host with mysterium-auth login; authenticated tool errors explain when the user must run it. Use mysterium_search for corpus results and sourcebook discovery. Global search results include bounded snippets, rendered Legacy status, source attribution, and direct sourcebook locations when D&D Beyond exposes them; use book_slug to restrict global results to one accessible book, legacy to select current or Legacy content, and nextCursor to continue bounded results. A unique final slug segment resolves to its canonical accessible book slug. Library, character-summary, and campaign-summary discovery use short-lived in-memory metadata caches; pass refresh: true when current account changes must be fetched. Use mysterium_get_stat_block for model-facing JSON and Markdown for a cataloged monster or NPC; use mysterium_view_stat_block only when an MCP App presentation is useful. Legacy filtering follows D&D Beyond's rendered badge and is separate from edition labels. Use mysterium_list_campaigns to filter normalized campaign summaries before mysterium_get_campaign; private notes default to requested but remain permission-gated, while sensitive invite and administration links require explicit opt-ins. A sourcebook result is safe to pass to mysterium_read_book only when access is 'accessible' and bookSlug is non-null; unavailable results may link to the store. Use mysterium_list_library to list accessible sourcebooks. Use mysterium_read_book in outline mode to retrieve a book's table of contents or a chapter's heading index, then use content mode for bounded chapter or section text. Continue sourcebook content using nextCursor until done is true. Use mysterium_read_page with url to navigate and read generic bounded page text, then continue its nextCursor with the same tool while the shared page remains unchanged. Use mysterium_capture_page only for an explicit visual inspection request because authenticated screenshots may contain private or copyrighted content. Sourcebook responses include image metadata, not image bytes.",
   });
   const characterPdfStore = new CharacterPdfStore(options.characterPdfDependencies);
 
@@ -105,7 +105,7 @@ export function createServer(
 server.registerTool(
   "mysterium_list_characters",
   {
-    description: "List normalized D&D Beyond character summaries with composable filters and deterministic sorting.",
+    description: "List cached, normalized D&D Beyond character summaries with composable filters, deterministic sorting, and optional refresh.",
     inputSchema: {
       names: z.array(z.string().min(1).max(100)).max(25).optional().describe("Character-name substrings. Values use OR and matching is case-insensitive."),
       classes: z.array(z.string().min(1).max(100)).max(25).optional().describe("Exact normalized class components. Values use OR and multiclass descriptions are split into components."),
@@ -116,6 +116,7 @@ server.registerTool(
       max_level: z.number().int().min(0).max(20).optional().describe("Inclusive maximum character level."),
       sort_by: z.enum(["created", "name", "level", "modified"]).optional().describe("Sort field. Defaults to name."),
       sort_direction: z.enum(["asc", "desc"]).optional().describe("Sort direction. Defaults to ascending."),
+      refresh: z.boolean().optional().describe("Fetch current character summaries and replace the five-minute in-memory metadata cache before filtering."),
     },
     outputSchema: characterListEnvelopeSchema,
     annotations: {
@@ -125,7 +126,7 @@ server.registerTool(
       openWorldHint: true,
     },
   },
-  async ({ names, classes, species, campaign_ids, level, min_level, max_level, sort_by, sort_direction }) => {
+  async ({ names, classes, species, campaign_ids, level, min_level, max_level, sort_by, sort_direction, refresh }) => {
     try {
       const request = {
         names,
@@ -137,6 +138,7 @@ server.registerTool(
         maxLevel: max_level,
         sortBy: sort_by,
         sortDirection: sort_direction,
+        refresh,
       };
       validateCharacterListRequest(request);
       const context = await getContextForTool();
@@ -509,7 +511,7 @@ server.registerTool(
 server.registerTool(
   "mysterium_list_campaigns",
   {
-    description: "List normalized D&D Beyond campaign summaries with composable filters and deterministic sorting.",
+    description: "List cached, normalized D&D Beyond campaign summaries with composable filters, deterministic sorting, and optional refresh.",
     inputSchema: {
       names: z.array(z.string().min(1).max(100)).max(25).optional().describe("Campaign-name substrings. Values use OR and matching is case-insensitive."),
       campaign_ids: z.array(z.string().regex(/^\d+$/)).max(25).optional().describe("Exact numeric campaign IDs. Values use OR."),
@@ -521,6 +523,7 @@ server.registerTool(
       content_sharing_enabled: z.boolean().optional().describe("Exact content-sharing state."),
       sort_by: z.enum(["name", "role", "created", "players", "content_sharing"]).optional().describe("Sort field. Defaults to name."),
       sort_direction: z.enum(["asc", "desc"]).optional().describe("Sort direction. Defaults to ascending."),
+      refresh: z.boolean().optional().describe("Fetch current campaign summaries and replace the five-minute in-memory metadata cache before filtering."),
     },
     outputSchema: campaignListEnvelopeSchema,
     annotations: {
@@ -530,7 +533,7 @@ server.registerTool(
       openWorldHint: true,
     },
   },
-  async ({ names, campaign_ids, roles, created_on_or_after, created_on_or_before, min_players, max_players, content_sharing_enabled, sort_by, sort_direction }) => {
+  async ({ names, campaign_ids, roles, created_on_or_after, created_on_or_before, min_players, max_players, content_sharing_enabled, sort_by, sort_direction, refresh }) => {
     try {
       const request = {
         names,
@@ -543,6 +546,7 @@ server.registerTool(
         contentSharingEnabled: content_sharing_enabled,
         sortBy: sort_by,
         sortDirection: sort_direction,
+        refresh,
       };
       validateCampaignListRequest(request);
       const context = await getContextForTool();
@@ -628,9 +632,9 @@ server.registerTool(
 server.registerTool(
   "mysterium_search",
   {
-    description: "Search D&D Beyond indexes for spells, monsters, magic items, races, classes, feats, sourcebooks, or general results. Results include normalized source attribution when D&D Beyond exposes it. Sourcebook searches default to accessible books.",
+    description: "Search D&D Beyond indexes and global rendered results with normalized snippets, sourcebook locations, source attribution, Legacy filtering, and bounded cursor pagination. An optional exact or uniquely matching final slug segment filters global results to one accessible sourcebook.",
     inputSchema: {
-      query: z.string().describe("The search query (e.g. 'Fireball', 'Beholder', 'Vorpal Sword')"),
+      query: z.string().min(1).max(200).describe("The D&D Beyond search query (for example, 'opportunity attack')."),
       category: z
         .enum(["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"])
         .optional()
@@ -639,14 +643,27 @@ server.registerTool(
         .enum(["accessible", "all"])
         .optional()
         .describe("Sourcebook availability scope. Defaults to 'accessible'; 'all' also returns unavailable catalog/store results. Valid only with category 'sourcebooks'."),
+      book_slug: z
+        .string()
+        .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/)
+        .optional()
+        .describe("Optional accessible sourcebook slug. Valid only with category 'all' or an omitted category; filters D&D Beyond global results by direct source path or rendered source attribution."),
+      legacy: z
+        .enum(["include", "exclude", "only"])
+        .optional()
+        .describe("How to filter D&D Beyond's rendered per-entry Legacy badge: include both (default), exclude Legacy, or return only Legacy. Invalid with category 'sourcebooks'."),
+      limit: z.number().int().positive().max(50).optional().describe("Maximum results per response. Defaults to 20 and cannot exceed 50."),
+      cursor: z.string().min(1).optional().describe("Opaque nextCursor from the preceding identical search. Reuse the same query, category, source_scope, book_slug, legacy, and limit."),
+      refresh: z.boolean().optional().describe("With book_slug, refresh the one-hour accessible-library metadata cache before resolving the book. Search results are never cached."),
     },
     outputSchema: searchEnvelopeSchema,
   },
-  async ({ query, category, source_scope }) => {
+  async ({ query, category, source_scope, book_slug, legacy, limit, cursor, refresh }) => {
     try {
-      validateSearchRequest(category ?? "all", source_scope);
+      const options = { bookSlug: book_slug, legacy, limit, cursor, refresh };
+      validateSearchContinuation(query, category ?? "all", source_scope, options);
       const context = await getContextForTool();
-      const results = await search(context, query, category ?? "all", source_scope);
+      const results = await search(context, query, category ?? "all", source_scope, options);
       return jsonToolResult(results);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -659,14 +676,16 @@ server.registerTool(
 server.registerTool(
   "mysterium_list_library",
   {
-    description: "List sourcebooks you own or can access through sharing in your D&D Beyond library, including slugs for use with mysterium_read_book.",
-    inputSchema: {},
+    description: "List cached sourcebooks you own or can access through sharing in your D&D Beyond library, including canonical slugs and optional refresh.",
+    inputSchema: {
+      refresh: z.boolean().optional().describe("Fetch the current accessible library and replace the one-hour in-memory metadata cache."),
+    },
     outputSchema: libraryEnvelopeSchema,
   },
-  async () => {
+  async ({ refresh }) => {
     try {
       const context = await getContextForTool();
-      const books = await listLibrary(context);
+      const books = await listLibrary(context, { refresh });
       return jsonToolResult(books);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

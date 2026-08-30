@@ -154,6 +154,7 @@ test("character tools publish exact stable contracts", async (t) => {
   const listed = await client.listTools();
   const listTool = listed.tools.find(({ name }) => name === "mysterium_list_characters");
   assert.deepEqual(listTool.inputSchema.properties.sort_by.enum, ["created", "name", "level", "modified"]);
+  assert.equal(listTool.inputSchema.properties.refresh.type, "boolean");
   assert.equal(listTool.outputSchema.additionalProperties, false);
   assert.deepEqual(listTool.outputSchema.required.sort(), ["characters", "count", "filters", "sort", "total"].sort());
 
@@ -175,6 +176,7 @@ test("campaign tools publish exact stable contracts", async (t) => {
   const listed = await client.listTools();
   const listTool = listed.tools.find(({ name }) => name === "mysterium_list_campaigns");
   assert.deepEqual(listTool.inputSchema.properties.sort_by.enum, ["name", "role", "created", "players", "content_sharing"]);
+  assert.equal(listTool.inputSchema.properties.refresh.type, "boolean");
   assert.equal(listTool.outputSchema.additionalProperties, false);
   assert.deepEqual(listTool.outputSchema.required.sort(), ["campaigns", "count", "filters", "sort", "total"].sort());
   assert.equal(listTool.annotations.readOnlyHint, true);
@@ -383,7 +385,7 @@ test("mature model-facing tools publish exact output schemas", async (t) => {
   assert.equal(library.additionalProperties, false);
 
   const search = tools.get("mysterium_search").outputSchema;
-  assert.deepEqual(search.required.sort(), ["category", "count", "query", "results", "url"]);
+  assert.deepEqual(search.required.sort(), ["category", "count", "done", "filters", "nextCursor", "partial", "query", "reportedCount", "results", "total", "url"].sort());
   assert.deepEqual(search.properties.category.enum, ["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"]);
   assert.equal(search.additionalProperties, false);
 

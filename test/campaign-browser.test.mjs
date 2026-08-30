@@ -23,6 +23,12 @@ test("campaign tools combine rendered visibility with page-issued read-only resp
   assert.equal(listing.count, 1);
   assert.equal(listing.campaigns[0].createdOn, "2025-01-02");
 
+  const cached = await listMyCampaigns(context, { names: ["campaign"] });
+  assert.equal(cached.count, 1);
+  assert.equal(state.requests.filter(({ url }) => new URL(url).pathname === "/my-campaigns").length, 1);
+  await listMyCampaigns(context, { refresh: true });
+  assert.equal(state.requests.filter(({ url }) => new URL(url).pathname === "/my-campaigns").length, 2);
+
   const detail = await getCampaign(context, "7", {
     includeInviteLink: true,
     includeAdministrationLinks: true,

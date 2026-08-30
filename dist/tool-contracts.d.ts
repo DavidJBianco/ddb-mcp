@@ -550,8 +550,23 @@ export declare const searchEnvelopeSchema: z.ZodObject<{
         sourcebooks: "sourcebooks";
         all: "all";
     }>;
+    filters: z.ZodObject<{
+        sourceScope: z.ZodNullable<z.ZodEnum<{
+            accessible: "accessible";
+            all: "all";
+        }>>;
+        bookSlug: z.ZodNullable<z.ZodString>;
+        legacy: z.ZodNullable<z.ZodEnum<{
+            include: "include";
+            exclude: "exclude";
+            only: "only";
+        }>>;
+    }, z.core.$strict>;
     url: z.ZodString;
     count: z.ZodNumber;
+    total: z.ZodNumber;
+    reportedCount: z.ZodNullable<z.ZodNumber>;
+    partial: z.ZodBoolean;
     results: z.ZodArray<z.ZodUnion<readonly [z.ZodObject<{
         name: z.ZodString;
         type: z.ZodLiteral<"sourcebook">;
@@ -567,11 +582,19 @@ export declare const searchEnvelopeSchema: z.ZodObject<{
         name: z.ZodString;
         type: z.ZodString;
         url: z.ZodString;
+        legacy: z.ZodBoolean;
+        snippets: z.ZodArray<z.ZodString>;
         sources: z.ZodArray<z.ZodObject<{
             title: z.ZodNullable<z.ZodString>;
             url: z.ZodNullable<z.ZodString>;
             bookSlug: z.ZodNullable<z.ZodString>;
             chapterSlug: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>>;
+        bookLocation: z.ZodNullable<z.ZodObject<{
+            bookSlug: z.ZodString;
+            chapterSlug: z.ZodNullable<z.ZodString>;
+            sectionFragment: z.ZodNullable<z.ZodString>;
+            sectionTitleHint: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>>;
         creatureId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
         monster: z.ZodOptional<z.ZodObject<{
@@ -591,6 +614,8 @@ export declare const searchEnvelopeSchema: z.ZodObject<{
             }>;
         }, z.core.$strict>>;
     }, z.core.$strict>]>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+    done: z.ZodBoolean;
 }, z.core.$strict>;
 export declare const readBookResultSchema: z.ZodObject<{
     kind: z.ZodEnum<{

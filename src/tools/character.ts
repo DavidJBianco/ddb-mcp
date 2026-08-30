@@ -10,11 +10,13 @@ import {
   characterPortraitMetadataSchema,
 } from "../tool-contracts.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { cachedMetadata } from "./metadata-cache.js";
 import { openDomReadyPage } from "./page-readiness.js";
 
 const CHARACTER_SERVICE_ORIGIN = "https://character-service.dndbeyond.com";
 const CHARACTER_LIST_PATH = "/character/v5/characters/list";
 const CHARACTER_LIST_TIMEOUT_MS = 30_000;
+export const CHARACTER_LIST_CACHE_TTL_MS = 5 * 60 * 1000;
 const PORTRAIT_TIMEOUT_MS = 30_000;
 export const MAX_PORTRAIT_BYTES = 5 * 1024 * 1024;
 
@@ -35,9 +37,11 @@ export interface CharacterListRequest {
   maxLevel?: number;
   sortBy?: CharacterSortField;
   sortDirection?: CharacterSortDirection;
+  refresh?: boolean;
 }
 
 type CharacterListResult = z.infer<typeof characterListEnvelopeSchema>;
+type CharacterSummary = CharacterListResult["characters"][number];
 export type CharacterDetail = z.infer<typeof characterDetailSchema>;
 export type CharacterPortraitMetadata = z.infer<typeof characterPortraitMetadataSchema>;
 
@@ -133,14 +137,10 @@ export function validateCharacterListRequest(request: CharacterListRequest): voi
   }
 }
 
-export function normalizeCharacterList(
-  upstreamPages: unknown[],
-  request: CharacterListRequest = {}
-): CharacterListResult {
-  validateCharacterListRequest(request);
+function normalizeCharacterSummaries(upstreamPages: unknown[]): CharacterSummary[] {
   if (upstreamPages.length === 0) throw new Error("Character list returned no response pages.");
 
-  const characters: CharacterListResult["characters"] = [];
+  const characters: CharacterSummary[] = [];
   for (const page of upstreamPages) {
     const parsedEnvelope = upstreamListEnvelopeSchema.safeParse(page);
     if (!parsedEnvelope.success) throw new Error("D&D Beyond returned an unexpected character-list response shape.");
@@ -171,7 +171,14 @@ export function normalizeCharacterList(
     if (seen.has(character.id)) throw new Error("D&D Beyond returned a duplicate character across list pages.");
     seen.add(character.id);
   }
+  return characters;
+}
 
+function characterListFromSummaries(
+  characters: CharacterSummary[],
+  request: CharacterListRequest
+): CharacterListResult {
+  validateCharacterListRequest(request);
   const names = canonicalValues(request.names, "Name");
   const classes = canonicalValues(request.classes, "Class");
   const species = canonicalValues(request.species, "Species");
@@ -225,6 +232,13 @@ export function normalizeCharacterList(
   return characterListEnvelopeSchema.parse(result);
 }
 
+export function normalizeCharacterList(
+  upstreamPages: unknown[],
+  request: CharacterListRequest = {}
+): CharacterListResult {
+  return characterListFromSummaries(normalizeCharacterSummaries(upstreamPages), request);
+}
+
 function isCharacterListResponse(response: Response): boolean {
   try {
     const url = new URL(response.url());
@@ -251,20 +265,28 @@ export async function listCharacters(
   request: CharacterListRequest = {}
 ): Promise<CharacterListResult> {
   validateCharacterListRequest(request);
-  const page = await getPage(context);
-  if (!(await isLoggedIn(page))) throw new AuthenticationRequiredError();
-
-  const response = await waitForCharacterListResponse(page);
-  if (response.status() === 401 || response.status() === 403) throw new AuthenticationRequiredError();
-  if (!response.ok()) throw new Error(`Character list request returned HTTP ${response.status()}.`);
-
-  let envelope: unknown;
-  try {
-    envelope = await response.json();
-  } catch {
-    throw new Error("D&D Beyond returned a non-JSON character-list response.");
-  }
-  return normalizeCharacterList([envelope], request);
+  const currentPage = await getPage(context);
+  if (!(await isLoggedIn(currentPage))) throw new AuthenticationRequiredError();
+  const summaries = (await cachedMetadata(
+    context,
+    "character-summaries",
+    CHARACTER_LIST_CACHE_TTL_MS,
+    async () => {
+      const page = await getPage(context);
+      const response = await waitForCharacterListResponse(page);
+      if (response.status() === 401 || response.status() === 403) throw new AuthenticationRequiredError();
+      if (!response.ok()) throw new Error(`Character list request returned HTTP ${response.status()}.`);
+      let envelope: unknown;
+      try {
+        envelope = await response.json();
+      } catch {
+        throw new Error("D&D Beyond returned a non-JSON character-list response.");
+      }
+      return normalizeCharacterSummaries([envelope]);
+    },
+    { refresh: request.refresh }
+  )).value;
+  return characterListFromSummaries(summaries, request);
 }
 
 async function fetchCharacterEnvelope(page: Page, characterId: string): Promise<unknown> {

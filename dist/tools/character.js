@@ -4,10 +4,12 @@ import { getPage, isLoggedIn } from "../browser.js";
 import { fetchAuthenticatedDdbJson } from "../service-auth.js";
 import { characterDetailSchema, characterListEnvelopeSchema, characterPortraitMetadataSchema, } from "../tool-contracts.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { cachedMetadata } from "./metadata-cache.js";
 import { openDomReadyPage } from "./page-readiness.js";
 const CHARACTER_SERVICE_ORIGIN = "https://character-service.dndbeyond.com";
 const CHARACTER_LIST_PATH = "/character/v5/characters/list";
 const CHARACTER_LIST_TIMEOUT_MS = 30_000;
+export const CHARACTER_LIST_CACHE_TTL_MS = 5 * 60 * 1000;
 const PORTRAIT_TIMEOUT_MS = 30_000;
 export const MAX_PORTRAIT_BYTES = 5 * 1024 * 1024;
 const CHARACTER_IMAGE_HOSTS = new Set(["www.dndbeyond.com", "media.dndbeyond.com"]);
@@ -90,8 +92,7 @@ export function validateCharacterListRequest(request) {
             throw new Error("Campaign IDs must contain only decimal digits.");
     }
 }
-export function normalizeCharacterList(upstreamPages, request = {}) {
-    validateCharacterListRequest(request);
+function normalizeCharacterSummaries(upstreamPages) {
     if (upstreamPages.length === 0)
         throw new Error("Character list returned no response pages.");
     const characters = [];
@@ -127,6 +128,10 @@ export function normalizeCharacterList(upstreamPages, request = {}) {
             throw new Error("D&D Beyond returned a duplicate character across list pages.");
         seen.add(character.id);
     }
+    return characters;
+}
+function characterListFromSummaries(characters, request) {
+    validateCharacterListRequest(request);
     const names = canonicalValues(request.names, "Name");
     const classes = canonicalValues(request.classes, "Class");
     const species = canonicalValues(request.species, "Species");
@@ -188,6 +193,9 @@ export function normalizeCharacterList(upstreamPages, request = {}) {
     };
     return characterListEnvelopeSchema.parse(result);
 }
+export function normalizeCharacterList(upstreamPages, request = {}) {
+    return characterListFromSummaries(normalizeCharacterSummaries(upstreamPages), request);
+}
 function isCharacterListResponse(response) {
     try {
         const url = new URL(response.url());
@@ -211,22 +219,26 @@ async function waitForCharacterListResponse(page) {
 }
 export async function listCharacters(context, request = {}) {
     validateCharacterListRequest(request);
-    const page = await getPage(context);
-    if (!(await isLoggedIn(page)))
+    const currentPage = await getPage(context);
+    if (!(await isLoggedIn(currentPage)))
         throw new AuthenticationRequiredError();
-    const response = await waitForCharacterListResponse(page);
-    if (response.status() === 401 || response.status() === 403)
-        throw new AuthenticationRequiredError();
-    if (!response.ok())
-        throw new Error(`Character list request returned HTTP ${response.status()}.`);
-    let envelope;
-    try {
-        envelope = await response.json();
-    }
-    catch {
-        throw new Error("D&D Beyond returned a non-JSON character-list response.");
-    }
-    return normalizeCharacterList([envelope], request);
+    const summaries = (await cachedMetadata(context, "character-summaries", CHARACTER_LIST_CACHE_TTL_MS, async () => {
+        const page = await getPage(context);
+        const response = await waitForCharacterListResponse(page);
+        if (response.status() === 401 || response.status() === 403)
+            throw new AuthenticationRequiredError();
+        if (!response.ok())
+            throw new Error(`Character list request returned HTTP ${response.status()}.`);
+        let envelope;
+        try {
+            envelope = await response.json();
+        }
+        catch {
+            throw new Error("D&D Beyond returned a non-JSON character-list response.");
+        }
+        return normalizeCharacterSummaries([envelope]);
+    }, { refresh: request.refresh })).value;
+    return characterListFromSummaries(summaries, request);
 }
 async function fetchCharacterEnvelope(page, characterId) {
     return fetchAuthenticatedDdbJson(page, `${CHARACTER_SERVICE_ORIGIN}/character/v5/character/${characterId}`);

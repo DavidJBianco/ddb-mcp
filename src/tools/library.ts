@@ -3,11 +3,13 @@ import type { BrowserContext, Page } from "playwright";
 
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { cachedMetadata, type MetadataCacheStatus } from "./metadata-cache.js";
 import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 import { decodeOpaqueCursorObject, encodeOpaqueCursor, paginateSegments } from "./pagination.js";
 
 export const DEFAULT_MAX_CHARS = 10_000;
 export const SERVER_MAX_CHARS = 25_000;
+export const LIBRARY_CACHE_TTL_MS = 60 * 60 * 1000;
 
 export type ReadBookMode = "outline" | "content";
 
@@ -70,6 +72,10 @@ export interface LibraryBook {
 export interface LibraryEnvelope {
   count: number;
   books: LibraryBook[];
+}
+
+export interface LibraryListOptions {
+  refresh?: boolean;
 }
 
 export interface ReadBookOutlineResult {
@@ -257,7 +263,7 @@ function selectSection(extracted: ExtractedBookPage, selector?: string): {
   return { blocks: extracted.blocks.slice(start, end), section };
 }
 
-export async function listLibrary(context: BrowserContext): Promise<LibraryEnvelope> {
+async function fetchLibrary(context: BrowserContext): Promise<LibraryEnvelope> {
   const page = await getPage(context);
 
   if (!(await isLoggedIn(page))) {
@@ -286,6 +292,28 @@ export async function listLibrary(context: BrowserContext): Promise<LibraryEnvel
   }));
 
   return { count: books.length, books };
+}
+
+export async function listLibrary(
+  context: BrowserContext,
+  options: LibraryListOptions = {}
+): Promise<LibraryEnvelope> {
+  return (await listLibrarySnapshot(context, options)).value;
+}
+
+export async function listLibrarySnapshot(
+  context: BrowserContext,
+  options: LibraryListOptions = {}
+): Promise<{ value: LibraryEnvelope; status: MetadataCacheStatus }> {
+  const page = await getPage(context);
+  if (!(await isLoggedIn(page))) throw new AuthenticationRequiredError();
+  return cachedMetadata(
+    context,
+    "accessible-library",
+    LIBRARY_CACHE_TTL_MS,
+    () => fetchLibrary(context),
+    options
+  );
 }
 
 export async function extractLibraryBookCards(page: Page): Promise<LibraryBookCard[]> {

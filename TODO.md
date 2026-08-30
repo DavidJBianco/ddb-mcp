@@ -32,6 +32,20 @@ release plan or pull request.
   reuse the same candidate image across applicable stages, and weigh the added
   Docker requirement and runtime before changing the current test workflow.
 
+## Container engine portability
+
+- [ ] Evaluate first-class Podman support alongside Docker while keeping Docker
+  MCP Toolkit behavior unchanged. Reuse the same OCI image, add an explicit
+  Docker-or-Podman engine selection to `mysterium-auth`, Make and npm scripts,
+  direct MCP client configuration, and offline/live container runners. Preserve
+  helper-owned volume labels, stdin-only session import, read-only normal
+  mounts, offline preflight checks, and refusal to adopt unknown state. Add
+  shared engine-neutral tests plus rootless Podman CI and auth-helper integration
+  coverage; verify named-volume ownership, stdio and signal handling, synthetic
+  Playwright execution, and Podman-machine behavior on macOS and Windows.
+  Document that Docker and Podman keep separate images and session volumes and
+  require separate authentication initialization.
+
 ## Live test suite
 
 - [x] Create a separately invoked, explicit-opt-in `make live-test-host` suite.
@@ -62,25 +76,35 @@ release plan or pull request.
   block-aware boundaries, oversized blocks, lists, tables, repeated headings,
   malformed cursors, and changed content.
 - [x] Add section-level sourcebook retrieval with pagination.
-- [x] Add sourcebook search and normalized source attribution to `mysterium_search`
-  so callers can pivot from standalone results into a sourcebook when D&D
-  Beyond exposes that relationship.
+- [x] Add title-level sourcebook catalog search and normalized source
+  attribution to `mysterium_search` so callers can discover an accessible book
+  or pivot from a standalone result when D&D Beyond exposes that relationship.
+- [x] Add bounded sourcebook-scoped global search without crawling chapters or
+  persisting copyrighted text. `mysterium_search` uses D&D Beyond's rendered
+  global results, optionally filters them to one accessible `book_slug`,
+  reports bounded snippets and direct reader locations when available,
+  supports rendered Legacy filtering, and continues normalized results with an
+  opaque content-bound cursor.
+- [x] Resolve a unique bare final sourcebook slug segment to its canonical
+  accessible-library slug, report ambiguous canonical choices, and reuse one
+  shared per-context metadata cache for library, character-summary, and
+  campaign-summary discovery with explicit refresh controls.
 - [x] Preserve document structure without mutating the rendered live DOM or
   persisting copyrighted sourcebook text.
 
 ## Tool response contracts
 
-- [ ] **Approved:** As each tool is reworked, give every ordinary and empty
-  successful response a documented, stable JSON shape with consistent field
-  names and types. Publish an MCP output schema and return the object through
-  `structuredContent`, with the same JSON serialized in a text content block
-  for client compatibility. Prefer a versioned JSON envelope where upstream
-  payloads, provenance, pagination, or partial results need context. Keep MCP
-  failures as `isError: true`; use another representation only when the caller
-  explicitly requests a non-JSON artifact such as a PDF.
-- [ ] Add contract tests for each reworked tool's JSON schema, empty result,
-  partial result, upstream-shape change, and MCP error shape. Do not silently
-  switch schemas when a fallback path is used.
+- [x] Every registered tool now gives ordinary and empty successful responses
+  a documented, stable shape with consistent field names and types. Model-facing
+  JSON tools publish MCP output schemas and return `structuredContent` with
+  JSON-text parity; MCP App tools publish exact metadata/result schemas while
+  retaining concise text summaries. Failures remain `isError: true`.
+  Versioned envelopes identify upstream payloads, provenance, pagination, and
+  partial results where those distinctions matter.
+- [x] Contract tests cover registered output schemas, structured/JSON-text
+  parity, empty and partial result families, changed upstream shapes, invalid
+  requests, dependency failures, and MCP `isError` behavior. Fallback paths
+  retain the same published schema.
 - [x] Publish exact output schemas and structured/JSON-text parity for the
   mature `mysterium_list_library`, `mysterium_search`, `mysterium_read_book`,
   and `mysterium_get_stat_block` response families. Validate MCP App results
@@ -273,12 +297,17 @@ release plan or pull request.
 - [x] Replace prefix-based D&D Beyond URL checks with parsed origin validation
   and add tests for lookalike hosts, credentials in URLs, alternate ports,
   fragments, redirects, and allowed canonical hosts.
-- [ ] Validate identifiers, slugs, output paths, and screenshot behavior at the
-  MCP boundary; add traversal and unsafe-path regression tests where relevant.
+- [x] Validate public identifiers, sourcebook slugs, URLs, and screenshot
+  scope/selector combinations at the MCP boundary. Numeric IDs reject malformed
+  values; sourcebook paths reject absolute and traversal forms; generic page
+  URLs use parsed-origin validation; screenshots return bounded in-memory image
+  content and expose no output-path argument. MCP regression tests reject these
+  requests before browser access.
 - [ ] Test that diagnostics never corrupt MCP stdout and that errors and logs
   redact cookies, authorization data, local paths, and private page content.
-- [ ] Review DOM extraction for destructive operations and clone or otherwise
-  preserve live page state before removing elements.
+- [x] DOM extraction that removes or rewrites elements operates on cloned
+  sourcebook, stat-block, and generic-page subtrees, preserving the live shared
+  page for later tools and cursor continuation.
 - [ ] Replace brittle fixed waits with bounded waits for meaningful page state
   as tool-specific tests make those changes safe.
 

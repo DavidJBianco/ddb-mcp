@@ -229,11 +229,20 @@ const monsterSearchMetadataSchema = z.object({
     tags: z.array(z.string()),
     access: searchAccessSchema,
 }).strict();
+const bookLocationSchema = z.object({
+    bookSlug: z.string(),
+    chapterSlug: nullableString,
+    sectionFragment: nullableString,
+    sectionTitleHint: nullableString,
+}).strict();
 const ordinarySearchResultSchema = z.object({
     name: z.string(),
     type: z.string(),
     url: z.string(),
+    legacy: z.boolean(),
+    snippets: z.array(z.string().max(500)).max(2),
     sources: z.array(sourceAttributionSchema),
+    bookLocation: bookLocationSchema.nullable(),
     creatureId: nullableString.optional(),
     monster: monsterSearchMetadataSchema.optional(),
 }).strict();
@@ -248,9 +257,19 @@ const sourcebookSearchResultSchema = z.object({
 export const searchEnvelopeSchema = z.object({
     query: z.string(),
     category: z.enum(["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"]),
+    filters: z.object({
+        sourceScope: z.enum(["accessible", "all"]).nullable(),
+        bookSlug: nullableString,
+        legacy: z.enum(["include", "exclude", "only"]).nullable(),
+    }).strict(),
     url: z.string(),
     count: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    reportedCount: z.number().int().nonnegative().nullable(),
+    partial: z.boolean(),
     results: z.array(z.union([sourcebookSearchResultSchema, ordinarySearchResultSchema])),
+    nextCursor: nullableString,
+    done: z.boolean(),
 }).strict();
 const outlineEntrySchema = z.object({
     id: z.string(),

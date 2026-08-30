@@ -1,6 +1,7 @@
 import type { BrowserContext } from "playwright";
 import { z } from "zod";
 import { campaignDetailEnvelopeSchema, campaignListEnvelopeSchema, campaignRoleSchema, campaignSortFieldSchema } from "../tool-contracts.js";
+export declare const CAMPAIGN_LIST_CACHE_TTL_MS: number;
 export type CampaignRole = z.infer<typeof campaignRoleSchema>;
 export type CampaignSortField = z.infer<typeof campaignSortFieldSchema>;
 export type CampaignSortDirection = "asc" | "desc";
@@ -17,6 +18,7 @@ export interface CampaignListRequest {
     contentSharingEnabled?: boolean;
     sortBy?: CampaignSortField;
     sortDirection?: CampaignSortDirection;
+    refresh?: boolean;
 }
 export interface CampaignDetailRequest {
     includePrivateNotes?: boolean;
