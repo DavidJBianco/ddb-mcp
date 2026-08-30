@@ -313,11 +313,12 @@ release plan or pull request.
 
 ## Packaging and releases
 
-- [ ] Treat the generic browser contract change as breaking in the next
-  governed release: `mysterium_navigate`, `mysterium_current_page`, and
-  `mysterium_interact` were replaced by `mysterium_read_page` and
-  `mysterium_capture_page`. Apply the major Semantic Version bump only on the
-  eventual `dev` to `main` release branch.
+- [x] Classify the generic browser contract update as compatible for v1.2.0.
+  `mysterium_navigate`, `mysterium_current_page`, and `mysterium_interact` were
+  replaced by `mysterium_read_page` and `mysterium_capture_page`; MCP clients
+  discover the current tool contracts and adapt their calls. Reserve v2.0.0
+  for a major capability change, such as tools that create or update D&D Beyond
+  data.
 
 - [x] Complete the first governed `dev` to `main` release, including the local
   live suite, SemVer update, release approval, tag, GitHub Release, and GHCR
