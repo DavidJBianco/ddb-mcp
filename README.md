@@ -6,9 +6,9 @@ and can work with characters, campaigns, sourcebooks, monster and NPC stat
 blocks, and other D&D Beyond pages.
 
 > **Important:** D&D Beyond does not provide a supported public API for this
-> use case. Mysterium uses the website and authenticated, read-only services
-> available to your browser. A D&D Beyond update can temporarily break a
-> feature until Mysterium is updated.
+> use case. Mysterium uses the website and services available to your signed-in
+> browser. A D&D Beyond update can temporarily break a feature until Mysterium
+> is updated.
 
 Mysterium is an independent, MIT-licensed fork of
 [ddb-mcp](https://github.com/ddb-mcp/ddb-mcp). It is not affiliated with,
@@ -17,8 +17,8 @@ endorsed by, or sponsored by D&D Beyond, Wizards of the Coast, or Hasbro.
 ## What you can do with Mysterium
 
 Mysterium keeps the useful D&D Beyond access introduced by `ddb-mcp` and
-extends it into a Docker-based, read-only assistant for more complete play and
-campaign workflows:
+extends it into a Docker-based assistant for more complete play and campaign
+workflows:
 
 - **Work with characters.** List and filter your characters, retrieve complete
   character data, access a character that is shared with you through a
@@ -37,15 +37,12 @@ campaign workflows:
   with copy and PNG export controls.
 - **Read or inspect other pages.** Extract bounded text from a D&D Beyond page
   or capture the visible page when a visual check is genuinely useful.
-- **Install without a Node.js toolchain.** The supported runtime is a Docker
-  image, so users do not need to install Node.js, Playwright, Chromium
-  dependencies, or the project's build tools.
-- **Sign in through a normal browser.** A small host helper opens a visible
-  browser for D&D Beyond login and saves the resulting session in a dedicated
-  Docker volume. Mysterium never asks an AI model for your password.
-- **Keep normal use read-only.** The server mounts its saved session read-only,
-  runs as an unprivileged container user, and does not expose arbitrary click
-  or form-filling tools.
+- **Run with Docker.** Docker provides everything Mysterium needs, so you do
+  not need to install any additional programming languages or software
+  packages.
+- **Sign in through a normal browser.** The included helper opens a visible
+  browser for D&D Beyond login. Mysterium never asks an AI model for your
+  password.
 
 ## Quickstart
 
@@ -60,16 +57,25 @@ this guide assumes Docker Desktop.
 ### 2. Download Mysterium
 
 Open the [Mysterium releases page](https://github.com/DavidJBianco/mysterium/releases)
-and choose a release. Download the `mysterium-auth` archive for your platform
-and the matching `checksums.txt` file. Verify the checksum, extract the helper,
-and place the executable somewhere on your `PATH`.
+and choose a release. Download the authentication helper for your computer:
 
-Pull the container image from the same release, replacing `X.Y.Z` with its
-version number:
+- **Mac with Apple silicon (M1 or newer):**
+  `mysterium-auth_darwin_arm64.tar.gz`
+- **Mac with an Intel processor:** `mysterium-auth_darwin_amd64.tar.gz`
+- **Windows on a 64-bit Intel or AMD processor:**
+  `mysterium-auth_windows_amd64.zip`
+- **Linux on a 64-bit Intel or AMD processor:**
+  `mysterium-auth_linux_amd64.tar.gz`
+- **Linux on a 64-bit ARM processor:** `mysterium-auth_linux_arm64.tar.gz`
 
-```bash
-docker pull ghcr.io/davidjbianco/mysterium:vX.Y.Z
-```
+Download `checksums.txt` from the same release if you want to verify the
+archive, then extract the helper and place the executable somewhere on your
+`PATH`.
+
+You do not need to run `docker pull` yourself. The authentication helper
+automatically downloads its matching Mysterium image the first time it is
+needed. Docker also downloads a missing image automatically when your MCP
+client starts Mysterium, so the first launch may take a little longer.
 
 The helper and container should always use the same version. Released helpers
 default to their matching immutable image, and `mysterium-auth version` shows
@@ -102,6 +108,39 @@ read-only D&D Beyond request. If the session expires, run
 
 ### 4. Connect your MCP client
 
+#### ChatGPT desktop and Codex
+
+The ChatGPT desktop app and local Codex clients share MCP configuration. In the
+desktop app, open **Settings** → **MCP servers**, select **Add server**, choose
+**STDIO**, and enter this command, replacing `X.Y.Z` with the release version:
+
+```bash
+docker run --rm --interactive --volume mysterium-session:/home/mcp/.config/mysterium:ro ghcr.io/davidjbianco/mysterium:vX.Y.Z
+```
+
+You can make the same configuration directly in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.mysterium]
+command = "docker"
+args = [
+  "run",
+  "--rm",
+  "--interactive",
+  "--volume",
+  "mysterium-session:/home/mcp/.config/mysterium:ro",
+  "ghcr.io/davidjbianco/mysterium:vX.Y.Z",
+]
+```
+
+Save the server and restart the app. Enter `/mcp` in the composer to confirm
+that Mysterium is connected. See the official
+[OpenAI MCP configuration guide](https://developers.openai.com/codex/mcp/)
+for more about shared desktop and Codex configuration. This local Docker setup
+does not apply to ChatGPT on the web.
+
+#### Claude Desktop
+
 For Claude Desktop, add Mysterium as a direct stdio server in your MCP
 configuration:
 
@@ -133,8 +172,7 @@ docker run --rm --interactive \
   ghcr.io/davidjbianco/mysterium:vX.Y.Z
 ```
 
-The server needs outbound HTTPS access to D&D Beyond. Its saved session is
-mounted read-only during normal operation.
+The server needs outbound HTTPS access to D&D Beyond.
 
 ### 5. Try it
 
