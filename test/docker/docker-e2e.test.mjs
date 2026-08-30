@@ -85,10 +85,36 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
       return result.content[0].text;
     }
 
-    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_characters")).length, 1);
+    const characterList = JSON.parse(await callSuccessfully("mysterium_list_characters"));
+    assert.equal(characterList.count, 1);
+    assert.equal(characterList.characters[0].id, "4242");
+    const emptyCharacterList = await client.callTool({
+      name: "mysterium_list_characters",
+      arguments: { names: ["missing"] },
+    });
+    assert.equal(emptyCharacterList.isError, undefined);
+    assert.deepEqual(JSON.parse(emptyCharacterList.content[0].text), emptyCharacterList.structuredContent);
+    assert.equal(emptyCharacterList.structuredContent.count, 0);
+    assert.equal(emptyCharacterList.structuredContent.total, 1);
 
     const characterText = await callSuccessfully("mysterium_get_character", { character_id: "4242" });
-    assert.equal(JSON.parse(characterText).data.name, "Synthetic Hero");
+    assert.equal(JSON.parse(characterText).character.name, "Synthetic Hero");
+    assert.match(JSON.parse(characterText).portraitUrl, /synthetic-hero\.jpeg/);
+    const characterParity = await client.callTool({
+      name: "mysterium_get_character",
+      arguments: { character_id: "4242" },
+    });
+    assert.deepEqual(JSON.parse(characterParity.content[0].text), characterParity.structuredContent);
+    const portraitResult = await client.callTool({
+      name: "mysterium_get_character_portrait",
+      arguments: { character_id: "4242" },
+    });
+    assert.equal(portraitResult.isError, undefined);
+    calledTools.push("mysterium_get_character_portrait");
+    assert.deepEqual(JSON.parse(portraitResult.content[0].text), portraitResult.structuredContent);
+    assert.equal(portraitResult.content[1].type, "image");
+    assert.equal(portraitResult.content[1].mimeType, "image/jpeg");
+    assert.deepEqual(Buffer.from(portraitResult.content[1].data, "base64"), Buffer.from([0xff, 0xd8, 0xff, 0x00]));
     const pdfResult = await client.callTool({
       name: "mysterium_export_character_pdf",
       arguments: { character_id: "4242" },
@@ -108,19 +134,27 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.deepEqual(Buffer.from(rangeResult.structuredContent.bytes, "base64"), pdfBytes);
 
     assert.equal(
-      JSON.parse(await callSuccessfully("mysterium_get_campaign", { campaign_id: "7" })).name,
+      JSON.parse(await callSuccessfully("mysterium_get_campaign", { campaign_id: "7" })).campaign.name,
       "Synthetic Campaign"
     );
-    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_campaigns")).length, 1);
+    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_campaigns")).campaigns.length, 1);
 
-    await callSuccessfully("mysterium_navigate", {
+    const genericPage = JSON.parse(await callSuccessfully("mysterium_read_page", {
       url: "https://www.dndbeyond.com/synthetic-page",
-    });
-    await callSuccessfully("mysterium_interact", {
-      action: "click",
-      selector: "#synthetic-button",
-    });
-    assert.match(await callSuccessfully("mysterium_current_page"), /Synthetic Page/);
+      max_chars: 55,
+    }));
+    assert.equal(genericPage.operation, "navigate");
+    assert.ok(genericPage.nextCursor);
+    const genericContinuation = JSON.parse(await callSuccessfully("mysterium_read_page", {
+      cursor: genericPage.nextCursor,
+    }));
+    assert.equal(genericContinuation.operation, "current_page");
+    const screenshot = await client.callTool({ name: "mysterium_capture_page", arguments: { scope: "element", selector: "#visual-target" } });
+    assert.equal(screenshot.isError, undefined);
+    calledTools.push("mysterium_capture_page");
+    assert.deepEqual(JSON.parse(screenshot.content[0].text), screenshot.structuredContent);
+    assert.equal(screenshot.content[1].type, "image");
+    assert.equal(screenshot.content[1].mimeType, "image/png");
 
     const searchText = await callSuccessfully("mysterium_search", {
       query: "shield",
@@ -154,7 +188,7 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
       query: "handbook",
       category: "sourcebooks",
     }));
-    assert.equal(accessibleSources.count, 1);
+    assert.equal(accessibleSources.count, 2);
     assert.equal(accessibleSources.results[0].access, "accessible");
     assert.equal(accessibleSources.results[0].bookSlug, "synthetic-handbook");
 
@@ -195,7 +229,9 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.equal(appStatBlock.structuredContent.kind, "stat_block");
     assert.equal(appStatBlock.structuredContent.creature.name, "Synthetic Watcher");
 
-    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_library")).count, 1);
+    const library = JSON.parse(await callSuccessfully("mysterium_list_library"));
+    assert.equal(library.count, 2);
+    assert.deepEqual(library.books.map(({ slug }) => slug), ["synthetic-handbook", "dnd/other-handbook"]);
     const bookOutline = JSON.parse(await callSuccessfully("mysterium_read_book", {
       book_slug: "synthetic-handbook",
     }));
@@ -227,7 +263,8 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.match(combinedContent, /1\. First ordered step/);
     assert.match(combinedContent, /\| Kind \| Value \|/);
     assert.deepEqual(contentPages.flatMap(({ images }) => images).map(({ alt }) => alt), ["Synthetic diagram"]);
-    assert.match(await callSuccessfully("mysterium_current_page"), /Preserved navigation marker/);
+    const currentSourcebookPage = JSON.parse(await callSuccessfully("mysterium_read_page"));
+    assert.match(currentSourcebookPage.text, /Preserved navigation marker/);
 
     const alternate = JSON.parse(await callSuccessfully("mysterium_read_book", {
       book_slug: "synthetic-handbook",
@@ -242,18 +279,11 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.equal(changedLayout.isError, true);
     assert.match(changedLayout.content[0].text, /layout was not recognized/);
 
-    const fallbackResult = await client.callTool({
-      name: "mysterium_get_character",
-      arguments: { character_id: "999", fallback_scrape: true },
-    });
-    assert.equal(fallbackResult.isError, undefined);
-    assert.equal(JSON.parse(fallbackResult.content[0].text).Name, "Synthetic Fallback Hero");
-
     assert.deepEqual(calledTools.sort(), EXPECTED_TOOLS);
 
     const failureResult = await client.callTool({
       name: "mysterium_get_campaign",
-      arguments: { campaign_id: "network-error" },
+      arguments: { campaign_id: "999" },
     });
     assert.equal(failureResult.isError, true);
     assert.match(failureResult.content[0].text, /Failed to get campaign/);

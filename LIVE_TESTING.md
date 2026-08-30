@@ -58,13 +58,17 @@ into a fixture, container layer, log, CI secret, or artifact.
 ## Coverage and privacy
 
 The suite reuses one MCP server/browser context and runs sequentially. It
-checks session restoration, character list/API retrieval/rendered fallback,
-rendered character-sheet PDF export and bounded byte reconstruction, campaign list/detail, safe navigation and
-current-page retrieval, search, one public catalog monster lookup and rendered
+checks session restoration, normalized character list/API retrieval, bounded
+portrait image delivery when configured, rendered character-sheet PDF export
+and bounded byte reconstruction, normalized campaign list/detail envelopes and
+permission-safe availability states, generic page navigation and cursor
+retrieval, bounded MCP image screenshot capture, global search result bounds,
+Legacy classification, safe sourcebook-location shape, one public catalog
+monster lookup and rendered
 stat-block shape, library listing, sourcebook book/chapter
 outlines, bounded chapter content, deterministic chapter and section cursor
 continuation, section retrieval by ID and unique heading, image metadata shape,
-and a screenshot-only generic interaction.
+and viewport screenshot delivery without filesystem persistence.
 
 Assertions inspect shapes only. Test output must not contain names, IDs,
 private URLs, character JSON or PDF contents, stat-block prose, campaign or sourcebook text, cookies, or the
@@ -78,9 +82,13 @@ are explicitly skipped when the account has no character, campaign, or
 sourcebook; a release remains blocked unless those required skips are accepted
 and recorded as an exception.
 
-Fresh interactive login remains a manual release check. Do not automate live
-click or fill operations until a disposable, verifiably safe account state is
-available.
+Campaign live assertions never request invite or administration links. The
+detail call exercises the default private-note policy but inspects only the
+availability variant; it never logs or snapshots note content.
+
+Fresh interactive login remains a manual release check. Mysterium exposes no
+generic click or fill tool; any future mutation workflow requires separately
+authorized write-only coverage and disposable, verifiably safe account state.
 
 For releases that include the host authentication helper, also run
 `mysterium-auth validate --live`
@@ -119,3 +127,29 @@ Helper volume validation: mysterium-auth validate --live => pass | fail | not ru
 ```
 
 Never paste the real session path or any returned account content into the PR.
+
+## Published release verification
+
+### v1.1.0
+
+- Release PR: [#22](https://github.com/DavidJBianco/mysterium/pull/22)
+- Release commit: `3c0367b0252ae5c784ef7a9658dc15ddd0077597`
+- Local release gate: `make test-release` passed at candidate commit
+  `9425c72b62b9109f02756c0ab2a49a07e37f7741` with 19 live tests passed,
+  0 failed, and 0 skipped. The non-live Docker MCP Toolkit routed-profile
+  check was skipped because its runtime was unavailable; its offline catalog
+  contract check passed.
+- GitHub Release: [v1.1.0](https://github.com/DavidJBianco/mysterium/releases/tag/v1.1.0),
+  targeting the exact release commit. All five helper archives passed their
+  published checksums, contained the expected executable and `LICENSE`, and
+  the published catalog pinned `ghcr.io/davidjbianco/mysterium:v1.1.0`.
+- Published image index:
+  `sha256:02c0dc7d50e51f3258599b69e3a90784ffbf22d0beb8a95f67c05d484ad9ddf3`.
+  Its `linux/amd64` and `linux/arm64` manifests were pulled by immutable
+  digest and each passed the six production-image hardening and runtime smoke
+  tests. The amd64 test ran under Docker emulation on an arm64 host.
+- Both architecture manifests have attached SPDX SBOM and SLSA provenance
+  statements. Their OCI labels identify version `1.1.0`, the MIT license, the
+  repository source, and the exact release commit. Runtime checks confirmed
+  the non-root `mcp` user and expected entrypoint, and found no session,
+  credential, test, or repository material in the image.

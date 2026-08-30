@@ -32,6 +32,20 @@ release plan or pull request.
   reuse the same candidate image across applicable stages, and weigh the added
   Docker requirement and runtime before changing the current test workflow.
 
+## Container engine portability
+
+- [ ] Evaluate first-class Podman support alongside Docker while keeping Docker
+  MCP Toolkit behavior unchanged. Reuse the same OCI image, add an explicit
+  Docker-or-Podman engine selection to `mysterium-auth`, Make and npm scripts,
+  direct MCP client configuration, and offline/live container runners. Preserve
+  helper-owned volume labels, stdin-only session import, read-only normal
+  mounts, offline preflight checks, and refusal to adopt unknown state. Add
+  shared engine-neutral tests plus rootless Podman CI and auth-helper integration
+  coverage; verify named-volume ownership, stdio and signal handling, synthetic
+  Playwright execution, and Podman-machine behavior on macOS and Windows.
+  Document that Docker and Podman keep separate images and session volumes and
+  require separate authentication initialization.
+
 ## Live test suite
 
 - [x] Create a separately invoked, explicit-opt-in `make live-test-host` suite.
@@ -42,13 +56,15 @@ release plan or pull request.
   path, campaign listing/retrieval, navigation/current-page retrieval, search,
   library listing, and sourcebook reading.
 - [x] Decide and document safe live coverage for the host authentication helper
-  and generic `mysterium_interact`. Interactive login requires a manual release
-  check; interaction tests must use non-destructive controls or disposable data.
+  and generic page tools. Interactive login requires a manual release check;
+  page reading and screenshot tests remain strictly read-only.
 - [x] Test both character API success and rendered-page fallback without
   recording private character content in assertions or logs.
 - [x] Make live tests fail clearly on missing or expired sessions, while never
   initiating an unexpected login or weakening the offline suite.
-- [ ] Record the live command, commit SHA, result, and skips in each release PR.
+- [x] Record the live command, commit SHA, result, and skips in each release PR.
+  The first governed release established this practice in release PR #22;
+  retain it as a required checklist item for every later release.
 
 ## Sourcebook discovery and pagination
 
@@ -60,40 +76,48 @@ release plan or pull request.
   block-aware boundaries, oversized blocks, lists, tables, repeated headings,
   malformed cursors, and changed content.
 - [x] Add section-level sourcebook retrieval with pagination.
-- [x] Add sourcebook search and normalized source attribution to `mysterium_search`
-  so callers can pivot from standalone results into a sourcebook when D&D
-  Beyond exposes that relationship.
+- [x] Add title-level sourcebook catalog search and normalized source
+  attribution to `mysterium_search` so callers can discover an accessible book
+  or pivot from a standalone result when D&D Beyond exposes that relationship.
+- [x] Add bounded sourcebook-scoped global search without crawling chapters or
+  persisting copyrighted text. `mysterium_search` uses D&D Beyond's rendered
+  global results, optionally filters them to one accessible `book_slug`,
+  reports bounded snippets and direct reader locations when available,
+  supports rendered Legacy filtering, and continues normalized results with an
+  opaque content-bound cursor.
+- [x] Resolve a unique bare final sourcebook slug segment to its canonical
+  accessible-library slug, report ambiguous canonical choices, and reuse one
+  shared per-context metadata cache for library, character-summary, and
+  campaign-summary discovery with explicit refresh controls.
 - [x] Preserve document structure without mutating the rendered live DOM or
   persisting copyrighted sourcebook text.
 
 ## Tool response contracts
 
-- [ ] **Approved:** As each tool is reworked, give every ordinary and empty
-  successful response a documented, stable JSON shape with consistent field
-  names and types. Publish an MCP output schema and return the object through
-  `structuredContent`, with the same JSON serialized in a text content block
-  for client compatibility. Prefer a versioned JSON envelope where upstream
-  payloads, provenance, pagination, or partial results need context. Keep MCP
-  failures as `isError: true`; use another representation only when the caller
-  explicitly requests a non-JSON artifact such as a PDF.
-- [ ] Add contract tests for each reworked tool's JSON schema, empty result,
-  partial result, upstream-shape change, and MCP error shape. Do not silently
-  switch schemas when a fallback path is used.
+- [x] Every registered tool now gives ordinary and empty successful responses
+  a documented, stable shape with consistent field names and types. Model-facing
+  JSON tools publish MCP output schemas and return `structuredContent` with
+  JSON-text parity; MCP App tools publish exact metadata/result schemas while
+  retaining concise text summaries. Failures remain `isError: true`.
+  Versioned envelopes identify upstream payloads, provenance, pagination, and
+  partial results where those distinctions matter.
+- [x] Contract tests cover registered output schemas, structured/JSON-text
+  parity, empty and partial result families, changed upstream shapes, invalid
+  requests, dependency failures, and MCP `isError` behavior. Fallback paths
+  retain the same published schema.
 - [x] Publish exact output schemas and structured/JSON-text parity for the
   mature `mysterium_list_library`, `mysterium_search`, `mysterium_read_book`,
   and `mysterium_get_stat_block` response families. Validate MCP App results
   through exact schemas while retaining concise App summaries rather than
   duplicating PDF bytes or full renderer payloads.
-- [ ] When reviewing the deferred `mysterium_list_characters`,
-  `mysterium_get_character`, `mysterium_list_campaigns`,
-  `mysterium_get_campaign`, `mysterium_navigate`, `mysterium_current_page`, and
-  `mysterium_interact` designs, define each stable success envelope, empty and
-  partial result semantics, exact output schema, `structuredContent`, JSON-text
-  behavior, and contract tests before considering the tool release-ready.
+- [x] Define a stable success envelope, cursor behavior, exact output schema,
+  `structuredContent`, JSON-text parity, and contract tests for
+  `mysterium_read_page`. Generic click/fill was withdrawn instead of being
+  represented as reliably non-mutating.
 
 ## Character and campaign retrieval
 
-- [ ] **`mysterium_list_characters` filtering and sorting:** Replace DOM-card parsing
+- [x] **`mysterium_list_characters` filtering and sorting:** Replace DOM-card parsing
   with normalized summaries from the read-only character-list request while
   preserving authentication checks and explicit upstream-failure handling.
   Return a stable JSON envelope such as `{ count, total, filters, sort,
@@ -102,7 +126,7 @@ release plan or pull request.
   species/race name, campaign ID/name when present, status, and created/modified
   dates. Do not expose image URLs or other fields unless a use case requires
   them.
-- [ ] Add optional composable `mysterium_list_characters` filters. At
+- [x] Add optional composable `mysterium_list_characters` filters. At
   minimum, support name, class (including multiclass characters), species or
   race, minimum/maximum or exact level, and one or more campaign IDs. Apply
   filters to the normalized list inside the MCP server with documented
@@ -110,7 +134,7 @@ release plan or pull request.
   so requests such as “Bards of level 3 or higher who are elves” are
   deterministic. Support the upstream sort modes where useful: created, name,
   level, and modified date in ascending or descending order.
-- [ ] Define and test the character-list filter contract before implementation:
+- [x] Define and test the character-list filter contract before implementation:
   case-insensitive matching; exact campaign IDs; documented exact-versus-
   substring behavior for name/class/species; all supplied filter categories
   combined with AND; multiple values within one category combined with OR;
@@ -127,16 +151,16 @@ release plan or pull request.
   stable `id`, `name`, numeric `level`, `classDescription`, `raceName`,
   `campaignId`, `campaignName`, status, and created/modified dates. Therefore
   campaign filtering does not require fetching campaign pages or issuing N+1
-  full-character requests. Preserve a rendered-page fallback for the list only
-  if needed for resilience, and test pagination rather than assuming every
-  account fits one response.
-- [ ] **`mysterium_get_character` contract cleanup:** Remove the public
+  full-character requests. The implemented service-backed contract fails
+  atomically instead of returning a rendered fallback that cannot populate the
+  normalized fields.
+- [x] **`mysterium_get_character` contract cleanup:** Remove the public
   `fallback_scrape` argument, the rendered-sheet scraper, its tests, and its
   documentation. The fallback's partial schema is not compatible with the full
   character response and should not be returned silently. Continue using the
   authenticated read-only character-detail request and return an explicit MCP
   error on failure.
-- [ ] Normalize `mysterium_get_character` into a documented JSON envelope rather than
+- [x] Normalize `mysterium_get_character` into a documented JSON envelope rather than
   exposing the upstream wrapper as the tool contract. Preserve the full useful
   character payload initially to avoid accidental data loss, but identify
   provenance/schema version and keep upstream transport fields such as request
@@ -148,7 +172,11 @@ release plan or pull request.
   scraper provides only name, level, race, class, HP, abilities, and skills. A
   separately named partial-summary tool can be reconsidered only if a concrete
   use case emerges.
-- [ ] **`mysterium_list_campaigns` contract:** Review campaign-list retrieval
+- [x] Add `mysterium_get_character_portrait` for validated, bounded MCP image
+  content and promote a nullable `portraitUrl` into the normalized character
+  envelope. Treat portrait URL parameters as opaque, persist no image data,
+  and do not substitute frames, backdrops, or placeholders.
+- [x] **`mysterium_list_campaigns` contract:** Review campaign-list retrieval
   alongside the campaign detail design. Define a stable normalized envelope,
   empty-list behavior, exact output schema, structured/JSON-text parity, and
   changed-upstream-shape tests without exposing administrative links or invite
@@ -192,18 +220,18 @@ release plan or pull request.
   Desktop delivery. Offline, Docker, audit, live acquisition, inline rendering,
   viewer controls, download, and downloaded-file opening were verified; Codex
   and Toolkit Apps forwarding remain follow-ups.
-- [ ] **`mysterium_get_campaign` enrichment:** Use the observed read-only campaign
+- [x] **`mysterium_get_campaign` enrichment:** Use the observed read-only campaign
   details and short-character data plus permission-aware rendered extraction.
   Return a stable JSON envelope containing campaign ID/name/status/creation
   date, DM and viewer role, content- and item-sharing status, active player and
   character summaries with stable IDs, description, public notes, and
-  DM-private notes only when visible and explicitly requested. Label every
-  notes field by visibility and provenance. Deliberately exclude invite codes,
-  reset/remove/deactivate links, and other administrative secrets or mutation
-  controls.
-- [ ] Define `mysterium_get_campaign` options and permissions before implementation.
-  Private DM notes should default to excluded and require an explicit
-  `include_private_notes` request; public notes and description may be included
+  DM-private notes only when visible and requested by the input policy. Label
+  every notes field by visibility and provenance. Invite and navigation-only
+  administration links require separate false-by-default opt-ins; deliberately
+  exclude standalone invite codes, reset/remove/deactivate/delete links, and mutation controls.
+- [x] Define `mysterium_get_campaign` options and permissions before implementation.
+  Private DM notes default to requested and can be disabled with
+  `include_private_notes: false`; public notes and description are included
   by default when visible. Represent missing, empty, hidden, and inaccessible
   fields distinctly without revealing that hidden content exists to an
   unauthorized viewer. Test DM and player views, campaigns with no characters
@@ -211,6 +239,13 @@ release plan or pull request.
   upstream-detail failure with safe rendered fallback, exact output schema,
   `structuredContent`, JSON-text parity, and contract validation. Keep game-log
   retrieval and all mutations out of scope.
+
+- [x] Add campaign-list filters and deterministic sorting for fields available
+  without opening campaign detail pages: name, ID, viewer role, creation date,
+  player count, and content-sharing state. The sanitized live structural probe
+  confirmed these list fields and the page-issued campaign-details and
+  short-character response shapes without retaining account values, note text,
+  invite codes, IDs, cookies, or session material.
 
 ## Future Maps and Journals exploration
 
@@ -229,13 +264,21 @@ release plan or pull request.
 
 ## Generic browser tools
 
-- [ ] Review `mysterium_navigate`, `mysterium_current_page`, and `mysterium_interact` as a
-  separate project before extending them. Reassess their stateful shared-page
-  contract, documentation, stable JSON response envelopes, exact output
-  schemas, structured/JSON-text behavior, truncation, non-mutating DOM
-  extraction, click/fill safeguards, sensitive-value redaction, redirect
-  checks, and whether screenshots should be returned directly as MCP image
-  content instead of an inaccessible container-local `/tmp` path.
+- [x] Review the generic browser tools as a separate project.
+  `mysterium_read_page` now combines navigation, current-page reading, and
+  cursor continuation through a documented shared-page contract, versioned
+  JSON envelope, opaque content-bound cursors, non-mutating DOM extraction,
+  and an exact output schema. It shares canonical cursor encoding and
+  Unicode-safe segmented pagination primitives with `mysterium_read_book`
+  while retaining tool-specific extraction and cursor bindings. Screenshot
+  capture moved to the read-only `mysterium_capture_page` tool and returns
+  bounded in-memory MCP image content instead of a container-local path.
+- [ ] Reconsider generic click/fill only if a concrete future workflow can meet
+  the repository's validation, exact dry-run, explicit execution, before/after
+  verification, and sensitive-data safeguards. The former
+  `mysterium_interact` implementation was removed from active source because
+  CSS-selector and label heuristics cannot reliably classify account mutations;
+  Git history preserves the implementation for reference.
 
 ## Character creation and modification
 
@@ -254,27 +297,43 @@ release plan or pull request.
 - [x] Replace prefix-based D&D Beyond URL checks with parsed origin validation
   and add tests for lookalike hosts, credentials in URLs, alternate ports,
   fragments, redirects, and allowed canonical hosts.
-- [ ] Validate identifiers, slugs, output paths, and screenshot behavior at the
-  MCP boundary; add traversal and unsafe-path regression tests where relevant.
+- [x] Validate public identifiers, sourcebook slugs, URLs, and screenshot
+  scope/selector combinations at the MCP boundary. Numeric IDs reject malformed
+  values; sourcebook paths reject absolute and traversal forms; generic page
+  URLs use parsed-origin validation; screenshots return bounded in-memory image
+  content and expose no output-path argument. MCP regression tests reject these
+  requests before browser access.
 - [ ] Test that diagnostics never corrupt MCP stdout and that errors and logs
   redact cookies, authorization data, local paths, and private page content.
-- [ ] Review DOM extraction for destructive operations and clone or otherwise
-  preserve live page state before removing elements.
+- [x] DOM extraction that removes or rewrites elements operates on cloned
+  sourcebook, stat-block, and generic-page subtrees, preserving the live shared
+  page for later tools and cursor continuation.
 - [ ] Replace brittle fixed waits with bounded waits for meaningful page state
   as tool-specific tests make those changes safe.
 
 ## Packaging and releases
 
-- [ ] Complete the first governed `dev` to `main` release, including the local
+- [x] Classify the generic browser contract update as compatible for v1.2.0.
+  `mysterium_navigate`, `mysterium_current_page`, and `mysterium_interact` were
+  replaced by `mysterium_read_page` and `mysterium_capture_page`; MCP clients
+  discover the current tool contracts and adapt their calls. Reserve v2.0.0
+  for a major capability change, such as tools that create or update D&D Beyond
+  data.
+
+- [x] Complete the first governed `dev` to `main` release, including the local
   live suite, SemVer update, release approval, tag, GitHub Release, and GHCR
-  publication.
-- [ ] Pull and smoke-test the published immutable GHCR tag on both supported
-  architectures where runners or hardware are available.
-- [ ] Verify the published image's provenance, SBOM, OCI labels, non-root user,
-  entrypoint, and absence of session or credential material.
-- [ ] Configure GitHub branch protection/rulesets so required offline checks
+  publication. Mysterium v1.1.0 was published from release PR #22; the release
+  and post-publication verification record is in `LIVE_TESTING.md`.
+- [x] Pull and smoke-test the published immutable GHCR tag on both supported
+  architectures where runners or hardware are available. The v1.1.0 arm64
+  image passed natively and its amd64 image passed under Docker emulation.
+- [x] Verify the published image's provenance, SBOM, OCI labels, non-root user,
+  entrypoint, and absence of session or credential material for v1.1.0.
+- [x] Configure GitHub branch protection/rulesets so required offline checks
   and the `dev` to `main` release flow are enforced by the repository host as
-  well as documented in `AGENTS.md`.
+  well as documented in `AGENTS.md`. Active `dev` and `main` rulesets require
+  the offline CI jobs and pull requests, restrict merge methods, prevent
+  deletion and force pushes, and retain the repository-admin PR bypass.
 - [x] Evaluate a configurable external session path or documented import helper
   for non-default host sessions without ever copying session data into the
   repository or image.

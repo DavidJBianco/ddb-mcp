@@ -1,7 +1,7 @@
 const loggedInHome = `<!doctype html><html><body><main>Signed in synthetic user</main></body></html>`;
 const loggedOutHome = `<!doctype html><html><body><main><a href="/login">Sign In</a></main></body></html>`;
 
-const searchPage = `<!doctype html><html><body><main class="listing-body">
+const categorySearchPage = `<!doctype html><html><body><main class="listing-body">
   <div class="info" data-slug="synthetic-shield">
     <a class="link" href="/spells/synthetic-shield">Synthetic Shield</a>
     <div class="row spell-level"><span>1st Level</span></div>
@@ -18,6 +18,32 @@ const searchPage = `<!doctype html><html><body><main class="listing-body">
   </div>
 </main></body></html>`;
 
+const globalSearchPage = `<!doctype html><html><body><main>
+  <div class="ddb-search-results-body">
+    <div class="ddb-search-results-counts-text">Returning 5 results for 'synthetic rule'.</div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="/sources/synthetic-handbook/safe-examples#Details">Safe Details</a></div><div class="ddb-search-results-listing-item-header-secondary"><span class="compendium">Compendium</span></div></div>
+      <div class="ddb-search-results-listing-item-body">Safe Details Synthetic current sourcebook snippet.</div>
+    </div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="/sources/synthetic-handbook/safe-examples#Details">Safe Details</a></div><div class="ddb-search-results-listing-item-header-secondary"><span class="compendium">Compendium</span></div></div>
+      <div class="ddb-search-results-listing-item-body">Safe Details Synthetic current sourcebook snippet.</div>
+    </div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="/feats/41-synthetic-legacy">Synthetic Legacy Feat</a><span class="badge"><span class="badge-label" aria-label="legacy">Legacy</span></span></div><div class="ddb-search-results-listing-item-header-secondary"><span class="feats">Feats</span><span class="source">Synthetic Handbook</span><span class="source"><a href="/sources/synthetic-handbook/safe-examples">Chapter attribution</a></span></div></div>
+      <div class="ddb-search-results-listing-item-body">Synthetic Legacy Feat Historical synthetic rule snippet.</div>
+    </div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="/spells/42-other-current">Other Current Spell</a></div><div class="ddb-search-results-listing-item-header-secondary"><span class="spells">Spells</span><span class="source">Other Handbook</span></div></div>
+      <div class="ddb-search-results-listing-item-body">Other Current Spell Unrelated synthetic snippet.</div>
+    </div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="https://example.com/unsafe">Unsafe External</a></div><div class="ddb-search-results-listing-item-header-secondary"><span class="compendium">Compendium</span></div></div>
+      <div class="ddb-search-results-listing-item-body">Unsafe External must be discarded.</div>
+    </div>
+  </div>
+</main></body></html>`;
+
 const monsterSearchPage = `<!doctype html><html><body><main class="listing-body">
   <div class="info" data-slug="synthetic-watcher">
     <a class="link" href="/monsters/42-synthetic-watcher">Synthetic Watcher</a>
@@ -28,7 +54,7 @@ const monsterSearchPage = `<!doctype html><html><body><main class="listing-body"
   </div>
   <div class="info legacy" data-slug="synthetic-watcher-legacy">
     <a class="link" href="/monsters/41-synthetic-watcher">Synthetic Watcher</a>
-    <div>Legacy This doesn't reflect the latest rules and lore.</div>
+    <div class="badge"><span class="badge-label" aria-label="legacy">Legacy</span><span>This doesn't reflect the latest rules and lore.</span></div>
     <div class="row monster-challenge"><span>6</span></div>
     <div class="row monster-type">Aberration</div>
     <div class="source">Synthetic Manual 5e</div>
@@ -62,15 +88,11 @@ const charactersPage = `<!doctype html><html><body><main><ul>
     </div>
     <div class="ddb-campaigns-character-card-footer-links"><a href="/characters/4242">View</a></div>
   </li>
-</ul></main></body></html>`;
-
-const characterSheetPage = `<!doctype html><html><body><main>
-  <h1 class="character-name">Synthetic Fallback Hero</h1>
-  <div class="character-level">Level 2</div>
-  <div class="character-race">Construct</div>
-  <div class="character-class">Rogue</div>
-  <div class="hp-current">12</div>
-</main></body></html>`;
+</ul></main><script>
+fetch("https://character-service.dndbeyond.com/character/v5/characters/list?userId=123", { credentials: "include" })
+  .then((response) => response.json())
+  .then(() => document.body.dataset.charactersLoaded = "true");
+</script></body></html>`;
 
 const characterExportPage = `<!doctype html><html><body><main>
   <h1 class="character-name">Synthetic Hero</h1>
@@ -83,27 +105,48 @@ const campaignsPage = `<!doctype html><html><body><main><ul>
   <li class="ddb-campaigns-list-item-wrapper">
     <div class="ddb-campaigns-list-item-body-title">Synthetic Campaign</div>
     <div class="ddb-campaigns-list-item-body-role">Role: Dungeon Master</div>
+    <div class="ddb-campaigns-list-item-body-date">Created: 1/2/2025</div>
+    <div class="ddb-campaigns-list-item-body-players"><span class="player-count">1 Player</span></div>
+    <div class="ddb-campaigns-list-item-body-sharing">Content Sharing Enabled</div>
     <a class="ddb-campaigns-list-item-footer-buttons-item" href="/campaigns/7">View</a>
+    <a class="ddb-campaigns-list-item-footer-buttons-item-deactivate" data-confirm-message="Confirm" href="/campaigns/7/deactivate">Deactivate</a>
   </li>
 </ul></main></body></html>`;
 
 const campaignPage = `<!doctype html><html><body><main>
+  <div class="user-role-registered-users" data-userid="10"></div>
   <h1 class="page-title">Synthetic Campaign</h1>
   <span class="user-interactions-profile-nickname">Synthetic DM</span>
-  <div class="ddb-campaigns-detail"><p>This entirely synthetic campaign description is deliberately long enough for extraction tests and contains no account data.</p></div>
+  <div class="ddb-campaigns-detail">
+    <p class="ddb-campaigns-detail-header-secondary-description">This entirely synthetic campaign description contains no account data.</p>
+    <div class="ddb-campaigns-detail-body-dm-notes-public">Synthetic public note.</div>
+    <div class="ddb-campaigns-detail-body-dm-notes-private">Synthetic private note.</div>
+    <div class="ddb-campaigns-invite-wrapper"><button data-clipboard-text="https://www.dndbeyond.com/campaigns/join/synthetic-secret">Copy Invite</button></div>
+    <a href="/campaigns/7/edit">Edit Campaign</a>
+    <a data-confirm-message="Confirm" href="/campaigns/7/delete">Delete Campaign</a>
+  </div>
+  <div class="ddb-campaigns-detail-body-listing">
   <li class="ddb-campaigns-character-card-wrapper">
     <div class="ddb-campaigns-character-card-header-upper-character-info-primary">Synthetic Hero</div>
     <div class="ddb-campaigns-character-card-header-upper-character-info-secondary">Level 3</div>
     <div class="ddb-campaigns-character-card-header-upper-character-info-secondary">Player: Synthetic Player</div>
     <a class="ddb-campaigns-character-card-header-upper-details-link" href="/characters/4242">View</a>
   </li>
-</main></body></html>`;
+  </div>
+</main><script>
+fetch("https://api.dndbeyond.com/campaigns/v1/details/7", { credentials: "include" }).then((response) => response.json());
+fetch("https://www.dndbeyond.com/api/campaign/stt/active-short-characters/7", { credentials: "include" }).then((response) => response.json());
+</script></body></html>`;
 
 const accessibleLibraryPage = `<!doctype html><html><body><main>
   <input placeholder="Filter by title" />
   <div data-testid="sourceCard">
     <a class="SourceCard_sourceTitle_synthetic" href="/sources/synthetic-handbook">Synthetic Handbook</a>
     <p class="SourceCard_sourceSubtitle_synthetic">Owned</p>
+  </div>
+  <div data-testid="sourceCard">
+    <a class="SourceCard_sourceTitle_synthetic" href="/sources/dnd/other-handbook">Other Handbook</a>
+    <p class="SourceCard_sourceSubtitle_synthetic">Shared</p>
   </div>
 </main></body></html>`;
 
@@ -151,10 +194,22 @@ const changedChapterPage = `<!doctype html><html><body><main>
   <section data-testid="unexpected-source-layout"><h1>Changed Layout</h1><p>This must not be silently scraped from body.</p></section>
 </main></body></html>`;
 
-const genericPage = `<!doctype html><html><body><main>
-  <h1>Synthetic Page</h1><p>Deterministic navigation content.</p>
-  <button id="synthetic-button">Safe Button</button><input id="synthetic-input" />
-</main></body></html>`;
+const genericPage = `<!doctype html><html><head><title>Synthetic Page</title></head><body>
+<script>
+setTimeout(() => {
+  const main = document.createElement("main");
+  main.innerHTML = '<nav id="preserved-navigation">Navigation excluded from extracted text.</nav>' +
+    '<h1>Synthetic Page</h1>' +
+    '<p>Deterministic navigation content with a Unicode glyph: 😀.</p>' +
+    '<p>Second synthetic paragraph for bounded cursor pagination.</p>' +
+    '<p>Third synthetic paragraph completes the rendered page.</p>' +
+    '<section id="visual-target" style="width: 240px; height: 80px; background: rgb(10, 20, 30); color: white">Visible screenshot target</section>' +
+    '<p hidden>Hidden content must not be extracted.</p>';
+  document.body.append(main);
+}, 25);
+</script></body></html>`;
+
+const emptyGenericPage = `<!doctype html><html><head><title>Empty Synthetic Page</title></head><body></body></html>`;
 
 function html(body, status = 200, headers = {}) {
   return {
@@ -196,11 +251,13 @@ export async function installSyntheticRoutes(context, options = {}) {
       return;
     }
 
-    if (
-      url.origin === "https://www.dndbeyond.com" &&
-      (url.pathname === "/spells" || url.pathname === "/search")
-    ) {
-      await route.fulfill(html(searchPage));
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/spells") {
+      await route.fulfill(html(categorySearchPage));
+      return;
+    }
+
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/search") {
+      await route.fulfill(html(globalSearchPage));
       return;
     }
 
@@ -222,13 +279,15 @@ export async function installSyntheticRoutes(context, options = {}) {
       return;
     }
 
-    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/characters/999") {
-      await route.fulfill(html(characterSheetPage));
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/characters/4242") {
+      await route.fulfill(html(characterExportPage));
       return;
     }
 
-    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/characters/4242") {
-      await route.fulfill(html(characterExportPage));
+    if (url.origin === "https://auth-service.dndbeyond.com" && url.pathname === "/v1/cobalt-token") {
+      await route.fulfill(authenticated
+        ? json({ token: "synthetic-short-term-token", ttl: 900 })
+        : json({ message: "synthetic authentication required" }, 401));
       return;
     }
 
@@ -239,6 +298,30 @@ export async function installSyntheticRoutes(context, options = {}) {
 
     if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/campaigns/7") {
       await route.fulfill(html(campaignPage));
+      return;
+    }
+
+    if (url.origin === "https://api.dndbeyond.com" && url.pathname === "/campaigns/v1/details/7") {
+      await route.fulfill(json({ data: {
+        id: 7,
+        name: "Synthetic Campaign",
+        status: 1,
+        dateCreated: "2025-01-02T03:04:05Z",
+        dmId: 10,
+        dmDisplayName: "Synthetic DM",
+        contentSharingEnabled: true,
+        itemSharingEnabled: false,
+        activePlayers: [{ id: 20, displayName: "Synthetic Player" }],
+        activeCharacters: [{ id: 4242, name: "Synthetic Hero", userId: 20, isPrivate: false }],
+      } }));
+      return;
+    }
+
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/api/campaign/stt/active-short-characters/7") {
+      await route.fulfill(json({
+        status: "success",
+        data: [{ id: 4242, name: "Synthetic Hero", userId: 20, userName: "Synthetic Player", characterStatus: 1, isAssigned: true }],
+      }));
       return;
     }
 
@@ -293,12 +376,61 @@ export async function installSyntheticRoutes(context, options = {}) {
       return;
     }
 
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/synthetic-empty-page") {
+      await route.fulfill(html(emptyGenericPage));
+      return;
+    }
+
+    if (
+      url.origin === "https://character-service.dndbeyond.com" &&
+      url.pathname === "/character/v5/characters/list"
+    ) {
+      await route.fulfill(json({
+        id: 0,
+        success: true,
+        message: null,
+        data: {
+          characters: [{
+            id: 4242,
+            name: "Synthetic Hero",
+            level: 3,
+            classDescription: "Wizard 3",
+            raceName: "Construct",
+            campaignId: 7,
+            campaignName: "Synthetic Campaign",
+            status: 1,
+            createdDate: Date.parse("2025-01-02T03:04:05Z"),
+            lastModifiedDate: Date.parse("2025-03-04T05:06:07Z"),
+          }],
+          characterSlotLimit: 6,
+          canUnlockCharacters: false,
+        },
+        pagination: null,
+      }));
+      return;
+    }
+
     if (
       url.origin === "https://character-service.dndbeyond.com" &&
       url.pathname === "/character/v5/character/4242"
     ) {
+      if (await request.headerValue("authorization") !== "Bearer synthetic-short-term-token") {
+        await route.fulfill(json({ message: "synthetic authorization required" }, 401));
+        return;
+      }
       await route.fulfill(
-        json({ data: { id: 4242, name: "Synthetic Hero", classes: [{ level: 3 }] } })
+        json({
+          id: 0,
+          success: true,
+          message: null,
+          data: {
+            id: 4242,
+            name: "Synthetic Hero",
+            classes: [{ level: 3 }],
+            decorations: { avatarUrl: "https://www.dndbeyond.com/avatars/synthetic-hero.jpeg?width=150&height=150" },
+          },
+          pagination: null,
+        })
       );
       return;
     }
@@ -313,7 +445,7 @@ export async function installSyntheticRoutes(context, options = {}) {
 
     if (
       url.origin === "https://www.dndbeyond.com" &&
-      url.pathname === "/campaigns/network-error"
+      url.pathname === "/campaigns/999"
     ) {
       await route.abort("failed");
       return;

@@ -1,8 +1,5 @@
-import { writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -14,7 +11,7 @@ const sensitive = "SYNTHETIC_PRIVATE_MARKER";
 const syntheticPdf = await readFile(new URL("synthetic-character-sheet.pdf", import.meta.url));
 const syntheticPdfUrl = "mysterium://character-pdf/live-mock/dnd-beyond-character-4242.pdf";
 
-server.tool("mysterium_list_characters", "mock", {}, async () => {
+server.tool("mysterium_list_characters", "mock", { refresh: z.boolean().optional() }, async () => {
   if (process.env.MYSTERIUM_LIVE_MOCK_FAIL_TOOL === "mysterium_list_characters") {
     process.stderr.write(`HTTP 403 while reading ${process.env.MYSTERIUM_SESSION_PATH} for ${sensitive}\n`);
     return {
@@ -25,14 +22,45 @@ server.tool("mysterium_list_characters", "mock", {}, async () => {
       }],
     };
   }
-  return text(JSON.stringify([{ id: "4242", name: sensitive }]));
+  return text(JSON.stringify({
+    count: 1,
+    total: 1,
+    filters: { names: [], classes: [], species: [], campaignIds: [], level: null, minLevel: null, maxLevel: null },
+    sort: { field: "name", direction: "asc" },
+    characters: [{ id: "4242", name: sensitive }],
+  }));
 });
 server.tool(
   "mysterium_get_character",
   "mock",
-  { character_id: z.string(), fallback_scrape: z.boolean().optional() },
-  async ({ character_id, fallback_scrape }) =>
-    text(JSON.stringify(fallback_scrape ? { Name: sensitive } : { data: { id: character_id, name: sensitive } }))
+  { character_id: z.string() },
+  async ({ character_id }) => text(JSON.stringify({
+    source: "dndbeyond-character-service",
+    schemaVersion: "v5",
+    portraitUrl: "https://www.dndbeyond.com/avatars/synthetic.jpeg",
+    character: { id: character_id, name: sensitive },
+  }))
+);
+server.tool(
+  "mysterium_get_character_portrait",
+  "mock",
+  { character_id: z.string() },
+  async ({ character_id }) => {
+    const metadata = {
+      characterId: character_id,
+      available: true,
+      portraitUrl: "https://www.dndbeyond.com/avatars/synthetic.jpeg",
+      mimeType: "image/jpeg",
+      byteCount: 4,
+    };
+    return {
+      content: [
+        { type: "text", text: JSON.stringify(metadata) },
+        { type: "image", data: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString("base64"), mimeType: "image/jpeg" },
+      ],
+      structuredContent: metadata,
+    };
+  }
 );
 server.registerTool(
   "mysterium_export_character_pdf",
@@ -82,31 +110,88 @@ server.registerTool(
     };
   }
 );
-server.tool("mysterium_list_campaigns", "mock", {}, async () =>
-  text(JSON.stringify([{ id: "7", name: sensitive }]))
+server.tool("mysterium_list_campaigns", "mock", { refresh: z.boolean().optional() }, async () =>
+  text(JSON.stringify({
+    count: 1,
+    total: 1,
+    filters: { names: [], campaignIds: [], roles: [], createdOnOrAfter: null, createdOnOrBefore: null, minPlayers: null, maxPlayers: null, contentSharingEnabled: null },
+    sort: { field: "name", direction: "asc" },
+    campaigns: [{ id: "7", name: sensitive, role: "dungeon_master", createdOn: "2025-01-02", playerCount: 1, contentSharingEnabled: true, url: "https://www.dndbeyond.com/campaigns/7" }],
+  }))
 );
-server.tool("mysterium_get_campaign", "mock", { campaign_id: z.string() }, async () =>
-  text(JSON.stringify({ name: sensitive }))
+server.tool("mysterium_get_campaign", "mock", { campaign_id: z.string() }, async ({ campaign_id }) => {
+  const unavailable = { state: "unavailable", value: null, provenance: null };
+  return text(JSON.stringify({
+    source: "dndbeyond-campaign",
+    schemaVersion: "v1",
+    partial: true,
+    campaign: {
+      id: campaign_id, name: sensitive, url: `https://www.dndbeyond.com/campaigns/${campaign_id}`,
+      viewerRole: "unknown", identityProvenance: "rendered-dom",
+      status: unavailable, createdAt: unavailable, dungeonMaster: unavailable, sharing: unavailable,
+      players: unavailable, characters: { state: "empty", value: [], provenance: "rendered-dom" },
+      description: unavailable, notes: { public: unavailable, private: unavailable },
+      links: { canonical: `https://www.dndbeyond.com/campaigns/${campaign_id}`, invite: unavailable, administration: unavailable },
+    },
+  }));
+});
+function mockPageEnvelope(operation, requestedUrl, url) {
+  return {
+    source: "dndbeyond-rendered-page",
+    schemaVersion: "v1",
+    operation,
+    requestedUrl,
+    page: { url, title: "Synthetic Page" },
+    text: sensitive,
+    totalCharacters: sensitive.length,
+    maxChars: 8000,
+    nextCursor: null,
+    done: true,
+  };
+}
+server.tool("mysterium_read_page", "mock", { url: z.string().optional(), cursor: z.string().optional() }, async ({ url }) =>
+  text(JSON.stringify(mockPageEnvelope(url ? "navigate" : "current_page", url ?? null, url ?? "https://www.dndbeyond.com/characters")))
 );
-server.tool("mysterium_navigate", "mock", { url: z.string() }, async ({ url }) => text(`URL: ${url}\n\n${sensitive}`));
-server.tool(
-  "mysterium_interact",
-  "mock",
-  { action: z.enum(["click", "fill", "screenshot"]), selector: z.string(), value: z.string().optional() },
-  async () => {
-    const path = join(tmpdir(), "mysterium-screenshot-live-mock.png");
-    writeFileSync(path, "synthetic screenshot");
-    return text(`Screenshot saved to: ${path}`);
-  }
-);
-server.tool("mysterium_current_page", "mock", {}, async () =>
-  text(`Current URL: https://www.dndbeyond.com/characters\n\n${sensitive}`)
-);
+server.tool("mysterium_capture_page", "mock", {}, async () => {
+  const bytes = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes);
+  bytes.write("IHDR", 12, "ascii");
+  bytes.writeUInt32BE(1, 16);
+  bytes.writeUInt32BE(1, 20);
+  const metadata = {
+    source: "dndbeyond-page-screenshot",
+    schemaVersion: "v1",
+    url: "https://www.dndbeyond.com/characters",
+    title: "Synthetic Page",
+    scope: "viewport",
+    selector: null,
+    width: 1,
+    height: 1,
+    mimeType: "image/png",
+    byteCount: bytes.length,
+  };
+  return {
+    content: [
+      { type: "text", text: JSON.stringify(metadata) },
+      { type: "image", data: bytes.toString("base64"), mimeType: "image/png" },
+    ],
+    structuredContent: metadata,
+  };
+});
 server.tool(
   "mysterium_search",
   "mock",
-  { query: z.string(), category: z.string().optional(), source_scope: z.enum(["accessible", "all"]).optional() },
-  async ({ query, category, source_scope }) => {
+  {
+    query: z.string(),
+    category: z.string().optional(),
+    source_scope: z.enum(["accessible", "all"]).optional(),
+    book_slug: z.string().optional(),
+    legacy: z.enum(["include", "exclude", "only"]).optional(),
+    limit: z.number().int().positive().max(50).optional(),
+    cursor: z.string().optional(),
+    refresh: z.boolean().optional(),
+  },
+  async ({ query, category, source_scope, book_slug, legacy }) => {
     const sourcebook = category === "sourcebooks";
     const monster = category === "monsters";
     const results = sourcebook
@@ -124,11 +209,31 @@ server.tool(
             type: "1/8",
             url: "https://www.dndbeyond.com/monsters/16915-guard",
             creatureId: "16915",
+            legacy: true,
+            snippets: [],
             sources: [],
+            bookLocation: null,
             monster: { source: "Basic Rules", edition: "5e", legacy: true, challengeRating: "1/8", type: "Humanoid", tags: ["NPC"], access: "unknown" },
           }]
-        : [{ name: sensitive, type: "1st Level", url: "https://www.dndbeyond.com/spells/synthetic", sources: [] }];
-    return text(JSON.stringify({ query, category: category ?? "all", count: results.length, results }));
+        : [{ name: sensitive, type: "1st Level", url: "https://www.dndbeyond.com/spells/synthetic", legacy: false, snippets: [], sources: [], bookLocation: null }];
+    const resolvedCategory = category ?? "all";
+    return text(JSON.stringify({
+      query,
+      category: resolvedCategory,
+      filters: {
+        sourceScope: resolvedCategory === "sourcebooks" ? source_scope ?? "accessible" : null,
+        bookSlug: book_slug ?? null,
+        legacy: resolvedCategory === "sourcebooks" ? null : legacy ?? "include",
+      },
+      url: resolvedCategory === "sourcebooks" ? "https://www.dndbeyond.com/en/library?type=sourcebooks" : `https://www.dndbeyond.com/search?q=${encodeURIComponent(query)}`,
+      count: results.length,
+      total: results.length,
+      reportedCount: results.length,
+      partial: false,
+      results,
+      nextCursor: null,
+      done: true,
+    }));
   }
 );
 const syntheticStatBlock = {
@@ -177,7 +282,7 @@ server.registerTool(
   },
   async () => ({ content: [{ type: "text", text: "Loaded Guard." }], structuredContent: syntheticStatBlock })
 );
-server.tool("mysterium_list_library", "mock", {}, async () =>
+server.tool("mysterium_list_library", "mock", { refresh: z.boolean().optional() }, async () =>
   text(JSON.stringify({ books: [{ slug: "synthetic-book", title: sensitive }] }))
 );
 server.tool(

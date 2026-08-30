@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  characterDetailSchema,
+  characterListEnvelopeSchema,
+  characterPortraitMetadataSchema,
+  campaignDetailEnvelopeSchema,
+  campaignListEnvelopeSchema,
   libraryEnvelopeSchema,
+  pageContentEnvelopeSchema,
+  pageScreenshotMetadataSchema,
   readBookResultSchema,
   searchEnvelopeSchema,
   statBlockResolutionSchema,
@@ -45,13 +52,84 @@ const statBlock = {
 };
 
 test("mature output schemas accept each stable result family", () => {
+  assert.equal(characterListEnvelopeSchema.safeParse({
+    count: 0,
+    total: 0,
+    filters: { names: [], classes: [], species: [], campaignIds: [], level: null, minLevel: null, maxLevel: null },
+    sort: { field: "name", direction: "asc" },
+    characters: [],
+  }).success, true);
+  assert.equal(characterDetailSchema.safeParse({
+    source: "dndbeyond-character-service",
+    schemaVersion: "v5",
+    portraitUrl: null,
+    character: { id: 4242 },
+  }).success, true);
+  assert.equal(characterPortraitMetadataSchema.safeParse({
+    characterId: "4242",
+    available: false,
+    portraitUrl: null,
+    mimeType: null,
+    byteCount: 0,
+  }).success, true);
+  assert.equal(campaignListEnvelopeSchema.safeParse({
+    count: 0,
+    total: 0,
+    filters: { names: [], campaignIds: [], roles: [], createdOnOrAfter: null, createdOnOrBefore: null, minPlayers: null, maxPlayers: null, contentSharingEnabled: null },
+    sort: { field: "name", direction: "asc" },
+    campaigns: [],
+  }).success, true);
+  const unavailable = { state: "unavailable", value: null, provenance: null };
+  assert.equal(campaignDetailEnvelopeSchema.safeParse({
+    source: "dndbeyond-campaign",
+    schemaVersion: "v1",
+    partial: true,
+    campaign: {
+      id: "7", name: "Synthetic Campaign", url: "https://www.dndbeyond.com/campaigns/7",
+      viewerRole: "unknown", identityProvenance: "rendered-dom",
+      status: unavailable, createdAt: unavailable, dungeonMaster: unavailable, sharing: unavailable,
+      players: unavailable, characters: { state: "empty", value: [], provenance: "rendered-dom" },
+      description: unavailable, notes: { public: unavailable, private: unavailable },
+      links: { canonical: "https://www.dndbeyond.com/campaigns/7", invite: unavailable, administration: unavailable },
+    },
+  }).success, true);
   assert.equal(libraryEnvelopeSchema.safeParse({ count: 0, books: [] }).success, true);
+  assert.equal(pageContentEnvelopeSchema.safeParse({
+    source: "dndbeyond-rendered-page",
+    schemaVersion: "v1",
+    operation: "current_page",
+    requestedUrl: null,
+    page: { url: "https://www.dndbeyond.com/characters", title: "Characters" },
+    text: "",
+    totalCharacters: 0,
+    maxChars: 8000,
+    nextCursor: null,
+    done: true,
+  }).success, true);
+  assert.equal(pageScreenshotMetadataSchema.safeParse({
+    source: "dndbeyond-page-screenshot",
+    schemaVersion: "v1",
+    url: "https://www.dndbeyond.com/characters",
+    title: "Characters",
+    scope: "viewport",
+    selector: null,
+    width: 1280,
+    height: 800,
+    mimeType: "image/png",
+    byteCount: 1024,
+  }).success, true);
   assert.equal(searchEnvelopeSchema.safeParse({
     query: "missing",
     category: "spells",
+    filters: { sourceScope: null, bookSlug: null, legacy: "include" },
     url: "https://www.dndbeyond.com/spells?filter-search=missing",
     count: 0,
+    total: 0,
+    reportedCount: null,
+    partial: false,
     results: [],
+    nextCursor: null,
+    done: true,
   }).success, true);
   assert.equal(readBookResultSchema.safeParse({
     kind: "outline",
@@ -88,7 +166,27 @@ test("mature output schemas accept each stable result family", () => {
 });
 
 test("mature output schemas reject undocumented and incomplete shapes", () => {
+  assert.equal(characterListEnvelopeSchema.safeParse({ count: 0, total: 0, filters: {}, sort: {}, characters: [] }).success, false);
+  assert.equal(characterDetailSchema.safeParse({ source: "dndbeyond-character-service", schemaVersion: "v5", portraitUrl: null }).success, false);
+  assert.equal(characterPortraitMetadataSchema.safeParse({
+    characterId: "4242", available: false, portraitUrl: "https://www.dndbeyond.com/avatar.jpg", mimeType: null, byteCount: 0,
+  }).success, false);
+  assert.equal(campaignListEnvelopeSchema.safeParse({ count: 0, total: 0, campaigns: [] }).success, false);
+  assert.equal(campaignDetailEnvelopeSchema.safeParse({ source: "dndbeyond-campaign", schemaVersion: "v1" }).success, false);
   assert.equal(libraryEnvelopeSchema.safeParse({ count: 0, books: [], undocumented: true }).success, false);
+  assert.equal(pageContentEnvelopeSchema.safeParse({ source: "dndbeyond-rendered-page", schemaVersion: "v1" }).success, false);
+  assert.equal(pageScreenshotMetadataSchema.safeParse({
+    source: "dndbeyond-page-screenshot",
+    schemaVersion: "v1",
+    url: "https://www.dndbeyond.com/characters",
+    title: "Characters",
+    scope: "element",
+    selector: null,
+    width: 1,
+    height: 1,
+    mimeType: "image/png",
+    byteCount: 24,
+  }).success, false);
   assert.equal(searchEnvelopeSchema.safeParse({ query: "x", category: "spells", url: "x", results: [] }).success, false);
   assert.equal(readBookResultSchema.safeParse({
     kind: "content",

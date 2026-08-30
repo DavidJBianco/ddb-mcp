@@ -13,6 +13,207 @@ export const libraryEnvelopeSchema = z.object({
     count: z.number().int().nonnegative(),
     books: z.array(libraryBookSchema),
 }).strict();
+export const characterSummarySchema = z.object({
+    id: z.string().regex(/^\d+$/),
+    name: z.string(),
+    level: z.number().int().nonnegative(),
+    classDescription: z.string(),
+    species: z.string(),
+    campaign: z.object({
+        id: z.string().regex(/^\d+$/),
+        name: z.string(),
+    }).strict().nullable(),
+    status: z.number().int(),
+    createdAt: z.iso.datetime(),
+    modifiedAt: z.iso.datetime(),
+}).strict();
+export const characterListEnvelopeSchema = z.object({
+    count: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    filters: z.object({
+        names: z.array(z.string()),
+        classes: z.array(z.string()),
+        species: z.array(z.string()),
+        campaignIds: z.array(z.string().regex(/^\d+$/)),
+        level: z.number().int().nonnegative().nullable(),
+        minLevel: z.number().int().nonnegative().nullable(),
+        maxLevel: z.number().int().nonnegative().nullable(),
+    }).strict(),
+    sort: z.object({
+        field: z.enum(["created", "name", "level", "modified"]),
+        direction: z.enum(["asc", "desc"]),
+    }).strict(),
+    characters: z.array(characterSummarySchema),
+}).strict();
+export const characterDetailSchema = z.object({
+    source: z.literal("dndbeyond-character-service"),
+    schemaVersion: z.literal("v5"),
+    portraitUrl: z.url().nullable(),
+    character: z.record(z.string(), z.unknown()),
+}).strict();
+export const characterPortraitMetadataSchema = z.object({
+    characterId: z.string().regex(/^\d+$/),
+    available: z.boolean(),
+    portraitUrl: z.url().nullable(),
+    mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]).nullable(),
+    byteCount: z.number().int().nonnegative(),
+}).strict().superRefine((value, context) => {
+    const complete = value.available
+        ? value.portraitUrl !== null && value.mimeType !== null && value.byteCount > 0
+        : value.portraitUrl === null && value.mimeType === null && value.byteCount === 0;
+    if (!complete)
+        context.addIssue({ code: "custom", message: "Invalid character portrait metadata variant." });
+});
+export const campaignRoleSchema = z.enum(["dungeon_master", "player", "unknown"]);
+export const campaignSortFieldSchema = z.enum(["name", "role", "created", "players", "content_sharing"]);
+const campaignProvenanceSchema = z.enum([
+    "campaign-details-v1",
+    "active-short-characters",
+    "rendered-dom",
+    "derived",
+]);
+function campaignAvailabilitySchema(valueSchema) {
+    return z.discriminatedUnion("state", [
+        z.object({
+            state: z.literal("available"),
+            value: valueSchema,
+            provenance: campaignProvenanceSchema,
+        }).strict(),
+        z.object({
+            state: z.literal("empty"),
+            value: valueSchema,
+            provenance: campaignProvenanceSchema,
+        }).strict(),
+        z.object({
+            state: z.literal("unavailable"),
+            value: z.null(),
+            provenance: z.null(),
+        }).strict(),
+    ]);
+}
+export const campaignSummarySchema = z.object({
+    id: z.string().regex(/^\d+$/),
+    name: z.string(),
+    role: campaignRoleSchema,
+    createdOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    playerCount: z.number().int().nonnegative(),
+    contentSharingEnabled: z.boolean(),
+    url: z.url(),
+}).strict();
+export const campaignListEnvelopeSchema = z.object({
+    count: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    filters: z.object({
+        names: z.array(z.string()),
+        campaignIds: z.array(z.string().regex(/^\d+$/)),
+        roles: z.array(campaignRoleSchema),
+        createdOnOrAfter: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+        createdOnOrBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+        minPlayers: z.number().int().nonnegative().nullable(),
+        maxPlayers: z.number().int().nonnegative().nullable(),
+        contentSharingEnabled: z.boolean().nullable(),
+    }).strict(),
+    sort: z.object({
+        field: campaignSortFieldSchema,
+        direction: z.enum(["asc", "desc"]),
+    }).strict(),
+    campaigns: z.array(campaignSummarySchema),
+}).strict();
+const campaignDungeonMasterSchema = z.object({
+    id: z.string().regex(/^\d+$/),
+    displayName: z.string(),
+}).strict();
+const campaignSharingSchema = z.object({
+    contentEnabled: z.boolean(),
+    itemEnabled: z.boolean(),
+}).strict();
+const campaignPlayerSchema = z.object({
+    id: z.string().regex(/^\d+$/),
+    displayName: z.string(),
+}).strict();
+const campaignCharacterSchema = z.object({
+    id: z.string().regex(/^\d+$/),
+    name: z.string(),
+    playerId: z.string().regex(/^\d+$/).nullable(),
+    playerName: z.string().nullable(),
+    isPrivate: z.boolean().nullable(),
+    status: z.number().int().nullable(),
+    isAssigned: z.boolean().nullable(),
+    url: z.url(),
+}).strict();
+const campaignLinkSchema = z.object({
+    kind: z.enum(["invite", "edit", "manage", "settings", "other"]),
+    url: z.url(),
+}).strict();
+export const campaignDetailEnvelopeSchema = z.object({
+    source: z.literal("dndbeyond-campaign"),
+    schemaVersion: z.literal("v1"),
+    partial: z.boolean(),
+    campaign: z.object({
+        id: z.string().regex(/^\d+$/),
+        name: z.string(),
+        url: z.url(),
+        viewerRole: campaignRoleSchema,
+        identityProvenance: campaignProvenanceSchema,
+        status: campaignAvailabilitySchema(z.number().int()),
+        createdAt: campaignAvailabilitySchema(z.iso.datetime()),
+        dungeonMaster: campaignAvailabilitySchema(campaignDungeonMasterSchema),
+        sharing: campaignAvailabilitySchema(campaignSharingSchema),
+        players: campaignAvailabilitySchema(z.array(campaignPlayerSchema)),
+        characters: campaignAvailabilitySchema(z.array(campaignCharacterSchema)),
+        description: campaignAvailabilitySchema(z.string()),
+        notes: z.object({
+            public: campaignAvailabilitySchema(z.string()),
+            private: campaignAvailabilitySchema(z.string()),
+        }).strict(),
+        links: z.object({
+            canonical: z.url(),
+            invite: campaignAvailabilitySchema(campaignLinkSchema),
+            administration: campaignAvailabilitySchema(z.array(campaignLinkSchema)),
+        }).strict(),
+    }).strict(),
+}).strict();
+export const pageContentEnvelopeSchema = z.object({
+    source: z.literal("dndbeyond-rendered-page"),
+    schemaVersion: z.literal("v1"),
+    operation: z.enum(["navigate", "current_page"]),
+    requestedUrl: z.url().nullable(),
+    page: z.object({
+        url: z.url(),
+        title: z.string(),
+    }).strict(),
+    text: z.string(),
+    totalCharacters: z.number().int().nonnegative(),
+    maxChars: z.number().int().positive().max(25_000),
+    nextCursor: nullableString,
+    done: z.boolean(),
+}).strict().superRefine((value, context) => {
+    if ((value.operation === "navigate") !== (value.requestedUrl !== null)) {
+        context.addIssue({ code: "custom", message: "Invalid rendered-page operation and requested URL combination." });
+    }
+    if (value.done !== (value.nextCursor === null)) {
+        context.addIssue({ code: "custom", message: "Invalid rendered-page cursor completion state." });
+    }
+});
+export const pageScreenshotMetadataSchema = z.object({
+    source: z.literal("dndbeyond-page-screenshot"),
+    schemaVersion: z.literal("v1"),
+    url: z.url(),
+    title: z.string(),
+    scope: z.enum(["viewport", "element"]),
+    selector: nullableString,
+    width: z.number().int().positive().max(4_096),
+    height: z.number().int().positive().max(4_096),
+    mimeType: z.literal("image/png"),
+    byteCount: z.number().int().positive().max(5 * 1024 * 1024),
+}).strict().superRefine((value, context) => {
+    if ((value.scope === "viewport") !== (value.selector === null)) {
+        context.addIssue({ code: "custom", message: "Invalid page screenshot scope and selector combination." });
+    }
+    if (value.width * value.height > 16_777_216) {
+        context.addIssue({ code: "custom", message: "Page screenshot exceeds the maximum pixel count." });
+    }
+});
 const sourceAttributionSchema = z.object({
     title: nullableString,
     url: nullableString,
@@ -28,11 +229,20 @@ const monsterSearchMetadataSchema = z.object({
     tags: z.array(z.string()),
     access: searchAccessSchema,
 }).strict();
+const bookLocationSchema = z.object({
+    bookSlug: z.string(),
+    chapterSlug: nullableString,
+    sectionFragment: nullableString,
+    sectionTitleHint: nullableString,
+}).strict();
 const ordinarySearchResultSchema = z.object({
     name: z.string(),
     type: z.string(),
     url: z.string(),
+    legacy: z.boolean(),
+    snippets: z.array(z.string().max(500)).max(2),
     sources: z.array(sourceAttributionSchema),
+    bookLocation: bookLocationSchema.nullable(),
     creatureId: nullableString.optional(),
     monster: monsterSearchMetadataSchema.optional(),
 }).strict();
@@ -47,9 +257,19 @@ const sourcebookSearchResultSchema = z.object({
 export const searchEnvelopeSchema = z.object({
     query: z.string(),
     category: z.enum(["spells", "monsters", "items", "races", "classes", "feats", "sourcebooks", "all"]),
+    filters: z.object({
+        sourceScope: z.enum(["accessible", "all"]).nullable(),
+        bookSlug: nullableString,
+        legacy: z.enum(["include", "exclude", "only"]).nullable(),
+    }).strict(),
     url: z.string(),
     count: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    reportedCount: z.number().int().nonnegative().nullable(),
+    partial: z.boolean(),
     results: z.array(z.union([sourcebookSearchResultSchema, ordinarySearchResultSchema])),
+    nextCursor: nullableString,
+    done: z.boolean(),
 }).strict();
 const outlineEntrySchema = z.object({
     id: z.string(),

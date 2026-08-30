@@ -52,3 +52,13 @@ test("stat-block live failures receive allowlisted actionable categories", () =>
     /category: inaccessible content/
   );
 });
+
+test("character summary shape failures receive an actionable redacted category", () => {
+  const summary = summarizeLiveFailure("D&D Beyond returned an unexpected character summary shape.");
+  assert.match(summary, /category: JSON or response shape/);
+});
+
+test("portrait validation failures receive an actionable redacted category", () => {
+  const summary = summarizeLiveFailure("The character portrait did not have a recognized image signature.");
+  assert.match(summary, /category: portrait delivery/);
+});

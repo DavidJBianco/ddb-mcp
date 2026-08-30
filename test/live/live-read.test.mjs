@@ -193,14 +193,24 @@ test(
     });
 
     let characters = [];
+    let characterListingSucceeded = false;
     await t.test("restores the external session and lists characters", async () => {
-      characters = parseJson(await callText(client, diagnostics, "mysterium_list_characters"), "mysterium_list_characters");
-      requireStructure(Array.isArray(characters), "character listing must be an array");
+      const listing = parseJson(await callText(client, diagnostics, "mysterium_list_characters"), "mysterium_list_characters");
+      requireStructure(listing && typeof listing === "object", "character listing must be an object");
+      requireStructure(Array.isArray(listing.characters), "character listing omitted its characters array");
+      requireStructure(listing.count === listing.characters.length, "character listing count changed");
+      characters = listing.characters;
+      characterListingSucceeded = true;
     });
+
+    const characterPrerequisiteSkip = () => {
+      if (!characterListingSucceeded) return "character list prerequisite failed";
+      return characters.length === 0 ? "account has no character available" : false;
+    };
 
     await t.test(
       "retrieves a character through the authenticated API",
-      { skip: characters.length === 0 ? "account has no character available" : false },
+      { skip: characterPrerequisiteSkip() },
       async () => {
         const character = characters[0];
         requireStructure(typeof character?.id === "string" && character.id.length > 0, "character listing omitted an ID");
@@ -208,13 +218,34 @@ test(
           await callText(client, diagnostics, "mysterium_get_character", { character_id: character.id }),
           "mysterium_get_character"
         );
-        requireStructure(result && typeof result === "object" && result.data && typeof result.data === "object", "character API shape changed");
+        requireStructure(result && typeof result === "object" && result.character && typeof result.character === "object", "character API shape changed");
+        requireStructure(result.source === "dndbeyond-character-service" && result.schemaVersion === "v5", "character provenance changed");
+        requireStructure(result.portraitUrl === null || typeof result.portraitUrl === "string", "character portrait URL shape changed");
+      }
+    );
+
+    await t.test(
+      "retrieves a configured character portrait as bounded image content",
+      { skip: characterPrerequisiteSkip() },
+      async () => {
+        const characterId = characters[0]?.id;
+        const result = await callResult(client, diagnostics, "mysterium_get_character_portrait", { character_id: characterId });
+        const metadata = result.structuredContent;
+        requireStructure(metadata?.available === true || metadata?.available === false, "character portrait availability changed");
+        if (metadata.available) {
+          requireStructure(Number.isInteger(metadata.byteCount) && metadata.byteCount > 0 && metadata.byteCount <= 5 * 1024 * 1024, "character portrait size changed");
+          const image = result.content.find(({ type }) => type === "image");
+          requireStructure(image && image.mimeType === metadata.mimeType, "character portrait image content changed");
+          requireStructure(Buffer.from(image.data, "base64").length === metadata.byteCount, "character portrait byte count changed");
+        } else {
+          requireStructure(!result.content.some(({ type }) => type === "image"), "missing portrait unexpectedly returned image content");
+        }
       }
     );
 
     await t.test(
       "exports and validates a character PDF only in the external temporary directory",
-      { skip: characters.length === 0 ? "account has no character available" : false },
+      { skip: characterPrerequisiteSkip() },
       async () => {
         const characterId = characters[0]?.id;
         requireStructure(typeof characterId === "string" && characterId.length > 0, "character listing omitted an ID");
@@ -267,21 +298,12 @@ test(
       }
     );
 
-    await t.test("exercises rendered character fallback with a nonexistent ID", async () => {
-      const fallback = parseJson(
-        await callText(client, diagnostics, "mysterium_get_character", {
-          character_id: "999999999999999999",
-          fallback_scrape: true,
-        }),
-        "mysterium_get_character fallback"
-      );
-      requireStructure(fallback && typeof fallback === "object", "character fallback did not return an object");
-    });
-
     let campaigns = [];
     await t.test("lists campaigns without exposing campaign data", async () => {
-      campaigns = parseJson(await callText(client, diagnostics, "mysterium_list_campaigns"), "mysterium_list_campaigns");
-      requireStructure(Array.isArray(campaigns), "campaign listing must be an array");
+      const listing = parseJson(await callText(client, diagnostics, "mysterium_list_campaigns"), "mysterium_list_campaigns");
+      requireStructure(Array.isArray(listing?.campaigns), "campaign listing omitted its campaigns array");
+      requireStructure(listing.count === listing.campaigns.length, "campaign listing count changed");
+      campaigns = listing.campaigns;
     });
 
     await t.test(
@@ -294,26 +316,45 @@ test(
           await callText(client, diagnostics, "mysterium_get_campaign", { campaign_id: campaignId }),
           "mysterium_get_campaign"
         );
-        requireStructure(campaign && typeof campaign === "object", "campaign detail must be an object");
+        requireStructure(campaign?.source === "dndbeyond-campaign" && campaign?.schemaVersion === "v1", "campaign detail provenance changed");
+        requireStructure(campaign?.campaign?.id === campaignId, "campaign detail identity changed");
+        requireStructure(typeof campaign?.partial === "boolean", "campaign detail partial state changed");
+        requireStructure(["available", "empty", "unavailable"].includes(campaign?.campaign?.notes?.private?.state), "campaign private-note availability changed");
       }
     );
 
     await t.test("navigates safely and reads the current page", async () => {
-      const navigated = await callText(client, diagnostics, "mysterium_navigate", {
-        url: "https://www.dndbeyond.com/characters",
-      });
-      requireStructure(navigated.startsWith("URL: https://www.dndbeyond.com/characters"), "navigation response shape changed");
-      const current = await callText(client, diagnostics, "mysterium_current_page");
-      requireStructure(current.startsWith("Current URL: https://www.dndbeyond.com/characters"), "current-page response shape changed");
+      const requestedUrl = "https://www.dndbeyond.com/characters";
+      const navigated = parseJson(
+        await callText(client, diagnostics, "mysterium_read_page", { url: requestedUrl }),
+        "mysterium_read_page"
+      );
+      requireStructure(navigated.source === "dndbeyond-rendered-page" && navigated.schemaVersion === "v1", "navigation provenance changed");
+      requireStructure(navigated.operation === "navigate" && navigated.requestedUrl === requestedUrl, "navigation response shape changed");
+      requireStructure(navigated.page?.url === requestedUrl, "navigation final URL changed");
+      const current = parseJson(await callText(client, diagnostics, "mysterium_read_page"), "mysterium_read_page");
+      requireStructure(current.operation === "current_page" && current.requestedUrl === null, "current-page response shape changed");
+      requireStructure(current.page?.url === requestedUrl, "current-page URL changed");
     });
 
-    await t.test("performs a read-only search", async () => {
-      const results = await callText(client, diagnostics, "mysterium_search", { query: "shield", category: "spells" });
+    await t.test("performs a bounded read-only global search", async () => {
+      const results = await callText(client, diagnostics, "mysterium_search", { query: "opportunity attack", category: "all", legacy: "include", limit: 5 });
       requireStructure(results.length > 0, "search returned an empty response");
       const parsed = parseJson(results, "mysterium_search");
       requireStructure(Array.isArray(parsed.results), "search results shape changed");
+      requireStructure(parsed.count === parsed.results.length && parsed.count <= 5, "search result bound changed");
+      requireStructure(typeof parsed.total === "number" && parsed.total >= parsed.count, "search total shape changed");
+      requireStructure(parsed.filters?.legacy === "include" && parsed.filters.bookSlug === null, "search filters changed");
+      requireStructure(typeof parsed.done === "boolean", "search completion shape changed");
       requireStructure(parsed.results.every((result) => Array.isArray(result.sources)), "search source attribution shape changed");
       for (const result of parsed.results) {
+        requireStructure(typeof result.legacy === "boolean", "search Legacy classification changed");
+        requireStructure(Array.isArray(result.snippets) && result.snippets.length <= 2, "search snippet shape changed");
+        requireStructure(result.snippets.every((snippet) => typeof snippet === "string" && Array.from(snippet).length <= 500), "search snippet bound changed");
+        requireStructure(result.bookLocation === null || (
+          typeof result.bookLocation?.bookSlug === "string" &&
+          (result.bookLocation.chapterSlug === null || typeof result.bookLocation.chapterSlug === "string")
+        ), "search book location changed");
         for (const source of result.sources) {
           requireStructure(source && typeof source === "object", "search source attribution item changed");
           requireStructure(source.title === null || typeof source.title === "string", "search source title shape changed");
@@ -547,14 +588,16 @@ test(
       }
     );
 
-    await t.test("uses generic interaction only for a screenshot", async () => {
-      const response = await callText(client, diagnostics, "mysterium_interact", { action: "screenshot", selector: "body" });
-      requireStructure(response.startsWith("Screenshot saved to: "), "screenshot response shape changed");
-      if (process.env.MYSTERIUM_LIVE_TRANSPORT !== "docker") {
-        const screenshotPath = response.slice("Screenshot saved to: ".length);
-        requireStructure(screenshotPath.startsWith(`${tmpdir()}/mysterium-screenshot-`), "unexpected screenshot location");
-        await rm(screenshotPath, { force: true });
-      }
+    await t.test("captures the current viewport as MCP image content", async () => {
+      const result = await callResult(client, diagnostics, "mysterium_capture_page");
+      const metadata = result.structuredContent;
+      requireStructure(metadata?.source === "dndbeyond-page-screenshot" && metadata?.schemaVersion === "v1", "screenshot provenance changed");
+      requireStructure(metadata?.scope === "viewport" && metadata?.selector === null, "screenshot scope changed");
+      requireStructure(metadata?.mimeType === "image/png", "screenshot MIME type changed");
+      requireStructure(Number.isInteger(metadata?.byteCount) && metadata.byteCount > 0 && metadata.byteCount <= 5 * 1024 * 1024, "screenshot byte bound changed");
+      const image = result.content?.find((block) => block.type === "image");
+      requireStructure(image?.mimeType === "image/png" && typeof image.data === "string", "screenshot image content changed");
+      requireStructure(Buffer.from(image.data, "base64").length === metadata.byteCount, "screenshot metadata byte count changed");
     });
   }
 );
