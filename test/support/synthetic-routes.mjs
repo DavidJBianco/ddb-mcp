@@ -1,7 +1,7 @@
 const loggedInHome = `<!doctype html><html><body><main>Signed in synthetic user</main></body></html>`;
 const loggedOutHome = `<!doctype html><html><body><main><a href="/login">Sign In</a></main></body></html>`;
 
-const searchPage = `<!doctype html><html><body><main class="listing-body">
+const categorySearchPage = `<!doctype html><html><body><main class="listing-body">
   <div class="info" data-slug="synthetic-shield">
     <a class="link" href="/spells/synthetic-shield">Synthetic Shield</a>
     <div class="row spell-level"><span>1st Level</span></div>
@@ -18,6 +18,32 @@ const searchPage = `<!doctype html><html><body><main class="listing-body">
   </div>
 </main></body></html>`;
 
+const globalSearchPage = `<!doctype html><html><body><main>
+  <div class="ddb-search-results-body">
+    <div class="ddb-search-results-counts-text">Returning 5 results for 'synthetic rule'.</div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="/sources/synthetic-handbook/safe-examples#Details">Safe Details</a></div><div class="ddb-search-results-listing-item-header-secondary"><span class="compendium">Compendium</span></div></div>
+      <div class="ddb-search-results-listing-item-body">Safe Details Synthetic current sourcebook snippet.</div>
+    </div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="/sources/synthetic-handbook/safe-examples#Details">Safe Details</a></div><div class="ddb-search-results-listing-item-header-secondary"><span class="compendium">Compendium</span></div></div>
+      <div class="ddb-search-results-listing-item-body">Safe Details Synthetic current sourcebook snippet.</div>
+    </div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="/feats/41-synthetic-legacy">Synthetic Legacy Feat</a><span class="badge"><span class="badge-label" aria-label="legacy">Legacy</span></span></div><div class="ddb-search-results-listing-item-header-secondary"><span class="feats">Feats</span><span class="source">Synthetic Handbook</span><span class="source"><a href="/sources/synthetic-handbook/safe-examples">Chapter attribution</a></span></div></div>
+      <div class="ddb-search-results-listing-item-body">Synthetic Legacy Feat Historical synthetic rule snippet.</div>
+    </div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="/spells/42-other-current">Other Current Spell</a></div><div class="ddb-search-results-listing-item-header-secondary"><span class="spells">Spells</span><span class="source">Other Handbook</span></div></div>
+      <div class="ddb-search-results-listing-item-body">Other Current Spell Unrelated synthetic snippet.</div>
+    </div>
+    <div class="ddb-search-results-listing-item">
+      <div class="ddb-search-results-listing-item-header"><div class="ddb-search-results-listing-item-header-primary-text"><a href="https://example.com/unsafe">Unsafe External</a></div><div class="ddb-search-results-listing-item-header-secondary"><span class="compendium">Compendium</span></div></div>
+      <div class="ddb-search-results-listing-item-body">Unsafe External must be discarded.</div>
+    </div>
+  </div>
+</main></body></html>`;
+
 const monsterSearchPage = `<!doctype html><html><body><main class="listing-body">
   <div class="info" data-slug="synthetic-watcher">
     <a class="link" href="/monsters/42-synthetic-watcher">Synthetic Watcher</a>
@@ -28,7 +54,7 @@ const monsterSearchPage = `<!doctype html><html><body><main class="listing-body"
   </div>
   <div class="info legacy" data-slug="synthetic-watcher-legacy">
     <a class="link" href="/monsters/41-synthetic-watcher">Synthetic Watcher</a>
-    <div>Legacy This doesn't reflect the latest rules and lore.</div>
+    <div class="badge"><span class="badge-label" aria-label="legacy">Legacy</span><span>This doesn't reflect the latest rules and lore.</span></div>
     <div class="row monster-challenge"><span>6</span></div>
     <div class="row monster-type">Aberration</div>
     <div class="source">Synthetic Manual 5e</div>
@@ -117,6 +143,10 @@ const accessibleLibraryPage = `<!doctype html><html><body><main>
   <div data-testid="sourceCard">
     <a class="SourceCard_sourceTitle_synthetic" href="/sources/synthetic-handbook">Synthetic Handbook</a>
     <p class="SourceCard_sourceSubtitle_synthetic">Owned</p>
+  </div>
+  <div data-testid="sourceCard">
+    <a class="SourceCard_sourceTitle_synthetic" href="/sources/dnd/other-handbook">Other Handbook</a>
+    <p class="SourceCard_sourceSubtitle_synthetic">Shared</p>
   </div>
 </main></body></html>`;
 
@@ -221,11 +251,13 @@ export async function installSyntheticRoutes(context, options = {}) {
       return;
     }
 
-    if (
-      url.origin === "https://www.dndbeyond.com" &&
-      (url.pathname === "/spells" || url.pathname === "/search")
-    ) {
-      await route.fulfill(html(searchPage));
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/spells") {
+      await route.fulfill(html(categorySearchPage));
+      return;
+    }
+
+    if (url.origin === "https://www.dndbeyond.com" && url.pathname === "/search") {
+      await route.fulfill(html(globalSearchPage));
       return;
     }
 

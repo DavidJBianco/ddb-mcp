@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import type { APIResponse, BrowserContext } from "playwright";
 import { z } from "zod";
 import { characterDetailSchema, characterListEnvelopeSchema, characterPortraitMetadataSchema } from "../tool-contracts.js";
+export declare const CHARACTER_LIST_CACHE_TTL_MS: number;
 export declare const MAX_PORTRAIT_BYTES: number;
 export type CharacterSortField = "created" | "name" | "level" | "modified";
 export type CharacterSortDirection = "asc" | "desc";
@@ -15,6 +16,7 @@ export interface CharacterListRequest {
     maxLevel?: number;
     sortBy?: CharacterSortField;
     sortDirection?: CharacterSortDirection;
+    refresh?: boolean;
 }
 type CharacterListResult = z.infer<typeof characterListEnvelopeSchema>;
 export type CharacterDetail = z.infer<typeof characterDetailSchema>;

@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import { getPage, isLoggedIn } from "../browser.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { cachedMetadata } from "./metadata-cache.js";
 import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 import { decodeOpaqueCursorObject, encodeOpaqueCursor, paginateSegments } from "./pagination.js";
 export const DEFAULT_MAX_CHARS = 10_000;
 export const SERVER_MAX_CHARS = 25_000;
+export const LIBRARY_CACHE_TTL_MS = 60 * 60 * 1000;
 const SLUG_PATTERN = /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[a-zA-Z0-9][a-zA-Z0-9/_-]*$/;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/;
 function assertSlug(value, field) {
@@ -119,7 +121,7 @@ function selectSection(extracted, selector) {
     }
     return { blocks: extracted.blocks.slice(start, end), section };
 }
-export async function listLibrary(context) {
+async function fetchLibrary(context) {
     const page = await getPage(context);
     if (!(await isLoggedIn(page))) {
         throw new AuthenticationRequiredError();
@@ -136,6 +138,15 @@ export async function listLibrary(context) {
         url,
     }));
     return { count: books.length, books };
+}
+export async function listLibrary(context, options = {}) {
+    return (await listLibrarySnapshot(context, options)).value;
+}
+export async function listLibrarySnapshot(context, options = {}) {
+    const page = await getPage(context);
+    if (!(await isLoggedIn(page)))
+        throw new AuthenticationRequiredError();
+    return cachedMetadata(context, "accessible-library", LIBRARY_CACHE_TTL_MS, () => fetchLibrary(context), options);
 }
 export async function extractLibraryBookCards(page) {
     return page.evaluate(() => {

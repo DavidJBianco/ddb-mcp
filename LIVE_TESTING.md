@@ -62,7 +62,8 @@ checks session restoration, normalized character list/API retrieval, bounded
 portrait image delivery when configured, rendered character-sheet PDF export
 and bounded byte reconstruction, normalized campaign list/detail envelopes and
 permission-safe availability states, generic page navigation and cursor
-retrieval, bounded MCP image screenshot capture, search, one public catalog
+retrieval, bounded MCP image screenshot capture, global search result bounds,
+Legacy classification, safe sourcebook-location shape, one public catalog
 monster lookup and rendered
 stat-block shape, library listing, sourcebook book/chapter
 outlines, bounded chapter content, deterministic chapter and section cursor

@@ -28,7 +28,7 @@ Mysterium is not affiliated with, endorsed by, or sponsored by D&D Beyond, Wizar
 | `mysterium_get_campaign` | Retrieve permission-aware campaign metadata, participants, notes, and explicitly requested safe links. |
 | `mysterium_list_library` | List accessible sourcebooks and their slugs. |
 | `mysterium_read_book` | Discover outlines or read bounded chapter and section content with cursor pagination. |
-| `mysterium_search` | Search rendered D&D Beyond indexes and sourcebook listings. |
+| `mysterium_search` | Search rendered D&D Beyond indexes and global results, optionally filtered to one accessible sourcebook and by Legacy status. |
 | `mysterium_get_stat_block` | Resolve a cataloged monster or NPC and return its normalized rendered stat block as JSON and Markdown. |
 | `mysterium_view_stat_block` | Resolve a cataloged monster or NPC and open its stat block in an MCP App viewer with copy and PNG export actions. |
 | `mysterium_read_page` | Navigate to and read a D&D Beyond page, read the current page, or continue bounded rendered text with a cursor. |
@@ -50,8 +50,9 @@ same result in both `structuredContent` and the JSON text content block:
 - `mysterium_list_campaigns` returns `{ count, total, filters, sort, campaigns }`.
 - `mysterium_get_campaign` returns a versioned `{ source, schemaVersion,
   partial, campaign }` envelope with explicit availability and provenance.
-- `mysterium_search` returns `{ query, category, url, count, results }` with
-  ordinary, monster, or sourcebook result details appropriate to the category.
+- `mysterium_search` returns bounded, cursor-paginated results with normalized
+  filters, rendered snippets, Legacy status, source attribution, and direct
+  sourcebook locations where D&D Beyond exposes them.
 - `mysterium_read_book` returns a `kind: "outline"` discovery result or a
   `kind: "content"` result with bounded text, images, and cursor state.
 - `mysterium_get_stat_block` returns `kind: "stat_block"`, `"candidates"`, or
@@ -299,6 +300,24 @@ found only in sourcebook prose or homebrew-only discovery.
 
 ## Reading sourcebooks
 
+Use `mysterium_search` without `book_slug` to search D&D Beyond's rendered
+global index. Add an accessible `book_slug` to filter those same global results
+to direct source paths and standalone entries attributed to that book; Mysterium
+does not crawl every chapter. `legacy` accepts `include` (the default, meaning
+both), `exclude` (current only), or `only`. Continue bounded results with the
+returned opaque `nextCursor`. Each ordinary result includes bounded `snippets`,
+a rendered `legacy` boolean, and nullable `bookLocation`. When `bookLocation`
+contains a chapter and section-title hint, use those values with
+`mysterium_read_book`; standalone entries retain their canonical URL and source
+attribution even when reader coordinates are unavailable.
+
+Scoped search accepts either the exact accessible-library slug or one bare
+final slug segment. A unique final-segment match is normalized to its canonical
+full slug in `filters.bookSlug`; an ambiguous match returns the canonical
+choices. Library metadata is cached in memory for one hour. Pass
+`refresh: true` with `book_slug` to replace that snapshot before resolving the
+book. Global search results themselves are never cached.
+
 Call `mysterium_list_library` to discover accessible book slugs. Calling `mysterium_read_book` with only `book_slug` returns the book outline. Use a chapter path with `mode: "outline"` to discover stable section IDs:
 
 ```json
@@ -308,6 +327,16 @@ Call `mysterium_list_library` to discover accessible book slugs. Calling `myster
   "mode": "outline"
 }
 ```
+
+## Discovery metadata caches
+
+Mysterium keeps small normalized discovery snapshots in memory per
+authenticated browser context. Accessible library metadata is cached for one
+hour; character and campaign summaries are cached for five minutes. Detail
+responses, global search results, sourcebook content, and stat blocks are not
+cached. Each affected list tool accepts `refresh: true` to fetch current data
+and replace its snapshot before applying filters and sorting. A failed refresh
+returns an error rather than silently serving stale data.
 
 For content, omit `mode` or set it to `"content"`. Responses contain bounded Markdown in `text`, an opaque `nextCursor`, and a `done` flag. Return `nextCursor` as `cursor` with the same book, chapter, section, and character limit until `done` is `true`.
 

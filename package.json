@@ -13,7 +13,7 @@
     "lint": "eslint src/ apps/",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.apps.json",
     "test": "npm run build && npm run test:offline && npm run test:browser:only",
-    "test:unit": "node --test test/campaign.test.mjs test/character-pdf.test.mjs test/character.test.mjs test/ci-isolation.test.mjs test/docker-session-safeguards.test.mjs test/library.test.mjs test/make-targets.test.mjs test/navigate.test.mjs test/navigation-readiness.test.mjs test/search.test.mjs test/service-auth.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/stat-block.test.mjs test/tool-behavior.test.mjs test/tool-contracts.test.mjs test/version.test.mjs",
+    "test:unit": "node --test test/campaign.test.mjs test/character-pdf.test.mjs test/character.test.mjs test/ci-isolation.test.mjs test/docker-session-safeguards.test.mjs test/library.test.mjs test/make-targets.test.mjs test/metadata-cache.test.mjs test/navigate.test.mjs test/navigation-readiness.test.mjs test/search.test.mjs test/service-auth.test.mjs test/session-path.test.mjs test/session-state.test.mjs test/stat-block.test.mjs test/tool-behavior.test.mjs test/tool-contracts.test.mjs test/version.test.mjs",
     "test:mcp": "node --test test/synthetic-harness.test.mjs test/mcp-integration.test.mjs test/mcp-contract.test.mjs test/failure-diagnostics.test.mjs",
     "test:offline": "npm run test:unit && npm run test:mcp",
     "test:browser": "npm run build && npm run test:browser:only",

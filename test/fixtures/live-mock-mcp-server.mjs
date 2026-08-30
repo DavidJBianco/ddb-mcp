@@ -11,7 +11,7 @@ const sensitive = "SYNTHETIC_PRIVATE_MARKER";
 const syntheticPdf = await readFile(new URL("synthetic-character-sheet.pdf", import.meta.url));
 const syntheticPdfUrl = "mysterium://character-pdf/live-mock/dnd-beyond-character-4242.pdf";
 
-server.tool("mysterium_list_characters", "mock", {}, async () => {
+server.tool("mysterium_list_characters", "mock", { refresh: z.boolean().optional() }, async () => {
   if (process.env.MYSTERIUM_LIVE_MOCK_FAIL_TOOL === "mysterium_list_characters") {
     process.stderr.write(`HTTP 403 while reading ${process.env.MYSTERIUM_SESSION_PATH} for ${sensitive}\n`);
     return {
@@ -110,7 +110,7 @@ server.registerTool(
     };
   }
 );
-server.tool("mysterium_list_campaigns", "mock", {}, async () =>
+server.tool("mysterium_list_campaigns", "mock", { refresh: z.boolean().optional() }, async () =>
   text(JSON.stringify({
     count: 1,
     total: 1,
@@ -181,8 +181,17 @@ server.tool("mysterium_capture_page", "mock", {}, async () => {
 server.tool(
   "mysterium_search",
   "mock",
-  { query: z.string(), category: z.string().optional(), source_scope: z.enum(["accessible", "all"]).optional() },
-  async ({ query, category, source_scope }) => {
+  {
+    query: z.string(),
+    category: z.string().optional(),
+    source_scope: z.enum(["accessible", "all"]).optional(),
+    book_slug: z.string().optional(),
+    legacy: z.enum(["include", "exclude", "only"]).optional(),
+    limit: z.number().int().positive().max(50).optional(),
+    cursor: z.string().optional(),
+    refresh: z.boolean().optional(),
+  },
+  async ({ query, category, source_scope, book_slug, legacy }) => {
     const sourcebook = category === "sourcebooks";
     const monster = category === "monsters";
     const results = sourcebook
@@ -200,11 +209,31 @@ server.tool(
             type: "1/8",
             url: "https://www.dndbeyond.com/monsters/16915-guard",
             creatureId: "16915",
+            legacy: true,
+            snippets: [],
             sources: [],
+            bookLocation: null,
             monster: { source: "Basic Rules", edition: "5e", legacy: true, challengeRating: "1/8", type: "Humanoid", tags: ["NPC"], access: "unknown" },
           }]
-        : [{ name: sensitive, type: "1st Level", url: "https://www.dndbeyond.com/spells/synthetic", sources: [] }];
-    return text(JSON.stringify({ query, category: category ?? "all", count: results.length, results }));
+        : [{ name: sensitive, type: "1st Level", url: "https://www.dndbeyond.com/spells/synthetic", legacy: false, snippets: [], sources: [], bookLocation: null }];
+    const resolvedCategory = category ?? "all";
+    return text(JSON.stringify({
+      query,
+      category: resolvedCategory,
+      filters: {
+        sourceScope: resolvedCategory === "sourcebooks" ? source_scope ?? "accessible" : null,
+        bookSlug: book_slug ?? null,
+        legacy: resolvedCategory === "sourcebooks" ? null : legacy ?? "include",
+      },
+      url: resolvedCategory === "sourcebooks" ? "https://www.dndbeyond.com/en/library?type=sourcebooks" : `https://www.dndbeyond.com/search?q=${encodeURIComponent(query)}`,
+      count: results.length,
+      total: results.length,
+      reportedCount: results.length,
+      partial: false,
+      results,
+      nextCursor: null,
+      done: true,
+    }));
   }
 );
 const syntheticStatBlock = {
@@ -253,7 +282,7 @@ server.registerTool(
   },
   async () => ({ content: [{ type: "text", text: "Loaded Guard." }], structuredContent: syntheticStatBlock })
 );
-server.tool("mysterium_list_library", "mock", {}, async () =>
+server.tool("mysterium_list_library", "mock", { refresh: z.boolean().optional() }, async () =>
   text(JSON.stringify({ books: [{ slug: "synthetic-book", title: sensitive }] }))
 );
 server.tool(

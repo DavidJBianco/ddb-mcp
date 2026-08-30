@@ -121,9 +121,15 @@ test("mature output schemas accept each stable result family", () => {
   assert.equal(searchEnvelopeSchema.safeParse({
     query: "missing",
     category: "spells",
+    filters: { sourceScope: null, bookSlug: null, legacy: "include" },
     url: "https://www.dndbeyond.com/spells?filter-search=missing",
     count: 0,
+    total: 0,
+    reportedCount: null,
+    partial: false,
     results: [],
+    nextCursor: null,
+    done: true,
   }).success, true);
   assert.equal(readBookResultSchema.safeParse({
     kind: "outline",

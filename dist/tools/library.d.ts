@@ -1,6 +1,8 @@
 import type { BrowserContext, Page } from "playwright";
+import { type MetadataCacheStatus } from "./metadata-cache.js";
 export declare const DEFAULT_MAX_CHARS = 10000;
 export declare const SERVER_MAX_CHARS = 25000;
+export declare const LIBRARY_CACHE_TTL_MS: number;
 export type ReadBookMode = "outline" | "content";
 export interface ReadBookRequest {
     bookSlug: string;
@@ -53,6 +55,9 @@ export interface LibraryBook {
 export interface LibraryEnvelope {
     count: number;
     books: LibraryBook[];
+}
+export interface LibraryListOptions {
+    refresh?: boolean;
 }
 export interface ReadBookOutlineResult {
     kind: "outline";
@@ -114,7 +119,11 @@ export declare function encodeCursor(payload: CursorPayload): string;
 export declare function decodeCursor(cursor: string): CursorPayload;
 export declare function validateReadBookRequest(request: ReadBookRequest): Required<Pick<ReadBookRequest, "bookSlug" | "mode" | "maxChars">> & ReadBookRequest;
 export declare function paginateBlocks(blocks: ContentBlock[], maxChars: number, start?: CursorPosition): PageChunk;
-export declare function listLibrary(context: BrowserContext): Promise<LibraryEnvelope>;
+export declare function listLibrary(context: BrowserContext, options?: LibraryListOptions): Promise<LibraryEnvelope>;
+export declare function listLibrarySnapshot(context: BrowserContext, options?: LibraryListOptions): Promise<{
+    value: LibraryEnvelope;
+    status: MetadataCacheStatus;
+}>;
 export declare function extractLibraryBookCards(page: Page): Promise<LibraryBookCard[]>;
 export declare function readBook(context: BrowserContext, input: ReadBookRequest): Promise<ReadBookResult>;
 export {};

@@ -9,12 +9,14 @@ import {
   campaignSortFieldSchema,
 } from "../tool-contracts.js";
 import { AuthenticationRequiredError, throwIfAuthenticationRedirect } from "../session-state.js";
+import { cachedMetadata } from "./metadata-cache.js";
 import { openDomReadyPage, waitForRenderedContent } from "./page-readiness.js";
 
 const DDB_ORIGIN = "https://www.dndbeyond.com";
 const CAMPAIGN_DETAILS_ORIGIN = "https://api.dndbeyond.com";
 const CAMPAIGN_TIMEOUT_MS = 30_000;
 const CAMPAIGN_RESPONSE_TIMEOUT_MS = 15_000;
+export const CAMPAIGN_LIST_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export type CampaignRole = z.infer<typeof campaignRoleSchema>;
 export type CampaignSortField = z.infer<typeof campaignSortFieldSchema>;
@@ -33,6 +35,7 @@ export interface CampaignListRequest {
   contentSharingEnabled?: boolean;
   sortBy?: CampaignSortField;
   sortDirection?: CampaignSortDirection;
+  refresh?: boolean;
 }
 
 export interface CampaignDetailRequest {
@@ -294,35 +297,42 @@ export async function listMyCampaigns(
   request: CampaignListRequest = {}
 ): Promise<CampaignListResult> {
   validateCampaignListRequest(request);
-  const page = await getPage(context);
-  if (!(await isLoggedIn(page))) throw new AuthenticationRequiredError();
-
-  await openDomReadyPage(page, `${DDB_ORIGIN}/my-campaigns`, CAMPAIGN_TIMEOUT_MS);
-  throwIfAuthenticationRedirect(page);
-  await waitForRenderedContent(page, "li.ddb-campaigns-list-item-wrapper, main", CAMPAIGN_RESPONSE_TIMEOUT_MS);
-
-  const extracted = await page.evaluate((): ExtractedCampaignList => {
-    const items = Array.from(document.querySelectorAll("li.ddb-campaigns-list-item-wrapper"));
-    const unknownListItems = items.length === 0 && document.querySelectorAll("main ul li").length > 0;
-    const recognized = items.length > 0 || (!unknownListItems && Boolean(document.querySelector("main ul"))) ||
-      /no campaigns/i.test(document.querySelector("main")?.textContent ?? "");
-    return {
-      recognized,
-      items: items.map((element) => {
-        const links = Array.from(element.querySelectorAll("a[href]")) as HTMLAnchorElement[];
-        const canonical = links.find((link) => /^\/campaigns\/\d+\/?$/.test(new URL(link.href).pathname));
-        const id = canonical?.href.match(/\/campaigns\/(\d+)/)?.[1] ?? "";
+  const currentPage = await getPage(context);
+  if (!(await isLoggedIn(currentPage))) throw new AuthenticationRequiredError();
+  const extracted = (await cachedMetadata(
+    context,
+    "campaign-summaries",
+    CAMPAIGN_LIST_CACHE_TTL_MS,
+    async () => {
+      const page = await getPage(context);
+      await openDomReadyPage(page, `${DDB_ORIGIN}/my-campaigns`, CAMPAIGN_TIMEOUT_MS);
+      throwIfAuthenticationRedirect(page);
+      await waitForRenderedContent(page, "li.ddb-campaigns-list-item-wrapper, main", CAMPAIGN_RESPONSE_TIMEOUT_MS);
+      return page.evaluate((): ExtractedCampaignList => {
+        const items = Array.from(document.querySelectorAll("li.ddb-campaigns-list-item-wrapper"));
+        const unknownListItems = items.length === 0 && document.querySelectorAll("main ul li").length > 0;
+        const recognized = items.length > 0 || (!unknownListItems && Boolean(document.querySelector("main ul"))) ||
+          /no campaigns/i.test(document.querySelector("main")?.textContent ?? "");
         return {
-          id,
-          name: element.querySelector(".ddb-campaigns-list-item-body-title")?.textContent?.trim() ?? "",
-          roleText: element.querySelector(".ddb-campaigns-list-item-body-role")?.textContent?.trim() ?? "",
-          createdText: element.querySelector(".ddb-campaigns-list-item-body-date")?.textContent?.trim() ?? "",
-          playerCountText: element.querySelector(".player-count, .ddb-campaigns-list-item-body-players .count")?.textContent?.trim() ?? "",
-          sharingText: element.querySelector(".ddb-campaigns-list-item-body-sharing")?.textContent?.trim() ?? "",
+          recognized,
+          items: items.map((element) => {
+            const links = Array.from(element.querySelectorAll("a[href]")) as HTMLAnchorElement[];
+            const canonical = links.find((link) => /^\/campaigns\/\d+\/?$/.test(new URL(link.href).pathname));
+            const id = canonical?.href.match(/\/campaigns\/(\d+)/)?.[1] ?? "";
+            return {
+              id,
+              name: element.querySelector(".ddb-campaigns-list-item-body-title")?.textContent?.trim() ?? "",
+              roleText: element.querySelector(".ddb-campaigns-list-item-body-role")?.textContent?.trim() ?? "",
+              createdText: element.querySelector(".ddb-campaigns-list-item-body-date")?.textContent?.trim() ?? "",
+              playerCountText: element.querySelector(".player-count, .ddb-campaigns-list-item-body-players .count")?.textContent?.trim() ?? "",
+              sharingText: element.querySelector(".ddb-campaigns-list-item-body-sharing")?.textContent?.trim() ?? "",
+            };
+          }),
         };
-      }),
-    };
-  });
+      });
+    },
+    { refresh: request.refresh }
+  )).value;
   return normalizeCampaignList(extracted, request);
 }
 

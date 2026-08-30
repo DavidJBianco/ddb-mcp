@@ -337,13 +337,24 @@ test(
       requireStructure(current.page?.url === requestedUrl, "current-page URL changed");
     });
 
-    await t.test("performs a read-only search", async () => {
-      const results = await callText(client, diagnostics, "mysterium_search", { query: "shield", category: "spells" });
+    await t.test("performs a bounded read-only global search", async () => {
+      const results = await callText(client, diagnostics, "mysterium_search", { query: "opportunity attack", category: "all", legacy: "include", limit: 5 });
       requireStructure(results.length > 0, "search returned an empty response");
       const parsed = parseJson(results, "mysterium_search");
       requireStructure(Array.isArray(parsed.results), "search results shape changed");
+      requireStructure(parsed.count === parsed.results.length && parsed.count <= 5, "search result bound changed");
+      requireStructure(typeof parsed.total === "number" && parsed.total >= parsed.count, "search total shape changed");
+      requireStructure(parsed.filters?.legacy === "include" && parsed.filters.bookSlug === null, "search filters changed");
+      requireStructure(typeof parsed.done === "boolean", "search completion shape changed");
       requireStructure(parsed.results.every((result) => Array.isArray(result.sources)), "search source attribution shape changed");
       for (const result of parsed.results) {
+        requireStructure(typeof result.legacy === "boolean", "search Legacy classification changed");
+        requireStructure(Array.isArray(result.snippets) && result.snippets.length <= 2, "search snippet shape changed");
+        requireStructure(result.snippets.every((snippet) => typeof snippet === "string" && Array.from(snippet).length <= 500), "search snippet bound changed");
+        requireStructure(result.bookLocation === null || (
+          typeof result.bookLocation?.bookSlug === "string" &&
+          (result.bookLocation.chapterSlug === null || typeof result.bookLocation.chapterSlug === "string")
+        ), "search book location changed");
         for (const source of result.sources) {
           requireStructure(source && typeof source === "object", "search source attribution item changed");
           requireStructure(source.title === null || typeof source.title === "string", "search source title shape changed");

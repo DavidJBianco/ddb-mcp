@@ -188,7 +188,7 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
       query: "handbook",
       category: "sourcebooks",
     }));
-    assert.equal(accessibleSources.count, 1);
+    assert.equal(accessibleSources.count, 2);
     assert.equal(accessibleSources.results[0].access, "accessible");
     assert.equal(accessibleSources.results[0].bookSlug, "synthetic-handbook");
 
@@ -229,7 +229,9 @@ test("production image executes synthetic browser-backed MCP calls", { timeout: 
     assert.equal(appStatBlock.structuredContent.kind, "stat_block");
     assert.equal(appStatBlock.structuredContent.creature.name, "Synthetic Watcher");
 
-    assert.equal(JSON.parse(await callSuccessfully("mysterium_list_library")).count, 1);
+    const library = JSON.parse(await callSuccessfully("mysterium_list_library"));
+    assert.equal(library.count, 2);
+    assert.deepEqual(library.books.map(({ slug }) => slug), ["synthetic-handbook", "dnd/other-handbook"]);
     const bookOutline = JSON.parse(await callSuccessfully("mysterium_read_book", {
       book_slug: "synthetic-handbook",
     }));
